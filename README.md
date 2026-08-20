@@ -1,4 +1,4 @@
-# Saleem Video Editor
+# Video Editor
 
 A professional mobile video editor built with Flutter. Multi-clip timeline with a
 centred playhead, live-graded preview, overlay lanes for text, stickers, PIP
