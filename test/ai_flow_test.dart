@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:saleem_video_editor/core/utils/app_env.dart';
-import 'package:saleem_video_editor/data/services/ai_video_service.dart';
-import 'package:saleem_video_editor/data/services/gemini_video_client.dart';
+import 'package:video_editor/core/utils/app_env.dart';
+import 'package:video_editor/data/services/ai_video_service.dart';
+import 'package:video_editor/data/services/gemini_video_client.dart';
 
 /// A stand-in for the Gemini API: lists models, accepts a generation, reports
 /// the operation as running and then done, and serves the finished file.

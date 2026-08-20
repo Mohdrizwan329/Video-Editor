@@ -7,4 +7,8 @@
     <!-- Painted behind the Flutter UI for the rest of the session, so it
          matches the light page rather than the splash. -->
     <color name="window_background">#F5F4FA</color>
+
+    <!-- The plate the launcher mark sits on. The logo is drawn for a white
+         ground, so the adaptive icon's background layer matches it. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

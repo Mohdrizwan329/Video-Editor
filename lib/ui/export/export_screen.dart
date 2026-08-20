@@ -582,9 +582,9 @@ class _ExportScreenState extends State<ExportScreen> {
       final hasAccess = await Gal.hasAccess(toAlbum: true);
       if (!hasAccess) await Gal.requestAccess(toAlbum: true);
       if (_gifMode) {
-        await Gal.putImage(path, album: 'Saleem Video Editor');
+        await Gal.putImage(path, album: 'Video Editor');
       } else {
-        await Gal.putVideo(path, album: 'Saleem Video Editor');
+        await Gal.putVideo(path, album: 'Video Editor');
       }
       if (mounted) setState(() => _savedToGallery = true);
     } catch (e) {

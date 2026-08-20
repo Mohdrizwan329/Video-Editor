@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:saleem_video_editor/data/models/enums.dart';
-import 'package:saleem_video_editor/data/models/keyframe.dart';
-import 'package:saleem_video_editor/data/models/layers.dart';
-import 'package:saleem_video_editor/data/models/text_presets.dart';
-import 'package:saleem_video_editor/data/models/video_clip.dart';
+import 'package:video_editor/data/models/enums.dart';
+import 'package:video_editor/data/models/keyframe.dart';
+import 'package:video_editor/data/models/layers.dart';
+import 'package:video_editor/data/models/text_presets.dart';
+import 'package:video_editor/data/models/video_clip.dart';
 
 void main() {
   group('keyframe interpolation', () {

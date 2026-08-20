@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:saleem_video_editor/core/theme/app_colors.dart';
-import 'package:saleem_video_editor/core/theme/app_theme.dart';
-import 'package:saleem_video_editor/data/models/enums.dart';
-import 'package:saleem_video_editor/data/models/project.dart';
-import 'package:saleem_video_editor/data/models/video_clip.dart';
-import 'package:saleem_video_editor/data/services/export_settings.dart';
+import 'package:video_editor/core/theme/app_colors.dart';
+import 'package:video_editor/core/theme/app_theme.dart';
+import 'package:video_editor/data/models/enums.dart';
+import 'package:video_editor/data/models/project.dart';
+import 'package:video_editor/data/models/video_clip.dart';
+import 'package:video_editor/data/services/export_settings.dart';
 
 VideoClip _clip(Duration d, {TransitionType tr = TransitionType.none}) =>
     VideoClip(

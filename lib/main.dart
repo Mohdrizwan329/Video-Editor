@@ -69,7 +69,7 @@ class VideoEditorApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => ProjectsController(),
       child: MaterialApp(
-        title: 'Saleem Video Editor',
+        title: 'Video Editor',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         themeMode: ThemeMode.light,

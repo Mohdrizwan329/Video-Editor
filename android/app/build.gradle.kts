@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.saleem.videoeditor"
+    namespace = "com.example.videoeditor"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.saleem.videoeditor"
+        applicationId = "com.example.videoeditor"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // FFmpeg Kit and the media3-backed video player both require API 24+.

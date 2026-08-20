@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:saleem_video_editor/data/models/enums.dart';
-import 'package:saleem_video_editor/data/models/keyframe.dart';
-import 'package:saleem_video_editor/data/models/project.dart';
-import 'package:saleem_video_editor/data/models/template.dart';
-import 'package:saleem_video_editor/data/models/template_library.dart';
-import 'package:saleem_video_editor/data/models/video_clip.dart';
-import 'package:saleem_video_editor/data/services/caption_service.dart';
-import 'package:saleem_video_editor/data/services/sound_library.dart';
+import 'package:video_editor/data/models/enums.dart';
+import 'package:video_editor/data/models/keyframe.dart';
+import 'package:video_editor/data/models/project.dart';
+import 'package:video_editor/data/models/template.dart';
+import 'package:video_editor/data/models/template_library.dart';
+import 'package:video_editor/data/models/video_clip.dart';
+import 'package:video_editor/data/services/caption_service.dart';
+import 'package:video_editor/data/services/sound_library.dart';
 
 VideoClip _media(Duration d) => VideoClip(
       path: '/tmp/a.mp4',

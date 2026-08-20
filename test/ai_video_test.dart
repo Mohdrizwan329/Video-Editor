@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:saleem_video_editor/core/utils/app_env.dart';
-import 'package:saleem_video_editor/data/models/enums.dart';
-import 'package:saleem_video_editor/data/services/ai_video_service.dart';
-import 'package:saleem_video_editor/data/services/gemini_video_client.dart';
+import 'package:video_editor/core/utils/app_env.dart';
+import 'package:video_editor/data/models/enums.dart';
+import 'package:video_editor/data/services/ai_video_service.dart';
+import 'package:video_editor/data/services/gemini_video_client.dart';
 
 void main() {
   group('model listing', () {

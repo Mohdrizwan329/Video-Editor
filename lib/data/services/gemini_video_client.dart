@@ -147,7 +147,7 @@ class GeminiVideoClient {
         'x-goog-api-key': apiKey,
         HttpHeaders.contentTypeHeader: 'application/json',
         HttpHeaders.acceptHeader: 'application/json',
-        HttpHeaders.userAgentHeader: 'SaleemVideoEditor/1.0 (Flutter)',
+        HttpHeaders.userAgentHeader: 'VideoEditor/1.0 (Flutter)',
       };
 
   /// Every video-capable model this key can use, newest-looking first.

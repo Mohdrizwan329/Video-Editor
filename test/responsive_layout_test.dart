@@ -2,22 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
-import 'package:saleem_video_editor/core/theme/app_theme.dart';
-import 'package:saleem_video_editor/core/utils/responsive.dart';
-import 'package:saleem_video_editor/data/models/enums.dart';
-import 'package:saleem_video_editor/data/models/project.dart';
-import 'package:saleem_video_editor/state/projects_controller.dart';
-import 'package:saleem_video_editor/ui/editor/editor_screen.dart';
-import 'package:saleem_video_editor/data/models/video_clip.dart';
-import 'package:saleem_video_editor/ui/editor/timeline/clip_strip.dart';
-import 'package:saleem_video_editor/ui/editor/toolbar/editor_toolbar.dart';
-import 'package:saleem_video_editor/ui/export/export_screen.dart';
-import 'package:saleem_video_editor/ui/home/home_screen.dart';
-import 'package:saleem_video_editor/ui/templates/template_gallery_screen.dart';
-import 'package:saleem_video_editor/ui/picker/media_picker_screen.dart';
-import 'package:saleem_video_editor/ui/splash/splash_screen.dart';
-import 'package:saleem_video_editor/ui/text_to_video/text_slides_screen.dart';
-import 'package:saleem_video_editor/ui/text_to_video/text_to_video_screen.dart';
+import 'package:video_editor/core/theme/app_theme.dart';
+import 'package:video_editor/core/utils/responsive.dart';
+import 'package:video_editor/data/models/enums.dart';
+import 'package:video_editor/data/models/project.dart';
+import 'package:video_editor/state/projects_controller.dart';
+import 'package:video_editor/ui/editor/editor_screen.dart';
+import 'package:video_editor/data/models/video_clip.dart';
+import 'package:video_editor/ui/editor/timeline/clip_strip.dart';
+import 'package:video_editor/ui/editor/toolbar/editor_toolbar.dart';
+import 'package:video_editor/ui/export/export_screen.dart';
+import 'package:video_editor/ui/home/home_screen.dart';
+import 'package:video_editor/ui/templates/template_gallery_screen.dart';
+import 'package:video_editor/ui/picker/media_picker_screen.dart';
+import 'package:video_editor/ui/splash/splash_screen.dart';
+import 'package:video_editor/ui/text_to_video/text_slides_screen.dart';
+import 'package:video_editor/ui/text_to_video/text_to_video_screen.dart';
 
 /// The windows the app has to survive: the smallest phone still sold, a
 /// mainstream phone, that phone on its side, a tablet both ways up, and the

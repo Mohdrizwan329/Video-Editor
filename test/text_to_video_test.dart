@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:saleem_video_editor/data/models/enums.dart';
-import 'package:saleem_video_editor/data/models/keyframe.dart';
-import 'package:saleem_video_editor/data/models/project.dart';
-import 'package:saleem_video_editor/data/services/text_to_video_service.dart';
+import 'package:video_editor/data/models/enums.dart';
+import 'package:video_editor/data/models/keyframe.dart';
+import 'package:video_editor/data/models/project.dart';
+import 'package:video_editor/data/services/text_to_video_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
