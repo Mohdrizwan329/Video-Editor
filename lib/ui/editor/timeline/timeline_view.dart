@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/responsive.dart';
 import '../../../core/utils/constants.dart';
 import '../../../core/utils/duration_ext.dart';
 import '../../../data/models/enums.dart';
@@ -337,40 +338,49 @@ class TimelineHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final r = context.r;
+    // The row is a fixed set of buttons around a timecode. Scaling the button
+    // boxes and letting the timecode flex is what keeps it inside a 320pt
+    // phone and stops it looking sparse on a desktop window.
+    final box = BoxConstraints(minWidth: r.dp(32), minHeight: r.vp(30));
     return SizedBox(
-      height: 34,
+      height: math.max(r.vp(34), 32),
       child: Row(
         children: [
-          const SizedBox(width: 6),
+          SizedBox(width: r.dp(6)),
           ValueListenableBuilder<bool>(
             valueListenable: editor.isPlaying,
             builder: (context, playing, _) => IconButton(
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 34, minHeight: 30),
-              icon: Icon(playing ? Icons.pause : Icons.play_arrow, size: 22),
+              constraints: box,
+              icon: Icon(playing ? Icons.pause : Icons.play_arrow,
+                  size: r.ic(22)),
               color: AppColors.text,
               onPressed: onPlayPause,
             ),
           ),
-          const SizedBox(width: 4),
-          ValueListenableBuilder<Duration>(
-            valueListenable: editor.position,
-            builder: (context, t, _) => Text(
-              '${t.timecode}  /  ${editor.totalDuration.timecode}',
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textDim,
-                fontFeatures: [FontFeature.tabularFigures()],
+          SizedBox(width: r.dp(4)),
+          Expanded(
+            child: ValueListenableBuilder<Duration>(
+              valueListenable: editor.position,
+              builder: (context, t, _) => Text(
+                '${t.timecode}  /  ${editor.totalDuration.timecode}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: r.sp(11),
+                  color: AppColors.textDim,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ),
           ),
-          const Spacer(),
           if (editor.project.audios.any((a) => a.beats.isNotEmpty))
             IconButton(
               tooltip: 'Snap to beat',
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
-              icon: const Icon(Icons.graphic_eq, size: 17),
+              constraints: box,
+              icon: Icon(Icons.graphic_eq, size: r.ic(17)),
               color: AppColors.textDim,
               onPressed: onSnapToBeat,
             ),
@@ -378,12 +388,14 @@ class TimelineHeader extends StatelessWidget {
             IconButton(
               tooltip: 'Add keyframe',
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
+              constraints: box,
               icon: Transform.rotate(
                 angle: 0.785,
                 child: Icon(
-                  editor.hasKeyframeAtPlayhead ? Icons.square : Icons.square_outlined,
-                  size: 13,
+                  editor.hasKeyframeAtPlayhead
+                      ? Icons.square
+                      : Icons.square_outlined,
+                  size: r.ic(13),
                 ),
               ),
               color: editor.hasKeyframeAtPlayhead
@@ -393,26 +405,26 @@ class TimelineHeader extends StatelessWidget {
             ),
           IconButton(
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
-            icon: const Icon(Icons.undo, size: 18),
+            constraints: box,
+            icon: Icon(Icons.undo, size: r.ic(18)),
             color: editor.canUndo ? AppColors.text : AppColors.textFaint,
             onPressed: editor.canUndo ? onUndo : null,
           ),
           IconButton(
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
-            icon: const Icon(Icons.redo, size: 18),
+            constraints: box,
+            icon: Icon(Icons.redo, size: r.ic(18)),
             color: editor.canRedo ? AppColors.text : AppColors.textFaint,
             onPressed: editor.canRedo ? onRedo : null,
           ),
           IconButton(
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 34, minHeight: 30),
-            icon: const Icon(Icons.fullscreen, size: 20),
+            constraints: box,
+            icon: Icon(Icons.fullscreen, size: r.ic(20)),
             color: AppColors.text,
             onPressed: onFullscreen,
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: r.dp(4)),
         ],
       ),
     );

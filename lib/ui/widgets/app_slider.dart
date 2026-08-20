@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/responsive.dart';
 
 /// The labelled slider used by every property panel: value bubble on the
 /// right, optional centre detent, and a tap-to-reset title.
@@ -39,50 +40,64 @@ class AppSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = format?.call(value) ?? value.toStringAsFixed(2);
+    final r = context.r;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: r.dp(16), vertical: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 14, color: AppColors.textDim),
-                const SizedBox(width: 6),
+                Icon(icon, size: r.ic(14), color: AppColors.textDim),
+                SizedBox(width: r.dp(6)),
               ],
-              GestureDetector(
-                onDoubleTap: defaultValue == null
-                    ? null
-                    : () {
-                        onChanged(defaultValue!);
-                        onChangeEnd?.call(defaultValue!);
-                      },
-                child: Text(label,
-                    style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.textDim,
-                        fontWeight: FontWeight.w500)),
+              // Flexible, so a long label ellipsises instead of pushing the
+              // value bubble off the end of a narrow panel.
+              Flexible(
+                child: GestureDetector(
+                  onDoubleTap: defaultValue == null
+                      ? null
+                      : () {
+                          onChanged(defaultValue!);
+                          onChangeEnd?.call(defaultValue!);
+                        },
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: r.sp(11.5),
+                      color: AppColors.textDim,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
               ),
-              const Spacer(),
+              SizedBox(width: r.dp(8)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: EdgeInsets.symmetric(horizontal: r.dp(8), vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceHigh,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(text,
-                    style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.text,
-                        fontFeatures: [FontFeature.tabularFigures()],
-                        fontWeight: FontWeight.w600)),
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: r.sp(11),
+                    color: AppColors.text,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
           SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackShape: bipolar ? const _CenterTrackShape() : null,
-            ),
+            data: SliderTheme.of(
+              context,
+            ).copyWith(trackShape: bipolar ? const _CenterTrackShape() : null),
             child: Slider(
               value: value.clamp(min, max),
               min: min,
@@ -134,7 +149,9 @@ class _CenterTrackShape extends RoundedRectSliderTrackShape {
     final right = thumbCenter.dx < centre ? centre : thumbCenter.dx;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-          Rect.fromLTRB(left, rect.top, right, rect.bottom), radius),
+        Rect.fromLTRB(left, rect.top, right, rect.bottom),
+        radius,
+      ),
       active,
     );
   }

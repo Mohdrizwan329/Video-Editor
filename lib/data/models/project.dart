@@ -4,6 +4,7 @@ import '../../core/utils/id.dart';
 import 'enums.dart';
 import 'layers.dart';
 import 'video_clip.dart';
+import 'watermark.dart';
 
 /// Canvas background behind letterboxed clips.
 class BackgroundStyle {
@@ -62,6 +63,7 @@ class Project {
     List<StickerLayer>? stickers,
     List<OverlayLayer>? overlays,
     BackgroundStyle? background,
+    Watermark? watermark,
     DateTime? createdAt,
     DateTime? updatedAt,
     this.coverPath,
@@ -73,6 +75,7 @@ class Project {
         stickers = stickers ?? [],
         overlays = overlays ?? [],
         background = background ?? BackgroundStyle(),
+        watermark = watermark ?? Watermark(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -85,6 +88,9 @@ class Project {
   final List<StickerLayer> stickers;
   final List<OverlayLayer> overlays;
   BackgroundStyle background;
+
+  /// The creator's own mark, drawn over every frame of the export.
+  Watermark watermark;
   DateTime createdAt;
   DateTime updatedAt;
   String? coverPath;
@@ -171,6 +177,7 @@ class Project {
         'stickers': stickers.map((e) => e.toJson()).toList(),
         'overlays': overlays.map((e) => e.toJson()).toList(),
         'bg': background.toJson(),
+        'wm': watermark.toJson(),
         'created': createdAt.millisecondsSinceEpoch,
         'updated': updatedAt.millisecondsSinceEpoch,
         'cover': coverPath,
@@ -192,6 +199,7 @@ class Project {
       stickers: list('stickers', StickerLayer.fromJson),
       overlays: list('overlays', OverlayLayer.fromJson),
       background: BackgroundStyle.fromJson(j['bg'] as Map<String, dynamic>?),
+      watermark: Watermark.fromJson(j['wm'] as Map<String, dynamic>?),
       createdAt: DateTime.fromMillisecondsSinceEpoch(
           (j['created'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(

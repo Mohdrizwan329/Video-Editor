@@ -102,6 +102,7 @@ class ProjectBackup {
         stickers: restored.stickers,
         overlays: restored.overlays,
         background: restored.background,
+        watermark: restored.watermark,
         masterVolume: restored.masterVolume,
       );
       await ProjectRepository.instance.save(copy);
@@ -117,5 +118,8 @@ class ProjectBackup {
         ...p.overlays.map((o) => o.path),
         ...p.audios.map((a) => a.path),
         if (p.coverPath != null) p.coverPath!,
+        // The logo lives in app storage, so a bundle has to carry it too or
+        // the restored project draws a broken mark.
+        if ((p.watermark.imagePath ?? '').isNotEmpty) p.watermark.imagePath!,
       };
 }

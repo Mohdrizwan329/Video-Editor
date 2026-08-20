@@ -97,7 +97,10 @@ class _TextPanelState extends State<TextPanel> {
   }
 
   Widget _contentTab() {
-    return Padding(
+    // The field and its format row are a fixed height; on a short window —
+    // a phone in landscape, or with the keyboard up — the tab scrolls rather
+    // than clipping the alignment buttons.
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Column(
         children: [
@@ -120,7 +123,7 @@ class _TextPanelState extends State<TextPanel> {
             onChanged: (v) => _update((l) => l.text = v, record: false),
           ),
           const SizedBox(height: 10),
-          Row(
+          Wrap(
             children: [
               _toggle(Icons.format_bold, widget.layer.bold,
                   () => _update((l) => l.bold = !l.bold)),

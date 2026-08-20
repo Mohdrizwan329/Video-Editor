@@ -53,11 +53,12 @@ class _TtsPanelState extends State<TtsPanel> {
 
   Future<void> _loadVoices() async {
     final voices = await _tts.voices();
+    // Whatever the user chose last, else a voice matching the device locale.
+    final chosen = await _tts.defaultVoice(voices);
     if (!mounted) return;
     setState(() {
       _voices = voices;
-      // Prefer a voice matching the device locale; fall back to the first.
-      _voice = voices.isEmpty ? null : voices.first;
+      _voice = chosen;
       _loading = false;
     });
   }
@@ -148,7 +149,12 @@ class _TtsPanelState extends State<TtsPanel> {
                             label: const Text('Preview'),
                             onPressed: _text.text.trim().isEmpty
                                 ? null
-                                : () => _tts.preview(_text.text),
+                                : () => _tts.preview(
+                                      _text.text,
+                                      voice: _voice,
+                                      rate: _rate,
+                                      pitch: _pitch,
+                                    ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -227,7 +233,10 @@ class _TtsPanelState extends State<TtsPanel> {
                                 maxLines: 1, overflow: TextOverflow.ellipsis),
                           ))
                       .toList(),
-                  onChanged: (v) => setState(() => _voice = v),
+                  onChanged: (v) {
+                    setState(() => _voice = v);
+                    _tts.rememberVoice(v);
+                  },
                 ),
               ),
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/duration_ext.dart';
+import '../../core/utils/responsive.dart';
 import '../../data/models/template.dart';
 import '../../data/models/template_library.dart';
 import '../widgets/panel_shell.dart';
@@ -23,44 +24,55 @@ class _TemplateGalleryScreenState extends State<TemplateGalleryScreen> {
     final category = TemplateLibrary.categories[_category];
     final items = TemplateLibrary.byCategory(category);
 
+    final r = context.r;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Templates'),
         leading: IconButton(
-          icon: const Icon(Icons.close, size: 21),
+          icon: Icon(Icons.close, size: r.ic(21)),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 6),
-            ChipStrip(
-              labels: TemplateLibrary.categories,
-              selectedIndex: _category,
-              onSelected: (i) => setState(() => _category = i),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.72,
-                ),
-                itemCount: items.length,
-                itemBuilder: (context, i) => _TemplateCard(
-                  template: items[i],
-                  index: i,
-                  onTap: () => Navigator.pop(context, items[i]),
+        child: ContentBox(
+          child: Column(
+            children: [
+              SizedBox(height: r.vp(6)),
+              ChipStrip(
+                labels: TemplateLibrary.categories,
+                selectedIndex: _category,
+                onSelected: (i) => setState(() => _category = i),
+              ),
+              SizedBox(height: r.vp(12)),
+              Expanded(
+                child: GridView.builder(
+                  padding: EdgeInsets.fromLTRB(
+                    r.gutter,
+                    0,
+                    r.gutter,
+                    r.vp(24),
+                  ),
+                  // Two cards across a phone; wider windows add columns at the
+                  // same card size rather than blowing each card up.
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: r.isCompact
+                        ? (r.width - r.gutter * 2 - 12) / 2
+                        : 240,
+                    crossAxisSpacing: r.dp(12),
+                    mainAxisSpacing: r.dp(12),
+                    childAspectRatio: r.isShort && r.isLandscape ? 0.9 : 0.72,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) => _TemplateCard(
+                    template: items[i],
+                    index: i,
+                    onTap: () => Navigator.pop(context, items[i]),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -80,6 +92,7 @@ class _TemplateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final r = context.r;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(17),
@@ -98,35 +111,45 @@ class _TemplateCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(16)),
-                child: _preview(),
+                child: _preview(r),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              padding: EdgeInsets.fromLTRB(
+                r.dp(10),
+                r.vp(8),
+                r.dp(10),
+                r.vp(10),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(template.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 3),
+                      style: TextStyle(
+                          fontSize: r.sp(13), fontWeight: FontWeight.w700)),
+                  SizedBox(height: r.vp(3)),
                   Text(template.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 10, color: AppColors.textFaint, height: 1.3)),
-                  const SizedBox(height: 6),
-                  Row(
+                      style: TextStyle(
+                          fontSize: r.sp(10),
+                          color: AppColors.textFaint,
+                          height: 1.3)),
+                  SizedBox(height: r.vp(6)),
+                  // The chips are laid out by what fits: on a narrow card they
+                  // drop to a second line instead of clipping the ratio.
+                  Wrap(
+                    spacing: r.dp(5),
+                    runSpacing: r.vp(4),
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      _chip('${template.slotCount} clips'),
-                      const SizedBox(width: 5),
-                      _chip(template.approximateDuration.pretty),
-                      const Spacer(),
+                      _chip(r, '${template.slotCount} clips'),
+                      _chip(r, template.approximateDuration.pretty),
                       Text(template.ratio.label,
-                          style: const TextStyle(
-                              fontSize: 9, color: AppColors.textFaint)),
+                          style: TextStyle(
+                              fontSize: r.sp(9), color: AppColors.textFaint)),
                     ],
                   ),
                 ],
@@ -140,7 +163,7 @@ class _TemplateCard extends StatelessWidget {
 
   /// Schematic preview: the slot layout drawn as blocks, so the card conveys
   /// the rhythm of the edit without needing a rendered sample video.
-  Widget _preview() {
+  Widget _preview(Responsive r) {
     final aspect = template.ratio.value ?? 9 / 16;
     return Container(
       decoration: BoxDecoration(
@@ -157,7 +180,7 @@ class _TemplateCard extends StatelessWidget {
       ),
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(r.dp(12)),
           child: AspectRatio(
             aspectRatio: aspect,
             child: Container(
@@ -183,8 +206,8 @@ class _TemplateCard extends StatelessWidget {
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.clip,
-                        style: const TextStyle(
-                          fontSize: 9,
+                        style: TextStyle(
+                          fontSize: r.sp(9),
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
                           letterSpacing: 0.4,
@@ -216,7 +239,7 @@ class _TemplateCard extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
                         template.stickers.map((s) => s.$1).take(3).join(' '),
-                        style: const TextStyle(fontSize: 11),
+                        style: TextStyle(fontSize: r.sp(11)),
                       ),
                     ),
                 ],
@@ -228,15 +251,15 @@ class _TemplateCard extends StatelessWidget {
     );
   }
 
-  Widget _chip(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+  Widget _chip(Responsive r, String text) => Container(
+        padding: EdgeInsets.symmetric(horizontal: r.dp(6), vertical: r.dp(2)),
         decoration: BoxDecoration(
           color: AppColors.appBar.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(text,
             style: TextStyle(
-                fontSize: 8.5,
+                fontSize: r.sp(8.5),
                 fontWeight: FontWeight.w600,
                 color: AppColors.appBarMuted)),
       );

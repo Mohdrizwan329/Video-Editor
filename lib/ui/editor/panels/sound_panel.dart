@@ -78,9 +78,11 @@ class _SoundPanelState extends State<SoundPanel> {
 
   Widget _savedList() {
     if (_saved.isEmpty) {
-      return Center(
+      // Centred, but scrollable: on a short window the panel is only a
+      // hundred points tall and a fixed column would not fit in it.
+      return SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

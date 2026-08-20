@@ -16,6 +16,7 @@ import '../models/video_clip.dart';
 import '../repositories/project_repository.dart';
 import 'export_settings.dart';
 import 'overlay_rasterizer.dart';
+import '../models/watermark.dart';
 
 /// Live state of a render.
 class ExportProgress {
@@ -96,6 +97,24 @@ class ExportService {
           .rasterizeSticker(s, outWidth: settings.width, outHeight: settings.height);
       if (r != null) rasterized[s.id] = r;
     }
+    final mark = project.watermark;
+    if (mark.isReady) {
+      // The text mark is baked through the very same path a text layer takes,
+      // so what the creator positioned in the preview is what gets burned in.
+      final r = mark.type == WatermarkType.text
+          ? await OverlayRasterizer.instance.rasterizeText(
+              mark.asTextLayer(),
+              outWidth: settings.width,
+              outHeight: settings.height,
+              opacity: mark.transform.opacity,
+            )
+          : await OverlayRasterizer.instance.rasterizeWatermarkImage(
+              mark,
+              outWidth: settings.width,
+              outHeight: settings.height,
+            );
+      if (r != null) rasterized[_kWatermarkKey] = r;
+    }
     if (_cancelled) return const ExportResult(success: false, error: 'Cancelled');
 
     final graph = _GraphBuilder(
@@ -164,6 +183,10 @@ class ExportService {
     return completer.future;
   }
 }
+
+/// Key the baked watermark is filed under in the rasterized map. Layer ids
+/// are uuids, so this cannot collide with a real layer.
+const String _kWatermarkKey = 'watermark';
 
 /// Builds the single filter graph that represents the whole timeline.
 class _GraphBuilder {
@@ -515,6 +538,10 @@ class _GraphBuilder {
       current = _overlayImage(current, r, t, t.start, t.end, t.animationIn,
           t.animationOut, t.animationDuration, n++);
     }
+    // The watermark sits above everything and spans the whole timeline, so it
+    // is composited last and carries no `enable` window.
+    final mark = rasterized[_kWatermarkKey];
+    if (mark != null) current = _overlayWatermark(current, mark, n++);
     if (current == base) {
       _filters.add('[$base] null [outv]');
       return 'outv';
@@ -588,6 +615,18 @@ class _GraphBuilder {
     _filters.add('[$base][$src] overlay=$x:$y:format=auto'
         ':enable=\'between(t,${offset.toStringAsFixed(3)}'
         ',${end.seconds.toStringAsFixed(3)})\' [$label]');
+    return label;
+  }
+
+  /// Static, full-duration overlay for the project watermark. Opacity and
+  /// rotation are already baked into the PNG, so this only has to place it.
+  String _overlayWatermark(String base, RasterizedLayer r, int n) {
+    _inputs.add('-loop 1 -framerate $_fps -i ${_quote(r.path)}');
+    final idx = _inputIndex++;
+    final label = 'wm$n';
+    final src = 'ws$n';
+    _filters.add('[$idx:v] format=rgba [$src]');
+    _filters.add('[$base][$src] overlay=${r.x}:${r.y}:format=auto [$label]');
     return label;
   }
 

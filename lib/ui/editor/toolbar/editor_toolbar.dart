@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/responsive.dart';
 import '../../../data/models/enums.dart';
 import '../../../state/editor_controller.dart';
 import '../../widgets/tool_button.dart';
@@ -17,6 +20,7 @@ enum ToolAction {
   adjust,
   ratio,
   background,
+  watermark,
   masterVolume,
   voiceOver,
   soundLibrary,
@@ -69,10 +73,35 @@ class EditorToolbar extends StatelessWidget {
     super.key,
     required this.editor,
     required this.onAction,
+    this.axis = Axis.horizontal,
   });
 
   final EditorController editor;
   final void Function(ToolAction) onAction;
+
+  /// A strip along the bottom on phones and tablets; a filled rail down the
+  /// side once the window is wide enough for the editor's two-column layout.
+  final Axis axis;
+
+  /// One row of buttons, measured rather than assumed — the editor needs the
+  /// number to work out how much room is left for the preview.
+  static double rowHeight(BuildContext context) {
+    final r = context.r;
+    // The label's line box has to be measured through the text scaler, not
+    // just the app's own type scale — a large system font is what used to
+    // push the row past its box.
+    final label = MediaQuery.textScalerOf(context).scale(r.sp(9.5)) * 1.6;
+    return r.vp(12) + r.dp(34) + r.vp(4) + label;
+  }
+
+  /// The whole strip, including the context row shown while something is
+  /// selected and the bottom inset it sits above.
+  static double heightFor(BuildContext context, {required bool selected}) {
+    final r = context.r;
+    return rowHeight(context) +
+        (selected ? math.max(r.vp(26), 24) : 0) +
+        r.viewPadding.bottom;
+  }
 
   static const List<_Tool> _projectTools = [
     _Tool(ToolAction.addMedia, Icons.video_library_outlined, 'Media'),
@@ -85,6 +114,8 @@ class EditorToolbar extends StatelessWidget {
     _Tool(ToolAction.overlay, Icons.picture_in_picture_alt_outlined, 'Overlay'),
     _Tool(ToolAction.ratio, Icons.aspect_ratio, 'Canvas'),
     _Tool(ToolAction.background, Icons.wallpaper_outlined, 'Backdrop'),
+    _Tool(ToolAction.watermark, Icons.branding_watermark_outlined,
+        'Watermark'),
     _Tool(ToolAction.masterVolume, Icons.graphic_eq, 'Mix'),
   ];
 
@@ -172,74 +203,108 @@ class EditorToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = !editor.selection.isEmpty;
+    final r = context.r;
+    final vertical = axis == Axis.vertical;
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.divider)),
+        border: Border(
+          top: vertical
+              ? BorderSide.none
+              : const BorderSide(color: AppColors.divider),
+          left: vertical
+              ? const BorderSide(color: AppColors.divider)
+              : BorderSide.none,
+        ),
       ),
       child: SafeArea(
         top: false,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: vertical ? MainAxisSize.max : MainAxisSize.min,
           children: [
-            if (selected)
+            if (selected) _contextRow(r),
+            if (vertical)
+              Expanded(child: _toolGrid(context, r))
+            else
               SizedBox(
-                height: 26,
-                child: Row(
-                  children: [
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.appBar.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(_contextLabel,
-                          style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.appBarMuted)),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: editor.clearSelection,
-                      style: TextButton.styleFrom(
-                          minimumSize: const Size(0, 24),
-                          padding: const EdgeInsets.symmetric(horizontal: 10)),
-                      child: const Text('Done',
-                          style: TextStyle(
-                              fontSize: 11, color: AppColors.textDim)),
-                    ),
-                  ],
+                // 6+6 padding + 34 icon + 4 gap + the 9.5pt label's line box;
+                // 62 clipped the label and drew the overflow stripe.
+                height: rowHeight(context),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: r.dp(6)),
+                  itemCount: _tools.length,
+                  itemBuilder: (context, i) => _button(_tools[i]),
                 ),
               ),
-            SizedBox(
-              // 6+6 padding + 34 icon + 4 gap + the 9.5pt label's line box; 62
-              // clipped the label and drew the overflow stripe.
-              height: 66,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                itemCount: _tools.length,
-                itemBuilder: (context, i) {
-                  final tool = _tools[i];
-                  return ToolButton(
-                    icon: tool.icon,
-                    label: tool.label,
-                    accent: tool.danger ? AppColors.danger : null,
-                    tint: tool.danger
-                        ? AppColors.danger
-                        : AppColors.appBarMuted,
-                    selected: tool.danger,
-                    onTap: () => onAction(tool.action),
-                  );
-                },
-              ),
-            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _contextRow(Responsive r) {
+    return SizedBox(
+      height: math.max(r.vp(26), 24),
+      child: Row(
+        children: [
+          SizedBox(width: r.dp(12)),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: r.dp(8), vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.appBar.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(_contextLabel,
+                style: TextStyle(
+                    fontSize: r.sp(10),
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.appBarMuted)),
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed: editor.clearSelection,
+            style: TextButton.styleFrom(
+                minimumSize: const Size(0, 24),
+                padding: EdgeInsets.symmetric(horizontal: r.dp(10))),
+            child: Text('Done',
+                style:
+                    TextStyle(fontSize: r.sp(11), color: AppColors.textDim)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The rail's layout: the same buttons, wrapped into as many columns as the
+  /// rail is wide, scrolling when the list outgrows the window's height.
+  Widget _toolGrid(BuildContext context, Responsive r) {
+    final tile = r.dp(66);
+    return GridView.builder(
+      padding: EdgeInsets.symmetric(
+        horizontal: r.dp(6),
+        vertical: r.vp(6),
+      ),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: tile,
+        mainAxisExtent: rowHeight(context),
+        crossAxisSpacing: r.dp(2),
+        mainAxisSpacing: r.vp(2),
+      ),
+      itemCount: _tools.length,
+      itemBuilder: (context, i) => _button(_tools[i], width: 62),
+    );
+  }
+
+  Widget _button(_Tool tool, {double? width}) {
+    return ToolButton(
+      icon: tool.icon,
+      label: tool.label,
+      width: width,
+      accent: tool.danger ? AppColors.danger : null,
+      tint: tool.danger ? AppColors.danger : AppColors.appBarMuted,
+      selected: tool.danger,
+      onTap: () => onAction(tool.action),
     );
   }
 }

@@ -10,6 +10,7 @@ import '../../../core/utils/constants.dart';
 import '../../../data/models/enums.dart';
 import '../../../data/models/layers.dart';
 import '../../../data/models/keyframe.dart';
+import '../../../data/models/watermark.dart';
 import '../../../data/services/overlay_rasterizer.dart';
 import 'chroma_box.dart';
 import 'clip_view.dart';
@@ -304,6 +305,57 @@ class TextLayerView extends StatelessWidget {
               ]
             : null,
       );
+}
+
+/// Draws the project watermark. It is not a timeline item, so it carries no
+/// playhead and no animation — it simply sits over every frame.
+///
+/// The text mark is handed to [TextLayerView] through [Watermark.asTextLayer],
+/// which is what guarantees it looks the same as the text the exporter bakes.
+class WatermarkView extends StatelessWidget {
+  const WatermarkView({
+    super.key,
+    required this.mark,
+    required this.canvasSize,
+    this.focused = false,
+  });
+
+  final Watermark mark;
+  final Size canvasSize;
+
+  /// True while the watermark panel is open, which frames the mark so the
+  /// creator can see what they are dragging.
+  final bool focused;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!mark.isReady) return const SizedBox.shrink();
+
+    if (mark.type == WatermarkType.text) {
+      return TextLayerView(
+        layer: mark.asTextLayer(),
+        time: Duration.zero,
+        canvasSize: canvasSize,
+        selected: focused,
+      );
+    }
+
+    final scale =
+        canvasSize.height / kCanvasReferenceHeight * mark.transform.scale;
+    return _Positioned(
+      transform: mark.transform,
+      canvasSize: canvasSize,
+      anim: const _AnimState(),
+      selected: focused,
+      child: Image.file(
+        File(mark.imagePath!),
+        width: mark.imageSize * scale,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+    );
+  }
 }
 
 /// Draws an emoji or vector sticker at the current playhead.

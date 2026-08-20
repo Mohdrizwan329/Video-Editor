@@ -11,6 +11,7 @@ import '../data/models/layers.dart';
 import '../data/models/project.dart';
 import '../data/models/template.dart';
 import '../data/models/video_clip.dart';
+import '../data/models/watermark.dart';
 import '../data/services/media_library.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/services/media_probe.dart';
@@ -788,6 +789,30 @@ class EditorController extends ChangeNotifier {
 
   void setBackground(void Function(BackgroundStyle) mutate) =>
       edit(() => mutate(_project.background));
+
+  // ------------------------------------------------------------ watermark
+
+  void setWatermark(void Function(Watermark) mutate, {bool record = true}) =>
+      edit(record: record, () => mutate(_project.watermark));
+
+  /// Copies the picked logo into app storage before pointing the mark at it,
+  /// so deleting it from the gallery later cannot break the project, and
+  /// switches the mark to image so the choice takes effect immediately.
+  Future<void> setWatermarkImage(String sourcePath) async {
+    setBusy('Adding watermark');
+    try {
+      final dir = await _repo.mediaDir();
+      final stored = await MediaLibrary.instance.materialise(sourcePath, dir);
+      edit(() {
+        final w = _project.watermark;
+        w.imagePath = stored;
+        w.type = WatermarkType.image;
+        w.enabled = true;
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   void rename(String name) => edit(() => _project.name = name);
 

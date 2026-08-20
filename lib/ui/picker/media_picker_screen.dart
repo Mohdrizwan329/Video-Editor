@@ -6,6 +6,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/duration_ext.dart';
+import '../../core/utils/responsive.dart';
 import '../../data/services/media_library.dart';
 import 'widgets/asset_thumb.dart';
 
@@ -184,14 +185,14 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.close, size: 22),
+            icon: Icon(Icons.close, size: context.r.ic(22)),
             onPressed: () => Navigator.pop(context),
           ),
           title: _albumSelector(),
           actions: [
             IconButton(
               tooltip: 'Browse files',
-              icon: const Icon(Icons.folder_open, size: 20),
+              icon: Icon(Icons.folder_open, size: context.r.ic(20)),
               onPressed: _browseFiles,
             ),
           ],
@@ -260,11 +261,13 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
   }
 
   Widget _tabBar() {
+    final r = context.r;
     return SizedBox(
-      height: 40,
-      child: Row(
+      height: r.vp(40),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
         children: [
-          const SizedBox(width: 12),
+          SizedBox(width: r.dp(12)),
           for (var i = 0; i < _tabs.length; i++) ...[
             GestureDetector(
               onTap: () {
@@ -273,9 +276,10 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 7,
+                alignment: Alignment.center,
+                padding: EdgeInsets.symmetric(
+                  horizontal: r.dp(16),
+                  vertical: r.vp(7),
                 ),
                 decoration: BoxDecoration(
                   gradient: _tab == i ? AppColors.appBarGradient : null,
@@ -285,14 +289,14 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
                 child: Text(
                   _tabs[i].$1,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: r.sp(12.5),
                     fontWeight: FontWeight.w700,
                     color: _tab == i ? AppColors.onAppBar : AppColors.textDim,
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: r.dp(8)),
           ],
         ],
       ),
@@ -319,11 +323,21 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
         ),
       );
     }
+    // Four thumbnails across a phone; on a tablet, a desktop window or a
+    // browser the same thumbnail size simply yields more columns, instead of
+    // four enormous tiles.
+    final r = context.r;
+    final target = r.pick<double>(
+      compact: r.width / 4,
+      medium: 150,
+      expanded: 170,
+      large: 190,
+    );
     return GridView.builder(
       controller: _scroll,
       padding: const EdgeInsets.all(2),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: target,
         crossAxisSpacing: 2,
         mainAxisSpacing: 2,
       ),
@@ -341,15 +355,21 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
   }
 
   Widget _permissionFallback() {
+    final r = context.r;
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(
+          horizontal: r.gutter + r.dp(14),
+          vertical: r.vp(24),
+        ),
+        child: ContentBox(
+          maxWidth: 420,
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: r.dp(72),
+              height: r.dp(72),
               decoration: BoxDecoration(
                 gradient: AppColors.tint(AppColors.appBar),
                 shape: BoxShape.circle,
@@ -357,26 +377,30 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
                   color: AppColors.appBar.withValues(alpha: 0.18),
                 ),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.photo_library_outlined,
-                size: 30,
+                size: r.ic(30),
                 color: AppColors.appBarMuted,
               ),
             ),
-            const SizedBox(height: 14),
-            const Text(
+            SizedBox(height: r.vp(14)),
+            Text(
               'Gallery access is off',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: r.sp(14), fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 6),
-            const Text(
+            SizedBox(height: r.vp(6)),
+            Text(
               'Grant photo access, or pick files directly from storage.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.textDim),
+              style: TextStyle(fontSize: r.sp(12), color: AppColors.textDim),
             ),
-            const SizedBox(height: 18),
+            SizedBox(height: r.vp(18)),
             Wrap(
+              alignment: WrapAlignment.center,
               spacing: 10,
+              runSpacing: 10,
               children: [
                 OutlinedButton(
                   // The bare button inherits the accent, which only clears
@@ -400,6 +424,7 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
               ],
             ),
           ],
+          ),
         ),
       ),
     );
@@ -410,19 +435,25 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
       Duration.zero,
       (sum, e) => sum + e.duration,
     );
+    final r = context.r;
+    final thumb = r.dp(52);
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: r.dp(10),
+        vertical: r.vp(8),
+      ),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
       child: SafeArea(
         top: false,
-        child: Column(
+        child: ContentBox(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              height: 56,
+              height: thumb + 4,
               child: ReorderableListView.builder(
                 scrollDirection: Axis.horizontal,
                 buildDefaultDragHandles: false,
@@ -445,8 +476,8 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(6),
                             child: SizedBox(
-                              width: 52,
-                              height: 52,
+                              width: thumb,
+                              height: thumb,
                               child: AssetThumb(
                                 item: item,
                                 orderIndex: -1,
@@ -480,23 +511,27 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: r.vp(8)),
             Row(
               children: [
-                Text(
-                  '${_selected.length} selected · ${totalDuration.pretty}',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.textDim,
+                Expanded(
+                  child: Text(
+                    '${_selected.length} selected · ${totalDuration.pretty}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: r.sp(11.5),
+                      color: AppColors.textDim,
+                    ),
                   ),
                 ),
-                const Spacer(),
+                SizedBox(width: r.dp(10)),
                 InkWell(
                   onTap: _confirm,
                   borderRadius: BorderRadius.circular(13),
                   child: Container(
-                    width: 104,
-                    height: 40,
+                    width: r.dp(104),
+                    height: r.tap(40),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       gradient: AppColors.appBarGradient,
@@ -504,20 +539,21 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
                       boxShadow:
                           AppColors.glow(AppColors.appBar, opacity: 0.34),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           'Next',
                           style: TextStyle(
+                            fontSize: r.sp(14),
                             fontWeight: FontWeight.w800,
                             color: AppColors.onAppBar,
                           ),
                         ),
-                        SizedBox(width: 4),
+                        SizedBox(width: r.dp(4)),
                         Icon(
                           Icons.arrow_forward_rounded,
-                          size: 16,
+                          size: r.ic(16),
                           color: AppColors.onAppBar,
                         ),
                       ],
@@ -527,6 +563,7 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
               ],
             ),
           ],
+          ),
         ),
       ),
     );

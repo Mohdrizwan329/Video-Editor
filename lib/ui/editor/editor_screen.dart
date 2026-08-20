@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/constants.dart';
+import '../../core/utils/responsive.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/layers.dart';
 import '../../data/services/clip_operations.dart';
@@ -27,6 +30,7 @@ import 'panels/speech_panels.dart';
 import 'panels/sticker_panel.dart';
 import 'panels/text_panel.dart';
 import 'panels/voiceover_panel.dart';
+import 'panels/watermark_panel.dart';
 import 'preview/preview_stage.dart';
 import 'timeline/timeline_view.dart';
 import 'toolbar/editor_toolbar.dart';
@@ -44,6 +48,7 @@ enum _Panel {
   transition,
   ratio,
   background,
+  watermark,
   text,
   stickerPicker,
   stickerStyle,
@@ -153,63 +158,14 @@ class _EditorScreenState extends State<EditorScreen> {
               bottom: false,
               child: AnimatedBuilder(
                 animation: _editor,
-                builder: (context, _) {
-                  return Column(
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: const PreviewStage(),
-                        ),
-                      ),
-                      TimelineHeader(
-                        editor: _editor,
-                        onPlayPause: _engine.toggle,
-                        onUndo: _editor.undo,
-                        onRedo: _editor.redo,
-                        onFullscreen: _openFullscreen,
-                        onSnapToBeat: () {
-                          if (!_editor.snapToNearestBeat()) {
-                            _toast('No beat nearby');
-                          }
-                        },
-                        onAddKeyframe: () {
-                          if (_editor.hasKeyframeAtPlayhead) {
-                            _editor.removeKeyframeAtPlayhead();
-                          } else if (!_editor.addKeyframeAtPlayhead()) {
-                            _toast('Select a clip or layer first');
-                          }
-                        },
-                      ),
-                      SizedBox(
-                        height: _timelineHeight(),
-                        child: Container(
-                          color: AppColors.timelineBg,
-                          child: TimelineView(
-                            editor: _editor,
-                            onAddMedia: _pickMoreMedia,
-                            onTransitionTap: (i) {
-                              _editor.selectClip(i);
-                              setState(() {
-                                _transitionIndex = i;
-                                _panel = _Panel.transition;
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-                      if (_panel == _Panel.none)
-                        EditorToolbar(editor: _editor, onAction: _handle)
-                      else
-                        _buildPanel(),
-                      if (_editor.isBusy) _busyBar(),
-                    ],
-                  );
-                },
+                // Every strip below is measured against the room actually
+                // left, so the editor fits a 320pt phone, a phone turned on
+                // its side, a tablet and a resizable desktop window without a
+                // single overflow stripe.
+                builder: (context, _) => LayoutBuilder(
+                  builder: (context, constraints) =>
+                      _layout(context, constraints),
+                ),
               ),
             ),
           ),
@@ -218,6 +174,145 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  /// True once the window is wide enough to put the tools beside the preview
+  /// instead of under it — desktop, web, and landscape tablets.
+  bool _isWideLayout(BoxConstraints c) =>
+      c.maxWidth >= 1000 && c.maxWidth > c.maxHeight;
+
+  Widget _layout(BuildContext context, BoxConstraints constraints) {
+    final r = context.r;
+    final wide = _isWideLayout(constraints);
+    final timelineHeight = _timelineHeight();
+    final tools = _panel == _Panel.none
+        ? EditorToolbar(
+            editor: _editor,
+            onAction: _handle,
+            axis: wide ? Axis.vertical : Axis.horizontal,
+          )
+        : _buildPanel();
+
+    final preview = Padding(
+      padding: EdgeInsets.symmetric(horizontal: r.dp(12), vertical: r.vp(6)),
+      child: PreviewStage(watermarkFocus: _panel == _Panel.watermark),
+    );
+
+    final timeline = Container(
+      color: AppColors.timelineBg,
+      child: TimelineView(
+        editor: _editor,
+        onAddMedia: _pickMoreMedia,
+        onTransitionTap: (i) {
+          _editor.selectClip(i);
+          setState(() {
+            _transitionIndex = i;
+            _panel = _Panel.transition;
+          });
+        },
+      ),
+    );
+
+    final header = TimelineHeader(
+      editor: _editor,
+      onPlayPause: _engine.toggle,
+      onUndo: _editor.undo,
+      onRedo: _editor.redo,
+      onFullscreen: _openFullscreen,
+      onSnapToBeat: () {
+        if (!_editor.snapToNearestBeat()) _toast('No beat nearby');
+      },
+      onAddKeyframe: () {
+        if (_editor.hasKeyframeAtPlayhead) {
+          _editor.removeKeyframeAtPlayhead();
+        } else if (!_editor.addKeyframeAtPlayhead()) {
+          _toast('Select a clip or layer first');
+        }
+      },
+    );
+
+    // What the strips below the preview will take, so the preview knows what
+    // is left and the whole column knows whether it still fits.
+    final headerHeight = math.max(r.vp(34), 32);
+    final toolsHeight = _panel == _Panel.none
+        ? EditorToolbar.heightFor(context, selected: !_editor.selection.isEmpty)
+        : r.height * (r.isShort ? 0.42 : 0.5);
+
+    if (wide) {
+      // The rail holds two or three columns of tools on a laptop and more on
+      // a large monitor, while the timeline keeps the full width underneath.
+      // Its floor is a phone's width, because that is what the panels were
+      // drawn for — squeezing it is what clipped their control rows.
+      final rail = (constraints.maxWidth * 0.28).clamp(320.0, 420.0);
+      return _fit(
+        constraints,
+        headerHeight + timelineHeight + _kMinPreviewHeight,
+        Column(
+          children: [
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: preview),
+                  SizedBox(
+                    width: rail,
+                    child: _panel == _Panel.none
+                        ? tools
+                        : SingleChildScrollView(
+                            // A panel keeps the height it was drawn for; the
+                            // rail scrolls if the window cannot show all of it.
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxHeight: constraints.maxHeight,
+                              ),
+                              child: tools,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            header,
+            SizedBox(height: timelineHeight, child: timeline),
+            if (_editor.isBusy) _busyBar(),
+          ],
+        ),
+      );
+    }
+
+    return _fit(
+      constraints,
+      headerHeight + timelineHeight + toolsHeight + _kMinPreviewHeight,
+      Column(
+        children: [
+          Expanded(child: preview),
+          header,
+          SizedBox(height: timelineHeight, child: timeline),
+          tools,
+          if (_editor.isBusy) _busyBar(),
+        ],
+      ),
+    );
+  }
+
+  /// The preview may be squeezed, but not to nothing.
+  static const double _kMinPreviewHeight = 88;
+
+  /// Hands the column the room it needs. When the window genuinely cannot
+  /// give it — a browser window dragged down to a sliver, a phone in
+  /// landscape with a tall panel open — the editor scrolls instead of
+  /// painting an overflow stripe over the timeline.
+  Widget _fit(BoxConstraints constraints, double needed, Widget column) {
+    if (!constraints.maxHeight.isFinite || constraints.maxHeight >= needed) {
+      return column;
+    }
+    return SingleChildScrollView(
+      child: SizedBox(height: needed, child: column),
+    );
+  }
+
+  /// How tall the timeline has to be for the lanes it is showing. Its rows
+  /// are a fixed density — a ruler, a 56pt video track, 26pt lanes — so this
+  /// is not scaled to the window: shrinking the box would only clip a lane.
+  /// When the window cannot spare the room, [_fit] scrolls instead.
   double _timelineHeight() {
     final p = _editor.project;
     var h = 118.0;
@@ -232,20 +327,25 @@ class _EditorScreenState extends State<EditorScreen> {
   /// The bar rebuilds with the editor so a rename or ratio change shows up
   /// immediately — it now sits outside the body's [AnimatedBuilder].
   PreferredSizeWidget _topBar() {
+    // A phone on its side has little height to spare; the bar gives some of
+    // it back rather than eating the preview.
+    final height = context.r.isShort ? 46.0 : kAppBarHeight;
     return PreferredSize(
-      preferredSize: const Size.fromHeight(kAppBarHeight),
+      preferredSize: Size.fromHeight(height),
       child: AnimatedBuilder(
         animation: _editor,
-        builder: (context, _) => _appBarContent(),
+        builder: (context, _) => _appBarContent(height),
       ),
     );
   }
 
-  AppBar _appBarContent() {
+  AppBar _appBarContent(double height) {
+    final r = context.r;
     return AppBar(
+      toolbarHeight: height,
       titleSpacing: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, size: 21),
+        icon: Icon(Icons.arrow_back, size: r.ic(21)),
         onPressed: () async {
           final navigator = Navigator.of(context);
           await _engine.pause();
@@ -263,28 +363,28 @@ class _EditorScreenState extends State<EditorScreen> {
                 _editor.project.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13.5,
+                style: TextStyle(
+                  fontSize: r.sp(13.5),
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const SizedBox(width: 5),
-            const Icon(Icons.edit, size: 12, color: AppColors.onAppBarDim),
+            SizedBox(width: r.dp(5)),
+            Icon(Icons.edit, size: r.ic(12), color: AppColors.onAppBarDim),
           ],
         ),
       ),
       actions: [
         _ratioBadge(),
-        const SizedBox(width: 6),
+        SizedBox(width: r.dp(6)),
         Padding(
-          padding: const EdgeInsets.only(right: 10),
+          padding: EdgeInsets.only(right: r.dp(10)),
           child: InkWell(
             onTap: _export,
             borderRadius: BorderRadius.circular(11),
             child: Container(
-              height: 33,
-              padding: const EdgeInsets.symmetric(horizontal: 13),
+              height: math.min(r.dp(33), height - 12),
+              padding: EdgeInsets.symmetric(horizontal: r.dp(13)),
               alignment: Alignment.center,
               // The button sits inside the dark bar, so it inverts the pair
               // the rest of the app uses rather than repeating the bar fill.
@@ -292,19 +392,19 @@ class _EditorScreenState extends State<EditorScreen> {
                 color: AppColors.onAppBar,
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.file_upload_outlined,
-                    size: 15,
+                    size: r.ic(15),
                     color: AppColors.appBar,
                   ),
-                  SizedBox(width: 6),
+                  SizedBox(width: r.dp(6)),
                   Text(
                     'Export',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: r.sp(12),
                       fontWeight: FontWeight.w800,
                       color: AppColors.appBar,
                     ),
@@ -319,10 +419,11 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _ratioBadge() {
+    final r = context.r;
     return GestureDetector(
       onTap: () => setState(() => _panel = _Panel.ratio),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        padding: EdgeInsets.symmetric(horizontal: r.dp(9), vertical: r.dp(4)),
         // Tinted off the bar's own foreground, not off a hue — the hues are
         // tuned for the light page and go muddy on the dark bar.
         decoration: BoxDecoration(
@@ -332,8 +433,8 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
         child: Text(
           _editor.project.ratio.label,
-          style: const TextStyle(
-            fontSize: 10.5,
+          style: TextStyle(
+            fontSize: r.sp(10.5),
             fontWeight: FontWeight.w700,
             color: AppColors.onAppBar,
           ),
@@ -343,6 +444,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _busyBar() {
+    final r = context.r;
     return Container(
       color: AppColors.surfaceHigh,
       // Sits below the toolbar when it shows, so it is the strip that meets
@@ -350,26 +452,31 @@ class _EditorScreenState extends State<EditorScreen> {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 30,
+          height: math.max(r.vp(30), 26),
           child: Row(
             children: [
-              const SizedBox(width: 14),
-              const SizedBox(
-                width: 13,
-                height: 13,
-                child: CircularProgressIndicator(
+              SizedBox(width: r.dp(14)),
+              SizedBox(
+                width: r.dp(13),
+                height: r.dp(13),
+                child: const CircularProgressIndicator(
                   strokeWidth: 1.8,
                   color: AppColors.accent,
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(
-                _editor.busyMessage ?? 'Working…',
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.textDim,
+              SizedBox(width: r.dp(10)),
+              Expanded(
+                child: Text(
+                  _editor.busyMessage ?? 'Working…',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: r.sp(11.5),
+                    color: AppColors.textDim,
+                  ),
                 ),
               ),
+              SizedBox(width: r.dp(10)),
             ],
           ),
         ),
@@ -424,6 +531,8 @@ class _EditorScreenState extends State<EditorScreen> {
         return RatioPanel(editor: _editor, onClose: _closePanel);
       case _Panel.background:
         return BackgroundPanel(editor: _editor, onClose: _closePanel);
+      case _Panel.watermark:
+        return WatermarkPanel(editor: _editor, onClose: _closePanel);
       case _Panel.masterVolume:
         return MasterVolumePanel(editor: _editor, onClose: _closePanel);
       case _Panel.voiceOver:
@@ -512,11 +621,17 @@ class _EditorScreenState extends State<EditorScreen> {
       onClose: _closePanel,
       onConfirm: _closePanel,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 26),
+        padding: EdgeInsets.symmetric(
+          horizontal: context.r.dp(16),
+          vertical: context.r.vp(26),
+        ),
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+          style: TextStyle(
+            fontSize: context.r.sp(12),
+            color: AppColors.textDim,
+          ),
         ),
       ),
     );
@@ -619,6 +734,8 @@ class _EditorScreenState extends State<EditorScreen> {
         setState(() => _panel = _Panel.ratio);
       case ToolAction.background:
         setState(() => _panel = _Panel.background);
+      case ToolAction.watermark:
+        setState(() => _panel = _Panel.watermark);
       case ToolAction.masterVolume:
         setState(() => _panel = _Panel.masterVolume);
       case ToolAction.voiceOver:
@@ -927,6 +1044,7 @@ class _FullscreenPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final r = context.r;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Distraction-free playback runs on black, bars included.
       value: const SystemUiOverlayStyle(
@@ -943,11 +1061,15 @@ class _FullscreenPreview extends StatelessWidget {
           child: Column(
             children: [
               SizedBox(
-                height: kAppBarHeight,
+                height: r.isShort ? 42 : kAppBarHeight,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: r.ic(24),
+                    ),
                     onPressed: () {
                       engine.pause();
                       Navigator.pop(context);
@@ -968,6 +1090,7 @@ class _FullscreenPreview extends StatelessWidget {
                           icon: Icon(
                             playing ? Icons.pause : Icons.play_arrow,
                             color: Colors.white,
+                            size: r.ic(24),
                           ),
                           onPressed: engine.toggle,
                         ),
@@ -983,12 +1106,12 @@ class _FullscreenPreview extends StatelessWidget {
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.only(right: 14),
+                        padding: EdgeInsets.only(right: r.dp(14)),
                         child: Text(
                           '${t.inSeconds}s',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white70,
-                            fontSize: 11,
+                            fontSize: r.sp(11),
                           ),
                         ),
                       ),
@@ -996,7 +1119,7 @@ class _FullscreenPreview extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: r.vp(8)),
             ],
           ),
         ),

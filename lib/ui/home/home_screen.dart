@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/responsive.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/project.dart';
 import '../../data/repositories/project_backup.dart';
@@ -11,6 +12,7 @@ import '../../data/models/template.dart';
 import '../editor/editor_screen.dart';
 import '../templates/template_gallery_screen.dart';
 import '../picker/media_picker_screen.dart';
+import '../text_to_video/text_to_video_screen.dart';
 import 'widgets/project_tile.dart';
 
 /// Landing screen: the big "new project" action over the project library.
@@ -25,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ProjectsController>();
+    final r = context.r;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _appBar(context),
@@ -34,47 +37,87 @@ class _HomeScreenState extends State<HomeScreen> {
           color: AppColors.appBar,
           backgroundColor: AppColors.surface,
           onRefresh: controller.refresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: _newProjectCard(context)),
-              SliverToBoxAdapter(child: _templateCard(context)),
-              SliverToBoxAdapter(child: _quickTools(context)),
-              SliverToBoxAdapter(child: _sectionTitle(controller)),
-              if (controller.loading)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.appBar,
-                      strokeWidth: 2,
+          // On a tablet or a desktop window the page stops widening and
+          // centres instead, so a project row never stretches to a metre.
+          child: ContentBox(
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(child: _newProjectCard(context)),
+                SliverToBoxAdapter(child: _textToVideoCard(context)),
+                SliverToBoxAdapter(child: _templateCard(context)),
+                SliverToBoxAdapter(child: _quickTools(context)),
+                SliverToBoxAdapter(child: _sectionTitle(context, controller)),
+                if (controller.loading)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.appBar,
+                        strokeWidth: 2,
+                      ),
                     ),
-                  ),
-                )
-              else if (controller.isEmpty)
-                SliverFillRemaining(hasScrollBody: false, child: _empty())
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 40),
-                  sliver: SliverList.separated(
-                    itemCount: controller.projects.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) {
-                      final p = controller.projects[i];
-                      return ProjectTile(
-                        project: p,
-                        onTap: () => _open(context, p),
-                        onRename: () => _rename(context, p),
-                        onDuplicate: () => controller.duplicate(p),
-                        onDelete: () => _confirmDelete(context, p),
-                        onBackup: () => _backup(context, p),
-                      );
-                    },
-                  ),
-                ),
-            ],
+                  )
+                else if (controller.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _empty(context),
+                  )
+                else
+                  _projectSliver(context, controller, r),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// One column of rows on a phone; on anything wider the same rows tile into
+  /// a grid so the extra width becomes more projects on screen, not longer
+  /// rows.
+  Widget _projectSliver(
+    BuildContext context,
+    ProjectsController controller,
+    Responsive r,
+  ) {
+    final padding = EdgeInsets.fromLTRB(r.gutter, r.vp(4), r.gutter, r.vp(40));
+
+    Widget tileAt(int i) {
+      final p = controller.projects[i];
+      return ProjectTile(
+        project: p,
+        onTap: () => _open(context, p),
+        onRename: () => _rename(context, p),
+        onDuplicate: () => controller.duplicate(p),
+        onDelete: () => _confirmDelete(context, p),
+        onBackup: () => _backup(context, p),
+      );
+    }
+
+    if (r.isCompact) {
+      return SliverPadding(
+        padding: padding,
+        sliver: SliverList.separated(
+          itemCount: controller.projects.length,
+          separatorBuilder: (_, _) => SizedBox(height: r.vp(10)),
+          itemBuilder: (context, i) => tileAt(i),
+        ),
+      );
+    }
+    return SliverPadding(
+      padding: padding,
+      sliver: SliverGrid.builder(
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 460,
+          crossAxisSpacing: r.dp(12),
+          mainAxisSpacing: r.dp(12),
+          // The row is as tall as its cover plus the card's padding; fixing
+          // the extent keeps every tile aligned whatever the name length.
+          mainAxisExtent: ProjectTile.extentFor(context),
+        ),
+        itemCount: controller.projects.length,
+        itemBuilder: (context, i) => tileAt(i),
       ),
     );
   }
@@ -82,6 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The one top bar the home screen gets: same height and same flat fill as
   /// every other screen's app bar.
   PreferredSizeWidget _appBar(BuildContext context) {
+    final r = context.r;
     return AppBar(
       titleSpacing: 0,
       leadingWidth: 52,
@@ -89,12 +133,12 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         IconButton(
           tooltip: 'Restore project',
-          icon: const Icon(Icons.unarchive_outlined, size: 20),
+          icon: Icon(Icons.unarchive_outlined, size: r.ic(20)),
           onPressed: () => _restore(context),
         ),
         IconButton(
           tooltip: 'How it works',
-          icon: const Icon(Icons.help_outline, size: 20),
+          icon: Icon(Icons.help_outline, size: r.ic(20)),
           onPressed: () => _showAbout(context),
         ),
         const SizedBox(width: 4),
@@ -105,84 +149,70 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The primary action: the app bar's own fill dropped onto the light page,
   /// so it is unmistakably the thing to tap without introducing a new hue.
   Widget _newProjectCard(BuildContext context) {
+    final r = context.r;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(10), r.gutter, r.vp(4)),
+      child: _HeroCard(
+        icon: Icons.add,
+        iconSize: r.ic(28),
+        title: 'New Project',
+        subtitle: 'Pick videos and photos to start',
+        subtitleColor: AppColors.onAppBarDim,
+        gradient: AppColors.appBarGradient,
+        glow: AppColors.glow(AppColors.appBar, opacity: 0.34),
         onTap: () => _startNewProject(context),
-        child: Container(
-          height: 98,
-          decoration: BoxDecoration(
-            gradient: AppColors.appBarGradient,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: AppColors.glow(AppColors.appBar, opacity: 0.34),
-          ),
-          child: Row(
-            children: [
-              const SizedBox(width: 18),
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.onAppBar.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.onAppBar.withValues(alpha: 0.28),
-                    width: 1,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.add,
-                  color: AppColors.onAppBar,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'New Project',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.onAppBar,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Pick videos and photos to start',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.onAppBarDim,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                color: AppColors.onAppBar,
-                size: 21,
-              ),
-              const SizedBox(width: 16),
-            ],
-          ),
-        ),
       ),
     );
   }
 
-  Widget _templateCard(BuildContext context) {
+  /// The second way in: no footage at all, just a prompt. It carries the same
+  /// weight as [_newProjectCard] because it is an equal starting point, and
+  /// takes the hue wheel's violet so the two are never mistaken for each other.
+  Widget _textToVideoCard(BuildContext context) {
+    final r = context.r;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, 0),
+      child: _HeroCard(
+        icon: Icons.text_fields,
+        iconSize: r.ic(26),
+        title: 'Generate Text to Video',
+        subtitle: 'Describe a shot, AI films it',
+        subtitleColor: const Color(0xE6FFFFFF),
+        gradient: AppColors.heroGradient,
+        glow: AppColors.glow(AppColors.violet, opacity: 0.34),
+        onTap: () => _startTextToVideo(context),
+      ),
+    );
+  }
+
+  /// Builds the project on the generator screen, then drops straight into the
+  /// editor with it — the same landing point every other entry point uses.
+  Future<void> _startTextToVideo(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final controller = context.read<ProjectsController>();
+
+    final project = await navigator.push<Project>(
+      MaterialPageRoute(builder: (_) => const TextToVideoScreen()),
+    );
+    if (project == null) return;
+
+    await controller.refresh();
+    await navigator.push(
+      MaterialPageRoute(builder: (_) => EditorScreen(project: project)),
+    );
+    await controller.refresh();
+  }
+
+  Widget _templateCard(BuildContext context) {
+    final r = context.r;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, 0),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () => _startFromTemplate(context),
         child: Container(
-          height: 76,
+          constraints: BoxConstraints(minHeight: r.vp(76)),
+          padding: EdgeInsets.symmetric(vertical: r.vp(8)),
           decoration: BoxDecoration(
             gradient: AppColors.tint(AppColors.appBar),
             borderRadius: BorderRadius.circular(18),
@@ -190,43 +220,55 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Row(
             children: [
-              const SizedBox(width: 16),
+              SizedBox(width: r.dp(16)),
               Container(
-                width: 42,
-                height: 42,
+                width: r.dp(42),
+                height: r.dp(42),
                 decoration: BoxDecoration(
                   gradient: AppColors.appBarGradient,
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.auto_awesome,
                   color: AppColors.onAppBar,
-                  size: 21,
+                  size: r.ic(21),
                 ),
               ),
-              const SizedBox(width: 14),
-              const Expanded(
+              SizedBox(width: r.dp(14)),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'Start from a template',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 14.5,
+                        fontSize: r.sp(14.5),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    SizedBox(height: r.vp(2)),
                     Text(
                       'Cuts, moves and titles already set up',
-                      style: TextStyle(fontSize: 11, color: AppColors.textDim),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: r.sp(11),
+                        color: AppColors.textDim,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AppColors.appBarMuted),
-              const SizedBox(width: 12),
+              Icon(
+                Icons.chevron_right,
+                color: AppColors.appBarMuted,
+                size: r.ic(24),
+              ),
+              SizedBox(width: r.dp(12)),
             ],
           ),
         ),
@@ -277,95 +319,139 @@ class _HomeScreenState extends State<HomeScreen> {
       (Icons.stay_current_landscape, 'YouTube', '16:9', CanvasRatio.r16x9),
       (Icons.panorama_wide_angle, 'Cine', '2.35:1', CanvasRatio.r235x1),
     ];
-    return SizedBox(
-      // 102 = ListView vertical padding (14 + 6) + card padding (11 * 2) +
-      // the 1px border on each side + the 54px the Column needs for its
-      // icon, label and ratio rows. Anything tighter overflows by ~1px.
-      height: 102,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
-        itemCount: tools.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, i) {
-          final (icon, label, ratio, canvasRatio) = tools[i];
-          return InkWell(
+    final r = context.r;
+    final ts = MediaQuery.textScalerOf(context);
+    // The strip is measured, not guessed: the icon, both labels at whatever
+    // the system font scale is, the card's padding and border, and the list's
+    // own padding. Guessing is what used to clip the ratio line on a 320pt
+    // phone and at large text sizes.
+    double line(double size) => ts.scale(r.sp(size)) * 1.5;
+    final tileWidth = r.dp(100);
+    final tileHeight =
+        r.dp(11) * 2 + 2 + r.ic(20) + line(12.5) + r.vp(1) + line(10);
+    final stripHeight = tileHeight + r.vp(14) + r.vp(6);
+    final gap = r.dp(10);
+
+    Widget tile(int i, {double? width}) {
+      final (icon, label, ratio, canvasRatio) = tools[i];
+      return InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _startNewProject(context, ratio: canvasRatio),
+        child: Container(
+          width: width,
+          padding: EdgeInsets.all(r.dp(11)),
+          decoration: BoxDecoration(
+            gradient: AppColors.tint(AppColors.appBar),
             borderRadius: BorderRadius.circular(16),
-            onTap: () => _startNewProject(context, ratio: canvasRatio),
-            child: Container(
-              width: 100,
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(
-                gradient: AppColors.tint(AppColors.appBar),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.appBar.withValues(alpha: 0.16),
+            border: Border.all(color: AppColors.appBar.withValues(alpha: 0.16)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: r.ic(20), color: AppColors.appBarMuted),
+              const Spacer(),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: r.sp(12.5),
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              SizedBox(height: r.vp(1)),
+              Text(
+                ratio,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: r.sp(10),
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textFaint,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: stripHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final needed =
+              tools.length * tileWidth +
+              (tools.length - 1) * gap +
+              r.gutter * 2;
+          // Once all four fit, they share the row evenly instead of leaving a
+          // ragged scrollable strip on a wide window.
+          if (needed <= constraints.maxWidth) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                r.gutter,
+                r.vp(14),
+                r.gutter,
+                r.vp(6),
+              ),
+              child: Row(
                 children: [
-                  Icon(icon, size: 20, color: AppColors.appBarMuted),
-                  const Spacer(),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    ratio,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textFaint,
-                    ),
-                  ),
+                  for (var i = 0; i < tools.length; i++) ...[
+                    if (i > 0) SizedBox(width: gap),
+                    Expanded(child: tile(i)),
+                  ],
                 ],
               ),
-            ),
+            );
+          }
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.fromLTRB(r.gutter, r.vp(14), r.gutter, r.vp(6)),
+            itemCount: tools.length,
+            separatorBuilder: (_, _) => SizedBox(width: gap),
+            itemBuilder: (context, i) => tile(i, width: tileWidth),
           );
         },
       ),
     );
   }
 
-  Widget _sectionTitle(ProjectsController c) {
+  Widget _sectionTitle(BuildContext context, ProjectsController c) {
+    final r = context.r;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+      padding: EdgeInsets.fromLTRB(
+        r.gutter + r.dp(4),
+        r.vp(16),
+        r.gutter + r.dp(4),
+        r.vp(10),
+      ),
       child: Row(
         children: [
           Container(
             width: 3,
-            height: 15,
+            height: r.sp(15),
             decoration: BoxDecoration(
               gradient: AppColors.appBarGradient,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 9),
-          const Text(
+          SizedBox(width: r.dp(9)),
+          Text(
             'Projects',
-            style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: r.sp(14.5), fontWeight: FontWeight.w700),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: r.dp(8)),
           if (!c.loading)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+              padding: EdgeInsets.symmetric(horizontal: r.dp(7), vertical: 1.5),
               decoration: BoxDecoration(
                 color: AppColors.appBar.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Text(
                 '${c.projects.length}',
-                style: const TextStyle(
-                  fontSize: 10.5,
+                style: TextStyle(
+                  fontSize: r.sp(10.5),
                   fontWeight: FontWeight.w700,
                   color: AppColors.appBarMuted,
                 ),
@@ -376,14 +462,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _empty() {
+  Widget _empty(BuildContext context) {
+    final r = context.r;
     return Padding(
-      padding: const EdgeInsets.only(top: 44),
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(44), r.gutter, r.vp(24)),
       child: Column(
         children: [
           Container(
-            width: 74,
-            height: 74,
+            width: r.dp(74),
+            height: r.dp(74),
             decoration: BoxDecoration(
               gradient: AppColors.tint(AppColors.appBar),
               shape: BoxShape.circle,
@@ -391,21 +478,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: AppColors.appBar.withValues(alpha: 0.18),
               ),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.movie_creation_outlined,
-              size: 32,
+              size: r.ic(32),
               color: AppColors.appBarMuted,
             ),
           ),
-          const SizedBox(height: 14),
-          const Text(
+          SizedBox(height: r.vp(14)),
+          Text(
             'No projects yet',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: r.sp(14), fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 4),
-          const Text(
+          SizedBox(height: r.vp(4)),
+          Text(
             'Tap New Project to begin',
-            style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: r.sp(11.5), color: AppColors.textFaint),
           ),
         ],
       ),
@@ -526,47 +615,162 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showAbout(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      // On a wide window the sheet stops at a readable column rather than
+      // running the full width of a desktop monitor.
+      constraints: BoxConstraints(
+        maxWidth: context.r.maxDialogWidth,
+        maxHeight: context.r.height * 0.85,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) => AppTheme.onPopup(
-        child: const Padding(
-          padding: EdgeInsets.fromLTRB(20, 18, 20, 30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'How it works',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.onAppBar,
+      builder: (sheetContext) {
+        final r = sheetContext.r;
+        return AppTheme.onPopup(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              r.dp(20),
+              r.vp(18),
+              r.dp(20),
+              r.vp(30),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How it works',
+                  style: TextStyle(
+                    fontSize: r.sp(15),
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onAppBar,
+                  ),
+                ),
+                SizedBox(height: r.vp(12)),
+                const _Tip(
+                  icon: Icons.touch_app,
+                  text:
+                      'Drag the timeline to scrub. The playhead stays centred.',
+                ),
+                const _Tip(
+                  icon: Icons.pinch,
+                  text: 'Pinch the timeline to zoom in and out.',
+                ),
+                const _Tip(
+                  icon: Icons.content_cut,
+                  text: 'Tap a clip, then Split to cut at the playhead.',
+                ),
+                const _Tip(
+                  icon: Icons.movie_filter,
+                  text: 'Tap the ◇ between clips to add a transition.',
+                ),
+                const _Tip(
+                  icon: Icons.file_download,
+                  text: 'Export renders with FFmpeg at up to 4K.',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The two full-width entry points at the top of the page. They differ only in
+/// their fill and their words, so they are one widget sized from the window
+/// rather than two copies of the same fixed-height row.
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({
+    required this.icon,
+    required this.iconSize,
+    required this.title,
+    required this.subtitle,
+    required this.subtitleColor,
+    required this.gradient,
+    required this.glow,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final double iconSize;
+  final String title;
+  final String subtitle;
+  final Color subtitleColor;
+  final Gradient gradient;
+  final List<BoxShadow> glow;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = context.r;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        // A minimum rather than a fixed height: at the largest text scale the
+        // two lines grow the card instead of overflowing it.
+        constraints: BoxConstraints(minHeight: r.vp(98)),
+        padding: EdgeInsets.symmetric(vertical: r.vp(10)),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: glow,
+        ),
+        child: Row(
+          children: [
+            SizedBox(width: r.dp(18)),
+            Container(
+              width: r.dp(50),
+              height: r.dp(50),
+              decoration: BoxDecoration(
+                color: AppColors.onAppBar.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.onAppBar.withValues(alpha: 0.28),
+                  width: 1,
                 ),
               ),
-              SizedBox(height: 12),
-              _Tip(
-                icon: Icons.touch_app,
-                text: 'Drag the timeline to scrub. The playhead stays centred.',
+              child: Icon(icon, color: AppColors.onAppBar, size: iconSize),
+            ),
+            SizedBox(width: r.dp(14)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: r.sp(17),
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.onAppBar,
+                    ),
+                  ),
+                  SizedBox(height: r.vp(3)),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: r.sp(11.5),
+                      color: subtitleColor,
+                    ),
+                  ),
+                ],
               ),
-              _Tip(
-                icon: Icons.pinch,
-                text: 'Pinch the timeline to zoom in and out.',
-              ),
-              _Tip(
-                icon: Icons.content_cut,
-                text: 'Tap a clip, then Split to cut at the playhead.',
-              ),
-              _Tip(
-                icon: Icons.movie_filter,
-                text: 'Tap the ◇ between clips to add a transition.',
-              ),
-              _Tip(
-                icon: Icons.file_download,
-                text: 'Export renders with FFmpeg at up to 4K.',
-              ),
-            ],
-          ),
+            ),
+            Icon(
+              Icons.arrow_forward_rounded,
+              color: AppColors.onAppBar,
+              size: r.ic(21),
+            ),
+            SizedBox(width: r.dp(16)),
+          ],
         ),
       ),
     );
@@ -581,28 +785,29 @@ class _Tip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final r = context.r;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
+      padding: EdgeInsets.only(bottom: r.vp(13)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: r.dp(28),
+            height: r.dp(28),
             decoration: BoxDecoration(
               color: AppColors.onAppBar.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, size: 15, color: AppColors.onAppBar),
+            child: Icon(icon, size: r.ic(15), color: AppColors.onAppBar),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: r.dp(12)),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 5),
+              padding: EdgeInsets.only(top: r.vp(5)),
               child: Text(
                 text,
-                style: const TextStyle(
-                  fontSize: 12.5,
+                style: TextStyle(
+                  fontSize: r.sp(12.5),
                   color: AppColors.onAppBarDim,
                 ),
               ),

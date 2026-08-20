@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/utils/constants.dart';
 import '../models/layers.dart';
+import '../models/watermark.dart';
 
 /// Result of baking one overlay into a PNG for the renderer.
 class RasterizedLayer {
@@ -48,10 +49,15 @@ class OverlayRasterizer {
     return d;
   }
 
+  /// [opacity] is baked into the PNG rather than left to the filter graph.
+  /// The preview draws the layer inside an [Opacity], so folding the same
+  /// factor into the alpha channel here is what keeps the two in step —
+  /// and it costs nothing at render time, unlike a per-frame `geq`.
   Future<RasterizedLayer?> rasterizeText(
     TextLayer layer, {
     required int outWidth,
     required int outHeight,
+    double opacity = 1.0,
   }) async {
     final scale = outHeight / kCanvasReferenceHeight;
     // Measure once to size the gradient, then build the real painter.
@@ -80,6 +86,10 @@ class OverlayRasterizer {
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
+    if (opacity < 1) {
+      canvas.saveLayer(Rect.fromLTWH(0, 0, boxW, boxH),
+          Paint()..color = Color.fromRGBO(0, 0, 0, opacity.clamp(0.0, 1.0)));
+    }
     canvas.translate(boxW / 2, boxH / 2);
     if (rot != 0) canvas.rotate(rot);
 
@@ -103,6 +113,7 @@ class OverlayRasterizer {
       strokePainter.paint(canvas, origin);
     }
     painter.paint(canvas, origin);
+    if (opacity < 1) canvas.restore();
 
     final picture = recorder.endRecording();
     return _writePng(picture, boxW.ceil(), boxH.ceil(), layer.transform,
@@ -142,6 +153,62 @@ class OverlayRasterizer {
     final picture = recorder.endRecording();
     return _writePng(picture, boxW.ceil(), boxH.ceil(), layer.transform,
         outWidth, outHeight, 'sticker_${layer.id}');
+  }
+
+  /// Bakes an image watermark: the user's logo scaled to its canvas size,
+  /// rotated, and faded to the mark's opacity. Going through a PNG rather
+  /// than feeding the original file to FFmpeg means the geometry maths lives
+  /// in exactly one place and matches what the preview drew.
+  Future<RasterizedLayer?> rasterizeWatermarkImage(
+    Watermark mark, {
+    required int outWidth,
+    required int outHeight,
+  }) async {
+    final path = mark.imagePath;
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    if (!await file.exists()) return null;
+
+    final ui.Image src;
+    try {
+      final codec = await ui.instantiateImageCodec(await file.readAsBytes());
+      src = (await codec.getNextFrame()).image;
+      codec.dispose();
+    } catch (_) {
+      return null;
+    }
+    if (src.width <= 0 || src.height <= 0) {
+      src.dispose();
+      return null;
+    }
+
+    final scale = outHeight / kCanvasReferenceHeight * mark.transform.scale;
+    final drawW = mark.imageSize * scale;
+    final drawH = drawW * src.height / src.width;
+    final rot = mark.transform.rotation;
+    final cos = math.cos(rot).abs(), sin = math.sin(rot).abs();
+    final boxW = drawW * cos + drawH * sin + 4;
+    final boxH = drawW * sin + drawH * cos + 4;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final opacity = mark.transform.opacity.clamp(0.0, 1.0);
+    canvas.translate(boxW / 2, boxH / 2);
+    if (rot != 0) canvas.rotate(rot);
+    canvas.drawImageRect(
+      src,
+      Rect.fromLTWH(0, 0, src.width.toDouble(), src.height.toDouble()),
+      Rect.fromCenter(center: Offset.zero, width: drawW, height: drawH),
+      Paint()
+        ..isAntiAlias = true
+        ..filterQuality = FilterQuality.high
+        ..color = Color.fromRGBO(0, 0, 0, opacity),
+    );
+    src.dispose();
+
+    final picture = recorder.endRecording();
+    return _writePng(picture, boxW.ceil(), boxH.ceil(), mark.transform,
+        outWidth, outHeight, 'watermark');
   }
 
   Future<RasterizedLayer?> _writePng(

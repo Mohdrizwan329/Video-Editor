@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/responsive.dart';
 import '../../../data/models/enums.dart';
 import '../../../data/models/layers.dart';
 import '../../../state/editor_controller.dart';
@@ -13,9 +14,17 @@ import 'layer_views.dart';
 /// The player canvas: background, the clip under the playhead, then every
 /// overlay lane — composited in the same order the exporter uses.
 class PreviewStage extends StatelessWidget {
-  const PreviewStage({super.key, this.interactive = true});
+  const PreviewStage({
+    super.key,
+    this.interactive = true,
+    this.watermarkFocus = false,
+  });
 
   final bool interactive;
+
+  /// True while the watermark panel is open: the mark is framed and can be
+  /// dragged, pinched and twisted straight on the canvas.
+  final bool watermarkFocus;
 
   @override
   Widget build(BuildContext context) {
@@ -88,9 +97,19 @@ class PreviewStage extends StatelessWidget {
                           selected:
                               editor.selection.matches(LaneKind.text, text.id),
                         ),
+                    // Above every lane: the creator's own mark covers the
+                    // whole timeline, exactly as the exporter composites it.
+                    if (project.watermark.isReady)
+                      WatermarkView(
+                        mark: project.watermark,
+                        canvasSize: canvasSize,
+                        focused: watermarkFocus,
+                      ),
                     if (project.clips.isEmpty) const _EmptyCanvas(),
-                    if (interactive)
+                    if (interactive && !watermarkFocus)
                       _LayerGestureLayer(canvasSize: canvasSize, time: time),
+                    if (interactive && watermarkFocus)
+                      _WatermarkGestureLayer(canvasSize: canvasSize),
                   ],
                 );
               },
@@ -107,17 +126,33 @@ class _EmptyCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.add_photo_alternate_outlined,
-              size: 34, color: AppColors.textFaint),
-          SizedBox(height: 8),
-          Text('Add media to begin',
-              style: TextStyle(fontSize: 12, color: AppColors.textFaint)),
-        ],
-      ),
+    final r = context.r;
+    // With a panel open on a short window the canvas can shrink to a strip.
+    // The prompt drops its icon rather than drawing an overflow stripe.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tight = constraints.maxHeight < r.dp(34) + r.sp(12) * 2 + 16;
+        return Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!tight) ...[
+                  Icon(Icons.add_photo_alternate_outlined,
+                      size: r.ic(34), color: AppColors.textFaint),
+                  SizedBox(height: r.vp(8)),
+                ],
+                Text('Add media to begin',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: r.sp(12), color: AppColors.textFaint)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -191,6 +226,61 @@ class _LayerGestureLayerState extends State<_LayerGestureLayer> {
             t.rotation = _startRotation + details.rotation;
           }
         }, record: !_recorded);
+        _recorded = true;
+      },
+      onScaleEnd: (_) => _recorded = false,
+    );
+  }
+}
+
+
+/// Direct manipulation of the watermark while its panel is open. It takes
+/// over from [_LayerGestureLayer] so a drag cannot be stolen by whichever
+/// layer happened to be selected before.
+class _WatermarkGestureLayer extends StatefulWidget {
+  const _WatermarkGestureLayer({required this.canvasSize});
+
+  final Size canvasSize;
+
+  @override
+  State<_WatermarkGestureLayer> createState() => _WatermarkGestureLayerState();
+}
+
+class _WatermarkGestureLayerState extends State<_WatermarkGestureLayer> {
+  double _startScale = 1;
+  double _startRotation = 0;
+  Offset _startPosition = Offset.zero;
+  Offset _dragged = Offset.zero;
+  bool _recorded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final editor = context.read<EditorController>();
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onScaleStart: (_) {
+        final t = editor.project.watermark.transform;
+        _startScale = t.scale;
+        _startRotation = t.rotation;
+        _startPosition = Offset(t.x, t.y);
+        _dragged = Offset.zero;
+        _recorded = false;
+      },
+      onScaleUpdate: (details) {
+        _dragged += details.focalPointDelta;
+        // Only the gesture that starts the drag goes on the undo stack, so a
+        // single reposition is one undo step rather than hundreds.
+        editor.setWatermark(record: !_recorded, (mark) {
+          final t = mark.transform;
+          t.x = (_startPosition.dx + _dragged.dx / widget.canvasSize.width)
+              .clamp(-0.25, 1.25);
+          t.y = (_startPosition.dy + _dragged.dy / widget.canvasSize.height)
+              .clamp(-0.25, 1.25);
+          if (details.pointerCount > 1) {
+            t.scale = (_startScale * details.scale).clamp(0.1, 4.0);
+            t.rotation = _startRotation + details.rotation;
+          }
+        });
         _recorded = true;
       },
       onScaleEnd: (_) => _recorded = false,

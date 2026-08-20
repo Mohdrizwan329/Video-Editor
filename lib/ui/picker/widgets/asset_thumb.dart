@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/responsive.dart';
 import '../../../core/utils/duration_ext.dart';
 import '../../../data/services/media_library.dart';
 import '../../../data/services/thumbnail_service.dart';
@@ -63,6 +64,7 @@ class _AssetThumbState extends State<AssetThumb> {
   @override
   Widget build(BuildContext context) {
     final selected = widget.orderIndex >= 0;
+    final r = context.r;
     return GestureDetector(
       onTap: widget.onTap,
       child: Stack(
@@ -77,11 +79,11 @@ class _AssetThumbState extends State<AssetThumb> {
                 gaplessPlayback: true,
                 errorBuilder: (_, _, _) => const SizedBox())
           else
-            const Center(
+            Center(
               child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
+                width: r.dp(16),
+                height: r.dp(16),
+                child: const CircularProgressIndicator(
                     strokeWidth: 1.4, color: AppColors.textFaint),
               ),
             ),
@@ -90,7 +92,8 @@ class _AssetThumbState extends State<AssetThumb> {
               right: 4,
               bottom: 4,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                padding: EdgeInsets.symmetric(
+                    horizontal: r.dp(4), vertical: r.dp(1)),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.62),
                   borderRadius: BorderRadius.circular(4),
@@ -99,7 +102,7 @@ class _AssetThumbState extends State<AssetThumb> {
                   widget.item.duration > Duration.zero
                       ? widget.item.duration.mmss
                       : 'video',
-                  style: const TextStyle(fontSize: 9, color: Colors.white),
+                  style: TextStyle(fontSize: r.sp(9), color: Colors.white),
                 ),
               ),
             ),
@@ -110,14 +113,14 @@ class _AssetThumbState extends State<AssetThumb> {
               right: 4,
               top: 4,
               child: Container(
-                width: 20,
-                height: 20,
+                width: r.dp(20),
+                height: r.dp(20),
                 decoration: const BoxDecoration(
                     color: AppColors.accent, shape: BoxShape.circle),
                 alignment: Alignment.center,
                 child: Text('${widget.orderIndex + 1}',
-                    style: const TextStyle(
-                        fontSize: 10.5,
+                    style: TextStyle(
+                        fontSize: r.sp(10.5),
                         fontWeight: FontWeight.w800,
                         color: AppColors.onAccent)),
               ),

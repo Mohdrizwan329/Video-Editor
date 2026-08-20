@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/responsive.dart';
 import '../../state/projects_controller.dart';
 import '../editor/preview/chroma_box.dart';
 import '../home/home_screen.dart';
@@ -112,55 +113,70 @@ class _SplashScreenState extends State<SplashScreen>
       ),
       child: Scaffold(
         backgroundColor: AppColors.appBar,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ScaleTransition(
-                scale: Tween(begin: 0.72, end: 1.0).animate(_markIn),
-                child: FadeTransition(
-                  opacity: _markIn,
-                  child: const AppLogo(size: 84, glow: true),
+        body: Builder(
+          builder: (context) {
+            final r = context.r;
+            // The mark is sized from the window's short edge rather than a
+            // fixed 84, so it reads the same on a 320pt phone, a tablet and a
+            // maximised desktop window.
+            final mark = (r.shortestSide * 0.22).clamp(64.0, 132.0);
+            return Center(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: r.gutter,
+                  vertical: r.vp(24),
                 ),
-              ),
-              const SizedBox(height: 22),
-              FadeTransition(
-                opacity: _textIn,
-                child: const Column(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Video Editor',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.onAppBar,
+                    ScaleTransition(
+                      scale: Tween(begin: 0.72, end: 1.0).animate(_markIn),
+                      child: FadeTransition(
+                        opacity: _markIn,
+                        child: AppLogo(size: mark, glow: true),
                       ),
                     ),
-                    SizedBox(height: 5),
-                    Text(
-                      'Cut · Colour · Caption · Export',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.onAppBarDim,
+                    SizedBox(height: r.vp(22)),
+                    FadeTransition(
+                      opacity: _textIn,
+                      child: Column(
+                        children: [
+                          Text(
+                            'Video Editor',
+                            style: TextStyle(
+                              fontSize: r.sp(22),
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.onAppBar,
+                            ),
+                          ),
+                          SizedBox(height: r.vp(5)),
+                          Text(
+                            'Cut · Colour · Caption · Export',
+                            style: TextStyle(
+                              fontSize: r.sp(11),
+                              color: AppColors.onAppBarDim,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: r.vp(34)),
+                    FadeTransition(
+                      opacity: _textIn,
+                      child: SizedBox(
+                        width: r.dp(88),
+                        child: const LinearProgressIndicator(
+                          minHeight: 2.5,
+                          backgroundColor: AppColors.onAppBarDim,
+                          color: AppColors.accent,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 34),
-              FadeTransition(
-                opacity: _textIn,
-                child: const SizedBox(
-                  width: 88,
-                  child: LinearProgressIndicator(
-                    minHeight: 2.5,
-                    backgroundColor: AppColors.onAppBarDim,
-                    color: AppColors.accent,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

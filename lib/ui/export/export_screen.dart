@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
@@ -6,6 +7,7 @@ import 'package:gal/gal.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/duration_ext.dart';
+import '../../core/utils/responsive.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/project.dart';
 import '../../data/services/clip_operations.dart';
@@ -46,16 +48,22 @@ class _ExportScreenState extends State<ExportScreen> {
         appBar: AppBar(
           title: const Text('Export'),
           leading: IconButton(
-            icon: const Icon(Icons.close, size: 21),
-            onPressed: () => _running ? _confirmCancel() : Navigator.pop(context),
+            icon: Icon(Icons.close, size: context.r.ic(21)),
+            onPressed: () =>
+                _running ? _confirmCancel() : Navigator.pop(context),
           ),
         ),
         body: SafeArea(
-          child: _result != null
-              ? _resultView()
-              : _running
-                  ? _progressView()
-                  : _settingsView(),
+          // One readable column whatever the window: a phone fills it, a
+          // desktop centres it instead of stretching the option rows.
+          child: ContentBox(
+            maxWidth: 640,
+            child: _result != null
+                ? _resultView()
+                : _running
+                    ? _progressView()
+                    : _settingsView(),
+          ),
         ),
       ),
     );
@@ -66,18 +74,19 @@ class _ExportScreenState extends State<ExportScreen> {
   Widget _settingsView() {
     final duration = widget.project.totalDuration;
     final (w, h) = _settings.outputSize;
+    final r = context.r;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, r.vp(24)),
       children: [
         _summaryCard(w, h, duration),
-        const SizedBox(height: 18),
+        SizedBox(height: r.vp(18)),
         _sectionLabel('Format'),
         _optionRow(
           const ['MP4 video', 'Animated GIF'],
           _gifMode ? 1 : 0,
           (i) => setState(() => _gifMode = i == 1),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: r.vp(16)),
         _sectionLabel('Resolution'),
         _optionRow(
           ExportResolution.values.map((r) => r.label).toList(),
@@ -85,26 +94,26 @@ class _ExportScreenState extends State<ExportScreen> {
           (i) => setState(
               () => _settings.resolution = ExportResolution.values[i]),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: r.vp(16)),
         _sectionLabel('Frame rate'),
         _optionRow(
           ExportFps.values.map((f) => f.label).toList(),
           ExportFps.values.indexOf(_settings.fps),
           (i) => setState(() => _settings.fps = ExportFps.values[i]),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: r.vp(16)),
         _sectionLabel('Quality'),
         _optionRow(
           ExportQuality.values.map((q) => q.label).toList(),
           ExportQuality.values.indexOf(_settings.quality),
           (i) => setState(() => _settings.quality = ExportQuality.values[i]),
         ),
-        const SizedBox(height: 26),
+        SizedBox(height: r.vp(26)),
         InkWell(
           onTap: _start,
           borderRadius: BorderRadius.circular(16),
           child: Container(
-            height: 52,
+            height: r.tap(52),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               gradient: AppColors.appBarGradient,
@@ -114,24 +123,24 @@ class _ExportScreenState extends State<ExportScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.rocket_launch_rounded,
-                    size: 19, color: AppColors.onAppBar),
-                const SizedBox(width: 9),
+                Icon(Icons.rocket_launch_rounded,
+                    size: r.ic(19), color: AppColors.onAppBar),
+                SizedBox(width: r.dp(9)),
                 Text(_gifMode ? 'Export GIF' : 'Start export',
-                    style: const TextStyle(
-                        fontSize: 15.5,
+                    style: TextStyle(
+                        fontSize: r.sp(15.5),
                         fontWeight: FontWeight.w800,
                         color: AppColors.onAppBar)),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        const Text(
+        SizedBox(height: r.vp(12)),
+        Text(
           'Rendering runs on device with FFmpeg. Keep the app open — higher '
           'resolutions and slower presets take longer.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: AppColors.textFaint),
+          style: TextStyle(fontSize: r.sp(11), color: AppColors.textFaint),
         ),
       ],
     );
@@ -139,8 +148,9 @@ class _ExportScreenState extends State<ExportScreen> {
 
   Widget _summaryCard(int w, int h, Duration duration) {
     final size = _settings.estimatedBytes(duration);
+    final r = context.r;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(r.dp(16)),
       decoration: BoxDecoration(
         gradient: AppColors.tint(AppColors.appBar),
         borderRadius: BorderRadius.circular(18),
@@ -151,24 +161,25 @@ class _ExportScreenState extends State<ExportScreen> {
       child: Column(
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _stat('Size', '$w × $h'),
-              _stat('Length', duration.pretty),
-              _stat('Est. file', _bytes(size)),
+              Expanded(child: _stat('Size', '$w × $h')),
+              Expanded(child: _stat('Length', duration.pretty)),
+              Expanded(child: _stat('Est. file', _bytes(size))),
             ],
           ),
-          const Divider(height: 22),
+          Divider(height: r.vp(22)),
           Row(
             children: [
-              const Icon(Icons.info_outline, size: 14, color: AppColors.textFaint),
-              const SizedBox(width: 8),
+              Icon(Icons.info_outline,
+                  size: r.ic(14), color: AppColors.textFaint),
+              SizedBox(width: r.dp(8)),
               Expanded(
                 child: Text(
                   'H.264 · AAC · ${_settings.videoBitrateKbps} kbps · '
                   '${_settings.preset} preset',
-                  style: const TextStyle(
-                      fontSize: 11, color: AppColors.textFaint),
+                  style: TextStyle(
+                      fontSize: r.sp(11), color: AppColors.textFaint),
                 ),
               ),
             ],
@@ -178,92 +189,122 @@ class _ExportScreenState extends State<ExportScreen> {
     );
   }
 
-  Widget _stat(String label, String value) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                    color: AppColors.appBarMuted, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 5),
-              Text(label,
-                  style:
-                      const TextStyle(fontSize: 10, color: AppColors.textFaint)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 13.5, fontWeight: FontWeight.w700)),
-        ],
-      );
-
-  Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8, left: 2),
-        child: Row(
+  Widget _stat(String label, String value) {
+    final r = context.r;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
             Container(
-              width: 3,
-              height: 12,
-              decoration: BoxDecoration(
-                color: AppColors.appBar,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                  color: AppColors.appBarMuted, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 7),
-            Text(text,
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDim)),
+            SizedBox(width: r.dp(5)),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: r.sp(10), color: AppColors.textFaint)),
+            ),
           ],
         ),
-      );
+        SizedBox(height: r.vp(4)),
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: r.sp(13.5), fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
 
+  Widget _sectionLabel(String text) {
+    final r = context.r;
+    return Padding(
+      padding: EdgeInsets.only(bottom: r.vp(8), left: 2),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: r.sp(12),
+            decoration: BoxDecoration(
+              color: AppColors.appBar,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          SizedBox(width: r.dp(7)),
+          Text(text,
+              style: TextStyle(
+                  fontSize: r.sp(12),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDim)),
+        ],
+      ),
+    );
+  }
+
+  /// The options share one row while they each still have room for their
+  /// label; below that they wrap onto a second line rather than squeezing
+  /// "Balanced" into 50 points on a small phone.
   Widget _optionRow(
       List<String> labels, int selected, ValueChanged<int> onSelected) {
-    return Row(
-      children: [
-        for (var i = 0; i < labels.length; i++)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: GestureDetector(
-                onTap: () => onSelected(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: i == selected
-                        ? AppColors.appBar.withValues(alpha: 0.10)
-                        : AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
+    final r = context.r;
+    const gap = 6.0;
+    const minTile = 78.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final perRow = (available / minTile)
+            .floor()
+            .clamp(2, labels.length);
+        final tile = (available - gap * (perRow - 1)) / perRow;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              SizedBox(
+                width: tile,
+                child: GestureDetector(
+                  onTap: () => onSelected(i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    height: r.tap(44),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
                       color: i == selected
-                          ? AppColors.appBarMuted
-                          : AppColors.divider,
+                          ? AppColors.appBar.withValues(alpha: 0.10)
+                          : AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: i == selected
+                            ? AppColors.appBarMuted
+                            : AppColors.divider,
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    labels[i],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: i == selected
-                          ? AppColors.appBarMuted
-                          : AppColors.textDim,
+                    child: Text(
+                      labels[i],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: r.sp(12),
+                        fontWeight: FontWeight.w700,
+                        color: i == selected
+                            ? AppColors.appBarMuted
+                            : AppColors.textDim,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -272,15 +313,22 @@ class _ExportScreenState extends State<ExportScreen> {
   Widget _progressView() {
     final p = _progress;
     final value = (p?.value ?? -1);
+    final r = context.r;
+    // The dial is a share of the window, so it stays a dial on a small phone
+    // and does not become a postage stamp on a desktop monitor.
+    final dial = (r.shortestSide * 0.3).clamp(88.0, 168.0);
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 34),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(
+          horizontal: r.gutter + r.dp(12),
+          vertical: r.vp(20),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              width: 116,
-              height: 116,
+              width: dial,
+              height: dial,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -294,30 +342,32 @@ class _ExportScreenState extends State<ExportScreen> {
                   ),
                   Text(
                     value < 0 ? '…' : '${(value * 100).round()}%',
-                    style: const TextStyle(
-                        fontSize: 21, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        fontSize: r.sp(21), fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: r.vp(22)),
             Text(p?.stage ?? 'Preparing',
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: r.sp(14), fontWeight: FontWeight.w600)),
+            SizedBox(height: r.vp(6)),
             Text(
               p?.eta != null
                   ? 'About ${p!.eta!.pretty} left · ${p.speed.toStringAsFixed(1)}x'
                   : 'Building the render graph',
-              style: const TextStyle(fontSize: 11.5, color: AppColors.textDim),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: r.sp(11.5), color: AppColors.textDim),
             ),
-            const SizedBox(height: 30),
+            SizedBox(height: r.vp(30)),
             OutlinedButton(
               onPressed: _confirmCancel,
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.danger,
                 side: const BorderSide(color: AppColors.danger),
-                minimumSize: const Size(140, 42),
+                minimumSize: Size(r.dp(140), r.tap(42)),
               ),
               child: const Text('Cancel'),
             ),
@@ -330,43 +380,50 @@ class _ExportScreenState extends State<ExportScreen> {
   // ---------------------------------------------------------------- result
 
   Widget _resultView() {
-    final r = _result!;
-    if (!r.success) {
+    final result = _result!;
+    final r = context.r;
+    if (!result.success) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: r.gutter + r.dp(8),
+            vertical: r.vp(20),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 46, color: AppColors.danger),
-              const SizedBox(height: 14),
-              Text(r.error ?? 'Export failed',
-                  style: const TextStyle(
-                      fontSize: 14.5, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-              if (r.log != null)
+              Icon(Icons.error_outline,
+                  size: r.ic(46), color: AppColors.danger),
+              SizedBox(height: r.vp(14)),
+              Text(result.error ?? 'Export failed',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: r.sp(14.5), fontWeight: FontWeight.w600)),
+              SizedBox(height: r.vp(10)),
+              if (result.log != null)
                 Container(
-                  constraints: const BoxConstraints(maxHeight: 190),
-                  padding: const EdgeInsets.all(10),
+                  constraints: BoxConstraints(
+                      maxHeight: math.min(r.vp(190), r.height * 0.34)),
+                  padding: EdgeInsets.all(r.dp(10)),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: SingleChildScrollView(
                     reverse: true,
-                    child: Text(r.log!,
-                        style: const TextStyle(
-                            fontSize: 9.5,
+                    child: Text(result.log!,
+                        style: TextStyle(
+                            fontSize: r.sp(9.5),
                             color: AppColors.textFaint,
                             fontFamily: 'monospace')),
                   ),
                 ),
-              const SizedBox(height: 18),
+              SizedBox(height: r.vp(18)),
               FilledButton(
                 style: FilledButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     foregroundColor: AppColors.onAccent,
-                    minimumSize: const Size(160, 44)),
+                    minimumSize: Size(r.dp(160), r.tap(44))),
                 onPressed: () => setState(() {
                   _result = null;
                   _progress = null;
@@ -379,55 +436,64 @@ class _ExportScreenState extends State<ExportScreen> {
       );
     }
 
-    final file = File(r.path!);
+    final file = File(result.path!);
     final size = file.existsSync() ? file.lengthSync() : 0;
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(
+          horizontal: r.gutter + r.dp(8),
+          vertical: r.vp(20),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 66,
-              height: 66,
+              width: r.dp(66),
+              height: r.dp(66),
               decoration: const BoxDecoration(
                   color: AppColors.accent, shape: BoxShape.circle),
-              child: const Icon(Icons.check, size: 34, color: AppColors.onAccent),
+              child: Icon(Icons.check,
+                  size: r.ic(34), color: AppColors.onAccent),
             ),
-            const SizedBox(height: 18),
-            const Text('Export complete',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
+            SizedBox(height: r.vp(18)),
+            Text('Export complete',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: r.sp(16), fontWeight: FontWeight.w700)),
+            SizedBox(height: r.vp(6)),
             Text('${_bytes(size)} · ${_settings.resolution.label} · '
                 '${_settings.fps.label} fps',
-                style: const TextStyle(fontSize: 12, color: AppColors.textDim)),
-            const SizedBox(height: 8),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: r.sp(12), color: AppColors.textDim)),
+            SizedBox(height: r.vp(8)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(r.path!,
+              padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
+              child: Text(result.path!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 10, color: AppColors.textFaint)),
+                  style: TextStyle(
+                      fontSize: r.sp(10), color: AppColors.textFaint)),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: r.vp(24)),
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor:
                     _savedToGallery ? AppColors.surfaceHigh : AppColors.accent,
                 foregroundColor:
                     _savedToGallery ? AppColors.textDim : AppColors.onAccent,
-                minimumSize: const Size(200, 46),
+                minimumSize: Size(r.dp(200), r.tap(46)),
               ),
               icon: Icon(_savedToGallery ? Icons.check : Icons.save_alt,
-                  size: 18),
+                  size: r.ic(18)),
               label: Text(_savedToGallery
                   ? 'Saved to gallery'
                   : _gifMode
                       ? 'Save GIF to gallery'
                       : 'Save to gallery'),
-              onPressed: _savedToGallery ? null : () => _saveToGallery(r.path!),
+              onPressed:
+                  _savedToGallery ? null : () => _saveToGallery(result.path!),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: r.vp(10)),
             TextButton(
               // Secondary to the filled save action, so it takes the page's
               // header tone rather than the accent.

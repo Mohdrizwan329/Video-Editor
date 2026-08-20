@@ -411,7 +411,10 @@ class CropPanel extends StatelessWidget {
                 child: GestureDetector(
                   onTap: () => editor.updateClip(index, (c) => c.fit = mode),
                   child: Container(
-                    height: 42,
+                    // A minimum, not a fixed height: at a large system font
+                    // the icon and label together need more than 42.
+                    constraints: const BoxConstraints(minHeight: 42),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     decoration: BoxDecoration(
                       color: clip.fit == mode
                           ? AppColors.accent.withValues(alpha: 0.18)
@@ -425,6 +428,7 @@ class CropPanel extends StatelessWidget {
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(icon,
                             size: 15,
@@ -433,6 +437,8 @@ class CropPanel extends StatelessWidget {
                                 : AppColors.textDim),
                         const SizedBox(height: 2),
                         Text(label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 fontSize: 9.5,
                                 color: clip.fit == mode

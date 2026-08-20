@@ -90,6 +90,7 @@ class ProjectRepository {
       stickers: copy.stickers,
       overlays: copy.overlays,
       background: copy.background,
+      watermark: copy.watermark,
       coverPath: copy.coverPath,
       masterVolume: copy.masterVolume,
     );
