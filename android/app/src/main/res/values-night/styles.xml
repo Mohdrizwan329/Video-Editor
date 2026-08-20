@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app ships a single light theme, so the launch window uses the same
+         fill whether or not the OS is in dark mode — otherwise a dark-mode
+         device flashes black before the light UI appears. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Removed automatically once the Flutter engine draws its first frame,
+             which is SplashScreen painting this same colour. -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <!-- Applied once the process has started, and painted behind the Flutter UI
+         for the rest of the session. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

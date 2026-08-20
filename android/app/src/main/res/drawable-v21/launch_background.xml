@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The native launch window. It is a flat fill only: the animated mark lives
+     in Flutter's SplashScreen, which paints this exact colour so the handover
+     is invisible. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+</layer-list>

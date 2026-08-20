@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Must match AppColors.appBar so the native launch window and the
+         Flutter splash screen are the same fill, with no flash between them. -->
+    <color name="splash_background">#15122A</color>
+
+    <!-- Painted behind the Flutter UI for the rest of the session, so it
+         matches the light page rather than the splash. -->
+    <color name="window_background">#F5F4FA</color>
+</resources>
