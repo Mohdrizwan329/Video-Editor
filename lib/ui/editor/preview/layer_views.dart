@@ -13,6 +13,7 @@ import '../../../data/models/keyframe.dart';
 import '../../../data/models/watermark.dart';
 import '../../../data/services/overlay_rasterizer.dart';
 import 'chroma_box.dart';
+import 'grade_extras_box.dart';
 import 'clip_view.dart';
 import 'mask_box.dart';
 
@@ -478,7 +479,17 @@ class OverlayLayerView extends StatelessWidget {
       );
     }
     final grade = layer.gradedFilter;
+    final adj = layer.adjustments;
+    if (adj.blur > 0) media = SoftenedBox(blur: adj.blur, child: media);
     if (!grade.isIdentity) media = GradedBox(filter: grade, child: media);
+    if (GradeExtrasBox.wanted(adj, grade.gamma)) {
+      media = GradeExtrasBox(
+        adjustments: adj,
+        gamma: grade.gamma,
+        seed: (layer.id.hashCode % 997).toDouble(),
+        child: media,
+      );
+    }
     if (layer.maskShape != MaskShape.none) {
       media = MaskBox(
         shape: layer.maskShape,
@@ -497,7 +508,10 @@ class OverlayLayerView extends StatelessWidget {
       height: height,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(
-            layer.cornerRadius * canvasSize.height / kCanvasReferenceHeight),
+            layer.animated(KeyframeProperty.cornerRadius, time - layer.start,
+                    layer.cornerRadius) *
+                canvasSize.height /
+                kCanvasReferenceHeight),
         child: media,
       ),
     );

@@ -50,11 +50,6 @@ class Responsive {
   double get shortestSide => size.shortestSide;
 
   bool get isLandscape => orientation == Orientation.landscape;
-  bool get isPortrait => !isLandscape;
-
-  /// True while the on-screen keyboard covers part of the window. Screens use
-  /// it to drop decorative blocks rather than let the content overflow.
-  bool get keyboardOpen => viewInsets.bottom > 80;
 
   ScreenClass get screen {
     if (width < 600) return ScreenClass.compact;
@@ -64,18 +59,10 @@ class Responsive {
   }
 
   bool get isCompact => screen == ScreenClass.compact;
-  bool get isMedium => screen == ScreenClass.medium;
   bool get isExpanded => screen == ScreenClass.expanded;
-  bool get isLarge => screen == ScreenClass.large;
 
   /// A phone-sized window, whichever way round it is held.
   bool get isPhone => shortestSide < 600;
-
-  /// Tablet-sized: iPads, foldables open, and small desktop windows.
-  bool get isTablet => shortestSide >= 600 && width < 1024;
-
-  /// Enough room for a two-column editor: desktop, web and landscape tablets.
-  bool get isDesktopWidth => width >= 1024;
 
   /// A window short enough that stacked fixed-height strips stop fitting —
   /// a phone in landscape, or a browser window dragged down to a sliver.
@@ -146,13 +133,6 @@ class Responsive {
     };
   }
 
-  /// Column count for a grid whose tiles want to be about [target] wide,
-  /// given the width actually available to the grid.
-  int columns(double available, double target, {int min = 1, int? max}) {
-    final n = math.max(min, (available / target).floor());
-    return max == null ? n : math.min(n, max);
-  }
-
   /// A tap target never falls below the platform minimum, however small the
   /// window gets.
   double tap(double value) => math.max(value * scale, 44);
@@ -173,6 +153,7 @@ class ContentBox extends StatelessWidget {
     this.maxWidth,
     this.padded = false,
     this.alignment = Alignment.topCenter,
+    this.hugHeight = false,
   });
 
   final Widget child;
@@ -180,12 +161,17 @@ class ContentBox extends StatelessWidget {
   final bool padded;
   final AlignmentGeometry alignment;
 
+  /// Take the child's height instead of the full height on offer. A page
+  /// wants the fill; a bottom sheet wants to end where its controls do.
+  final bool hugHeight;
+
   @override
   Widget build(BuildContext context) {
     final r = context.r;
     final limit = maxWidth ?? r.maxContentWidth;
     return Align(
       alignment: alignment,
+      heightFactor: hugHeight ? 1.0 : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: limit),
         child: padded

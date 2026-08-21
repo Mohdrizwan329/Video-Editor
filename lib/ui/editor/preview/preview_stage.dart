@@ -5,11 +5,14 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../data/models/enums.dart';
 import '../../../data/models/layers.dart';
+import '../../../data/models/project.dart';
 import '../../../state/editor_controller.dart';
 import '../../../state/preview_engine.dart';
 import 'canvas_background.dart';
 import 'clip_view.dart';
+import 'effects_view.dart';
 import 'layer_views.dart';
+import 'transition_view.dart';
 
 /// The player canvas: background, the clip under the playhead, then every
 /// overlay lane — composited in the same order the exporter uses.
@@ -53,6 +56,17 @@ class PreviewStage extends StatelessWidget {
                         controller: engine.controllerFor(clip.id),
                         localTime: localTime,
                       );
+                // Inside a transition the exporter has both clips on screen
+                // at once. So does this: without it the whole Transition tool
+                // was invisible, and picking a look changed nothing the user
+                // could see until the file came out.
+                final stageView = _withTransition(
+                  project: project,
+                  engine: engine,
+                  index: index,
+                  time: time,
+                  outgoing: clipView,
+                );
 
                 return Stack(
                   fit: StackFit.expand,
@@ -68,7 +82,11 @@ class PreviewStage extends StatelessWidget {
                             )
                           : clipView,
                     ),
-                    ?clipView,
+                    ?stageView,
+                    if (clip != null && clip.fadeGainAt(localTime) < 1)
+                      Positioned.fill(
+                        child: FadeVeil(gain: clip.fadeGainAt(localTime)),
+                      ),
                     for (final pip in project.overlays)
                       if (pip.isVisibleAt(time))
                         OverlayLayerView(
@@ -97,6 +115,14 @@ class PreviewStage extends StatelessWidget {
                           selected:
                               editor.selection.matches(LaneKind.text, text.id),
                         ),
+                    // Whole-frame texture and border sit above every lane and
+                    // below the mark, in the exporter's own compositing order.
+                    if (project.hasFx)
+                      FxView(
+                        preset: project.fx,
+                        intensity: project.fxIntensity,
+                      ),
+                    if (project.hasFrame) FrameView(preset: project.frame),
                     // Above every lane: the creator's own mark covers the
                     // whole timeline, exactly as the exporter composites it.
                     if (project.watermark.isReady)
@@ -119,6 +145,55 @@ class PreviewStage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The clip's own fade to black.
+///
+/// The exporter lays `fade=t=in` / `fade=t=out` over the finished canvas —
+/// letterbox bars and all — with every overlay lane composited on top
+/// afterwards, so the veil sits between the two here as well.
+class FadeVeil extends StatelessWidget {
+  const FadeVeil({super.key, required this.gain});
+
+  /// How much of the picture the fade leaves: 1 is untouched, 0 is black.
+  final double gain;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        child: ColoredBox(
+          color: Colors.black.withValues(alpha: (1 - gain).clamp(0.0, 1.0)),
+        ),
+      );
+}
+
+/// Wraps the clip under the playhead in its outgoing transition when the
+/// playhead is inside the overlap with the clip after it.
+Widget? _withTransition({
+  required Project project,
+  required PreviewEngine engine,
+  required int index,
+  required Duration time,
+  required Widget? outgoing,
+}) {
+  if (outgoing == null || index < 0 || index + 1 >= project.clips.length) {
+    return outgoing;
+  }
+  final overlap = project.overlapAfter(index);
+  if (overlap <= Duration.zero) return outgoing;
+  final joinStart = project.clipStart(index + 1);
+  if (time < joinStart) return outgoing;
+
+  final next = project.clips[index + 1];
+  return TransitionView(
+    type: project.clips[index].transitionType,
+    progress: (time - joinStart).inMicroseconds / overlap.inMicroseconds,
+    outgoing: outgoing,
+    incoming: ClipView(
+      clip: next,
+      controller: engine.controllerFor(next.id),
+      localTime: time - joinStart,
+    ),
+  );
 }
 
 class _EmptyCanvas extends StatelessWidget {

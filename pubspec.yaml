@@ -48,6 +48,7 @@ flutter:
     - assets/logo/
   shaders:
     - shaders/chroma_key.frag
+    - shaders/grade_extras.frag
   fonts:
     - family: Anton
       fonts:

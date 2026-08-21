@@ -46,17 +46,10 @@ class MediaProbe {
     'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'bmp', 'gif', 'tiff'
   };
 
-  static const Set<String> audioExtensions = {
-    'mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'opus', 'wma', 'aiff'
-  };
-
   static const Duration defaultImageDuration = Duration(seconds: 4);
 
   static bool isImagePath(String p) =>
       imageExtensions.contains(p.split('.').last.toLowerCase());
-
-  static bool isAudioPath(String p) =>
-      audioExtensions.contains(p.split('.').last.toLowerCase());
 
   static Future<MediaInfo> probe(String path) async {
     final isImage = isImagePath(path);

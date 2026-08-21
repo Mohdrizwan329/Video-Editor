@@ -16,6 +16,7 @@ class ToolButton extends StatelessWidget {
     this.tint,
     this.width,
     this.badge,
+    this.maxLines = 1,
   });
 
   final IconData icon;
@@ -34,6 +35,10 @@ class ToolButton extends StatelessWidget {
   /// takes the toolbar's own 62.
   final double? width;
   final String? badge;
+
+  /// How many lines the label may take. The bottom strip gives it two, so a
+  /// two-word tool keeps its name at a large system font size.
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +98,8 @@ class ToolButton extends StatelessWidget {
               SizedBox(height: r.vp(4)),
               Text(
                 label,
-                maxLines: 1,
+                maxLines: maxLines,
+                textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     fontSize: r.sp(9.5),

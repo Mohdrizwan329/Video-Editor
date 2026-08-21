@@ -109,45 +109,42 @@ class BackgroundPanel extends StatelessWidget {
       title: 'Background',
       onClose: onClose,
       onConfirm: onClose,
-      child: SizedBox(
-        height: 190,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              ChipStrip(
-                labels: const ['Color', 'Blur', 'Gradient'],
-                selectedIndex: BackgroundType.values.indexOf(bg.type),
-                onSelected: (i) => editor
-                    .setBackground((b) => b.type = BackgroundType.values[i]),
+      child: PanelBody(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            ChipStrip(
+              labels: const ['Color', 'Blur', 'Gradient'],
+              selectedIndex: BackgroundType.values.indexOf(bg.type),
+              onSelected: (i) => editor
+                  .setBackground((b) => b.type = BackgroundType.values[i]),
+            ),
+            const SizedBox(height: 12),
+            if (bg.type == BackgroundType.color)
+              _swatchGrid(
+                _swatches.map((c) => (c, c)).toList(),
+                selected: bg.color,
+                onTap: (c) => editor.setBackground((b) => b.color = c),
               ),
-              const SizedBox(height: 12),
-              if (bg.type == BackgroundType.color)
-                _swatchGrid(
-                  _swatches.map((c) => (c, c)).toList(),
-                  selected: bg.color,
-                  onTap: (c) => editor.setBackground((b) => b.color = c),
-                ),
-              if (bg.type == BackgroundType.gradient)
-                _gradientGrid(bg.gradientStart, bg.gradientEnd),
-              if (bg.type == BackgroundType.blur)
-                AppSlider(
-                  label: 'Blur amount',
-                  icon: Icons.blur_on,
-                  value: bg.blurAmount,
-                  min: 2,
-                  max: 60,
-                  defaultValue: 18,
-                  format: (v) => v.round().toString(),
-                  onChanged: (v) =>
-                      editor.setBackground((b) => b.blurAmount = v),
-                ),
-              const SizedBox(height: 12),
-            ],
-          ),
+            if (bg.type == BackgroundType.gradient)
+              _gradientGrid(bg.gradientStart, bg.gradientEnd),
+            if (bg.type == BackgroundType.blur)
+              AppSlider(
+                label: 'Blur amount',
+                icon: Icons.blur_on,
+                value: bg.blurAmount,
+                min: 2,
+                max: 60,
+                defaultValue: 18,
+                format: (v) => v.round().toString(),
+                onChanged: (v) =>
+                    editor.setBackground((b) => b.blurAmount = v),
+              ),
+            const SizedBox(height: 12),
+          ],
         ),
-      ),
+),
     );
   }
 
@@ -227,11 +224,17 @@ class TransitionPanel extends StatefulWidget {
     required this.editor,
     required this.index,
     required this.onClose,
+    this.onPreview,
   });
 
   final EditorController editor;
   final int index;
   final VoidCallback onClose;
+
+  /// Puts the playhead back in the middle of the join. Every pick and every
+  /// length change moves that join, so the canvas needs re-parking or the
+  /// transition stops showing after the first tap.
+  final VoidCallback? onPreview;
 
   @override
   State<TransitionPanel> createState() => _TransitionPanelState();
@@ -281,8 +284,10 @@ class _TransitionPanelState extends State<TransitionPanel> {
                 final t = items[i];
                 final active = clip.transitionType == t;
                 return GestureDetector(
-                  onTap: () =>
-                      editor.setTransition(index, t, clip.transitionDuration),
+                  onTap: () {
+                    editor.setTransition(index, t, clip.transitionDuration);
+                    widget.onPreview?.call();
+                  },
                   child: Column(
                     children: [
                       Container(
@@ -334,6 +339,7 @@ class _TransitionPanelState extends State<TransitionPanel> {
               format: (v) => '${v.toStringAsFixed(1)}s',
               onChanged: (v) => editor.setTransition(index, clip.transitionType,
                   Duration(milliseconds: (v * 1000).round())),
+              onChangeEnd: (_) => widget.onPreview?.call(),
             ),
           const SizedBox(height: 10),
         ],

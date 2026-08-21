@@ -73,21 +73,16 @@ class _KeyframePanelState extends State<KeyframePanel> {
               setState(() {});
             }
           : null,
-      child: SizedBox(
-        height: 236,
+      child: PanelBody(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             _transport(owner, local, onKey),
             const Divider(height: 12),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  for (final p in props) _propertyRow(owner, local, p),
-                  const SizedBox(height: 10),
-                ],
-              ),
-            ),
+            // Plain rows: the sheet is one height for every tool and scrolls,
+            // so a list of its own here would only fight that scroll.
+            for (final p in props) _propertyRow(owner, local, p),
+            const SizedBox(height: 10),
           ],
         ),
       ),

@@ -151,6 +151,24 @@ class VideoClip with Keyframable {
       microseconds:
           (trimmedDuration.inMicroseconds / effectiveSpeed).round().clamp(1, 1 << 62));
 
+  /// How much of the picture the fade envelope leaves at [local], an offset
+  /// inside the clip's own span. 1 is the untouched frame, 0 is full black.
+  ///
+  /// The exporter emits these as `fade=t=in` / `fade=t=out`, which fade to
+  /// black over the finished canvas — letterbox bars included — so the
+  /// preview veils the whole canvas rather than dimming the footage alone.
+  double fadeGainAt(Duration local) {
+    var gain = 1.0;
+    if (fadeIn > Duration.zero && local < fadeIn) {
+      gain *= local.inMicroseconds / fadeIn.inMicroseconds;
+    }
+    final left = timelineDuration - local;
+    if (fadeOut > Duration.zero && left < fadeOut) {
+      gain *= left.inMicroseconds / fadeOut.inMicroseconds;
+    }
+    return gain.clamp(0.0, 1.0);
+  }
+
   FilterPreset get filter =>
       FilterPreset.fromId(filterId).lerpFromIdentity(filterIntensity);
 

@@ -120,9 +120,6 @@ class VideoTemplate {
     }
     return total;
   }
-
-  /// How many media items the user still needs to supply.
-  bool acceptsMedia(int count) => count > 0;
 }
 
 /// Fills a template with the user's media.

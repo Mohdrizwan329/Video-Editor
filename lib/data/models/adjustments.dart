@@ -99,12 +99,24 @@ class Adjustments {
 
   bool get hasCurves => curveLow != 0 || curveMid != 0 || curveHigh != 0;
 
+  /// True when something here needs the preview's second shader pass. These
+  /// are the sliders with no colour-matrix equivalent, so without it they
+  /// only ever show up in the exported file.
+  bool get hasShaderExtras =>
+      hasCurves || sharpen > 0 || grain > 0 || denoise > 0;
+
+  /// The three control points of the tone curve, shared by the exporter's
+  /// `curves` filter and the preview shader so the two cannot drift apart.
+  (double, double, double) get curvePoints => (
+        (curveLow * 0.25).clamp(0.0, 0.4),
+        (0.5 + curveMid * 0.25).clamp(0.1, 0.9),
+        (1 + curveHigh * 0.25).clamp(0.5, 1.0),
+      );
+
   /// FFmpeg `curves` control points for the three-point tone curve.
   String get curveExpression {
-    final lo = (curveLow * 0.25).clamp(-0.25, 0.25);
-    final mid = (0.5 + curveMid * 0.25).clamp(0.1, 0.9);
-    final hi = (1 + curveHigh * 0.25).clamp(0.5, 1.0);
-    return '0/${lo.clamp(0.0, 0.4).toStringAsFixed(3)}'
+    final (lo, mid, hi) = curvePoints;
+    return '0/${lo.toStringAsFixed(3)}'
         ' 0.5/${mid.toStringAsFixed(3)}'
         ' 1/${hi.toStringAsFixed(3)}';
   }

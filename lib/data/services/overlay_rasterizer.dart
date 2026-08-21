@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/utils/constants.dart';
 import '../models/layers.dart';
+import '../models/video_effect.dart';
+import 'effect_painter.dart';
 import '../models/watermark.dart';
 
 /// Result of baking one overlay into a PNG for the renderer.
@@ -153,6 +155,53 @@ class OverlayRasterizer {
     final picture = recorder.endRecording();
     return _writePng(picture, boxW.ceil(), boxH.ceil(), layer.transform,
         outWidth, outHeight, 'sticker_${layer.id}');
+  }
+
+  /// Bakes the project's design frame at full output size. It covers the whole
+  /// canvas, so it lands at 0,0 and the renderer only has to composite it.
+  Future<RasterizedLayer?> rasterizeFrame(
+    FramePreset preset, {
+    required int outWidth,
+    required int outHeight,
+  }) {
+    if (preset.isNone) return Future.value(null);
+    return _rasterizeFullCanvas(
+      'frame_${preset.id}',
+      outWidth,
+      outHeight,
+      (canvas, size) => EffectPainter.paintFrame(canvas, size, preset),
+    );
+  }
+
+  /// Bakes the project's FX texture at full output size. [intensity] is folded
+  /// into the pattern's alpha here, exactly as the preview folds it in.
+  Future<RasterizedLayer?> rasterizeFx(
+    FxPreset preset,
+    double intensity, {
+    required int outWidth,
+    required int outHeight,
+  }) {
+    if (preset.isNone || intensity <= 0) return Future.value(null);
+    return _rasterizeFullCanvas(
+      'fx_${preset.id}',
+      outWidth,
+      outHeight,
+      (canvas, size) => EffectPainter.paintFx(canvas, size, preset, intensity),
+    );
+  }
+
+  Future<RasterizedLayer?> _rasterizeFullCanvas(
+    String name,
+    int outWidth,
+    int outHeight,
+    void Function(Canvas, Size) paint,
+  ) async {
+    if (outWidth <= 0 || outHeight <= 0) return null;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    paint(canvas, Size(outWidth.toDouble(), outHeight.toDouble()));
+    return _writePng(recorder.endRecording(), outWidth, outHeight,
+        LayerTransform(), outWidth, outHeight, name);
   }
 
   /// Bakes an image watermark: the user's logo scaled to its canvas size,

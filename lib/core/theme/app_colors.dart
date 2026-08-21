@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 ///
 /// The base tones stay light and low-chroma so the chrome recedes and the
 /// footage in the preview stays the focus; the colour comes from [accent] for
-/// interactive state, the [hues] wheel for anything that needs to look
+/// interactive state, the hue constants for anything that needs to look
 /// distinct at a glance (tools, categories, tracks), and the gradients for
 /// hero surfaces. Every hue is picked to clear 4.5:1 against [surface], so the
 /// same constant works as a fill *and* as text/icon colour.
@@ -13,7 +13,6 @@ class AppColors {
 
   // ----------------------------------------------------------------- base
   static const Color background = Color(0xFFF5F4FA);
-  static const Color backgroundDeep = Color(0xFFEDEBF5);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceHigh = Color(0xFFECEAF5);
   static const Color surfaceSheet = Color(0xFFFFFFFF);
@@ -30,7 +29,7 @@ class AppColors {
 
   /// Tonal steps off [appBar]. Surfaces on the light page that belong to the
   /// header — the home cards and their icons — take their colour from here
-  /// instead of the [hues] wheel, so the page reads as one bar-and-page pair
+  /// instead of the hue constants, so the page reads as one bar-and-page pair
   /// rather than a set of unrelated tiles.
   ///
   /// [appBarSoft] is the lifted end of the header fill; [appBarMuted] is the
@@ -62,36 +61,14 @@ class AppColors {
   /// bar's fill — use this lifted red for their destructive action instead.
   static const Color dangerSoft = Color(0xFFFF7A8F);
 
-  /// Foreground for anything filled with [accent] or a [hues] entry — the
-  /// hues are dark enough now that white, not black, is the readable choice.
+  /// Foreground for anything filled with [accent] or a hue — the hues are
+  /// dark enough now that white, not black, is the readable choice.
   static const Color onAccent = Color(0xFFFFFFFF);
 
   // ------------------------------------------------------------ hue wheel
   static const Color violet = Color(0xFF7C3AED);
-  static const Color indigo = Color(0xFF4F46E5);
   static const Color sky = Color(0xFF0284C7);
-  static const Color mint = Color(0xFF0FA98F);
-  static const Color lime = Color(0xFF5F9B0C);
-  static const Color amber = Color(0xFFC77700);
   static const Color pink = Color(0xFFDB2777);
-  static const Color magenta = Color(0xFFA21CAF);
-
-  /// Stable colour wheel: index anything repeating (grid cards, category
-  /// chips, tool tiles) through [hueAt] so the same slot keeps its colour.
-  static const List<Color> hues = [
-    violet,
-    pink,
-    sky,
-    amber,
-    mint,
-    magenta,
-    lime,
-    indigo,
-  ];
-
-  static Color hueAt(int i) => hues[i % hues.length];
-
-  static LinearGradient gradientAt(int i) => _hueGradients[i % _hueGradients.length];
 
   // ------------------------------------------------------------- text
   static const Color text = Color(0xFF14121F);
@@ -107,23 +84,10 @@ class AppColors {
   static const Color trackText = Color(0xFF4F46E5);
   static const Color trackSticker = Color(0xFF9333EA);
   static const Color trackOverlay = Color(0xFFC2660A);
-  static const Color trackEffect = Color(0xFFDB2777);
 
   // -------------------------------------------------------- gradients
-  static const LinearGradient accentGradient = LinearGradient(
-    colors: [mint, sky],
-    begin: Alignment.centerLeft,
-    end: Alignment.centerRight,
-  );
-
   static const LinearGradient heroGradient = LinearGradient(
     colors: [violet, pink],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient sunsetGradient = LinearGradient(
-    colors: [amber, pink],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -133,26 +97,6 @@ class AppColors {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-
-  static const LinearGradient limeGradient = LinearGradient(
-    colors: [lime, mint],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient candyGradient = LinearGradient(
-    colors: [magenta, indigo],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const List<LinearGradient> _hueGradients = [
-    heroGradient,
-    sunsetGradient,
-    oceanGradient,
-    limeGradient,
-    candyGradient,
-  ];
 
   /// Card fill that hints at [hue] without lifting the surface far off the
   /// background — used for tiles that carry an icon in the same hue.

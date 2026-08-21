@@ -56,8 +56,6 @@ class ExportService {
   int? _sessionId;
   bool _cancelled = false;
 
-  bool get isRunning => _sessionId != null;
-
   Future<void> cancel() async {
     _cancelled = true;
     final id = _sessionId;
@@ -96,6 +94,23 @@ class ExportService {
       final r = await OverlayRasterizer.instance
           .rasterizeSticker(s, outWidth: settings.width, outHeight: settings.height);
       if (r != null) rasterized[s.id] = r;
+    }
+    if (project.hasFx) {
+      final r = await OverlayRasterizer.instance.rasterizeFx(
+        project.fx,
+        project.fxIntensity,
+        outWidth: settings.width,
+        outHeight: settings.height,
+      );
+      if (r != null) rasterized[_kFxKey] = r;
+    }
+    if (project.hasFrame) {
+      final r = await OverlayRasterizer.instance.rasterizeFrame(
+        project.frame,
+        outWidth: settings.width,
+        outHeight: settings.height,
+      );
+      if (r != null) rasterized[_kFrameKey] = r;
     }
     final mark = project.watermark;
     if (mark.isReady) {
@@ -183,6 +198,11 @@ class ExportService {
     return completer.future;
   }
 }
+
+/// Keys the baked whole-canvas overlays are filed under in the rasterized
+/// map, alongside the per-layer entries.
+const String _kFrameKey = 'design_frame';
+const String _kFxKey = 'design_fx';
 
 /// Key the baked watermark is filed under in the rasterized map. Layer ids
 /// are uuids, so this cannot collide with a real layer.
@@ -538,10 +558,16 @@ class _GraphBuilder {
       current = _overlayImage(current, r, t, t.start, t.end, t.animationIn,
           t.animationOut, t.animationDuration, n++);
     }
+    // Whole-frame texture then border, both spanning the full timeline — the
+    // same order the preview stacks them in.
+    final fx = rasterized[_kFxKey];
+    if (fx != null) current = _overlayFullSpan(current, fx, n++);
+    final frame = rasterized[_kFrameKey];
+    if (frame != null) current = _overlayFullSpan(current, frame, n++);
     // The watermark sits above everything and spans the whole timeline, so it
     // is composited last and carries no `enable` window.
     final mark = rasterized[_kWatermarkKey];
-    if (mark != null) current = _overlayWatermark(current, mark, n++);
+    if (mark != null) current = _overlayFullSpan(current, mark, n++);
     if (current == base) {
       _filters.add('[$base] null [outv]');
       return 'outv';
@@ -618,9 +644,10 @@ class _GraphBuilder {
     return label;
   }
 
-  /// Static, full-duration overlay for the project watermark. Opacity and
-  /// rotation are already baked into the PNG, so this only has to place it.
-  String _overlayWatermark(String base, RasterizedLayer r, int n) {
+  /// Static, full-duration overlay: the FX texture, the design frame and the
+  /// watermark all take this path. Opacity and rotation are already baked into
+  /// the PNG, so this only has to place it.
+  String _overlayFullSpan(String base, RasterizedLayer r, int n) {
     _inputs.add('-loop 1 -framerate $_fps -i ${_quote(r.path)}');
     final idx = _inputIndex++;
     final label = 'wm$n';
@@ -867,6 +894,21 @@ class _GraphBuilder {
       } else {
         final vol = clip.volume * project.masterVolume;
         if (vol != 1.0) chain.add('volume=${vol.toStringAsFixed(3)}');
+      }
+      // The same envelope the picture gets. The fade sliders sit in the
+      // Volume panel, so a fade that left the sound at full level was the one
+      // thing the control could not be read as meaning.
+      if (clip.fadeIn > Duration.zero) {
+        chain.add('afade=t=in:st=0:d=${clip.fadeIn.seconds.toStringAsFixed(3)}');
+      }
+      if (clip.fadeOut > Duration.zero) {
+        // After atempo the stream runs at timeline length, so the fade starts
+        // that far in rather than at the untimed source's end.
+        final st = (clip.timelineDuration - clip.fadeOut)
+            .seconds
+            .clamp(0, double.infinity);
+        chain.add('afade=t=out:st=${st.toStringAsFixed(3)}'
+            ':d=${clip.fadeOut.seconds.toStringAsFixed(3)}');
       }
       chain.add('adelay=${start.inMilliseconds}|${start.inMilliseconds}');
       chain.add('apad=pad_dur=0.05');

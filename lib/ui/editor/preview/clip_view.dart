@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -8,6 +9,7 @@ import '../../../data/models/filter_preset.dart';
 import '../../../data/models/keyframe.dart';
 import '../../../data/models/video_clip.dart';
 import 'chroma_box.dart';
+import 'grade_extras_box.dart';
 import 'mask_box.dart';
 
 /// Renders one clip exactly the way the exporter will: crop, rotate, mirror,
@@ -56,9 +58,21 @@ class ClipView extends StatelessWidget {
     if (showGrade) {
       final intensity = clip.animated(
           KeyframeProperty.filterIntensity, localTime, clip.filterIntensity);
-      final grade = clip.adjustments.merge(
+      final adj = clip.adjustments;
+      final grade = adj.merge(
           FilterPreset.fromId(clip.filterId).lerpFromIdentity(intensity));
+      // Innermost of the three, so grain and sharpening land on the softened
+      // picture — the order the exporter's own filter chain has them in.
+      if (adj.blur > 0) media = SoftenedBox(blur: adj.blur, child: media);
       if (!grade.isIdentity) media = GradedBox(filter: grade, child: media);
+      if (GradeExtrasBox.wanted(adj, grade.gamma)) {
+        media = GradeExtrasBox(
+          adjustments: adj,
+          gamma: grade.gamma,
+          seed: (clip.id.hashCode % 997).toDouble(),
+          child: media,
+        );
+      }
     }
     if (clip.hasChroma) {
       media = ChromaBox(
@@ -187,6 +201,34 @@ class GradedBox extends StatelessWidget {
       );
     }
     return out;
+  }
+}
+
+/// The preview twin of the exporter's `gblur`.
+///
+/// The exported sigma is 12px at 1080p, which is 1.11% of the frame height.
+/// This box is drawn inside the 1000-tall media box, so the same softening
+/// is 11.1 units here whatever size the canvas is on screen.
+class SoftenedBox extends StatelessWidget {
+  const SoftenedBox({super.key, required this.blur, required this.child});
+
+  /// 0..1, straight off the Blur slider.
+  final double blur;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final sigma = blur * 11.1;
+    return ImageFiltered(
+      // Clamp, not the default decal: a decal edge fades the frame's border
+      // to transparent and reads as a dark rim over the background.
+      imageFilter: ui.ImageFilter.blur(
+        sigmaX: sigma,
+        sigmaY: sigma,
+        tileMode: TileMode.clamp,
+      ),
+      child: child,
+    );
   }
 }
 

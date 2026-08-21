@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:video_player/video_player.dart';
 
+import '../data/models/keyframe.dart';
 import '../data/models/layers.dart';
 import '../data/models/video_clip.dart';
 import 'editor_controller.dart';
@@ -47,9 +49,7 @@ class PreviewEngine extends ChangeNotifier {
   bool _priming = false;
   DateTime? _lastSeekAt;
 
-  int get activeIndex => _activeIndex;
   bool get isPlaying => editor.isPlaying.value;
-  bool get isMuted => _muted;
 
   /// Controller for the clip currently under the playhead, if it is ready.
   VideoPlayerController? get activeController {
@@ -179,6 +179,11 @@ class PreviewEngine extends ChangeNotifier {
 
   Future<void> _syncAll({bool force = false, required bool playing}) async {
     await _syncMainTrack(force: force, playing: playing);
+    await _syncTransitionPartner(
+      force: force,
+      playing: playing,
+      index: editor.project.clipIndexAt(editor.position.value),
+    );
     await _syncOverlays(force: force, playing: playing);
     await _syncAudio(force: force, playing: playing);
   }
@@ -246,9 +251,63 @@ class PreviewEngine extends ChangeNotifier {
     if (controller.value.playbackSpeed != clip.effectiveSpeed) {
       await controller.setPlaybackSpeed(clip.effectiveSpeed.clamp(0.1, 8.0));
     }
-    final wantedVolume = _muted ? 0.0 : clip.volume * editor.project.masterVolume;
+    // The volume *track* when there is one: a keyframed level that only moved
+    // in the render is a keyframe the user cannot hear themselves setting.
+    final level = clip.animated(KeyframeProperty.volume, local, clip.volume);
+    final wantedVolume = _muted
+        ? 0.0
+        : level * editor.project.masterVolume * clip.fadeGainAt(local);
     if ((controller.value.volume - wantedVolume).abs() > 0.01) {
       await controller.setVolume(wantedVolume.clamp(0.0, 1.0));
+    }
+    if (playing && !controller.value.isPlaying) {
+      await controller.play();
+    } else if (!playing && controller.value.isPlaying) {
+      await controller.pause();
+    }
+  }
+
+  /// The clip on the far side of a transition, while the playhead is inside
+  /// the overlap between the two.
+  ///
+  /// The canvas composites both frames there, the way the exporter's `xfade`
+  /// does, so the incoming decoder has to be running as well — left alone it
+  /// holds its first frame and every transition plays against a still.
+  Future<void> _syncTransitionPartner({
+    required bool force,
+    required bool playing,
+    required int index,
+  }) async {
+    final project = editor.project;
+    if (index < 0 || index + 1 >= project.clips.length) return;
+    final next = project.clips[index + 1];
+    final controller = _video[next.id];
+    if (controller == null || !controller.value.isInitialized) return;
+
+    final joinStart = project.clipStart(index + 1);
+    final t = editor.position.value;
+    if (project.overlapAfter(index) <= Duration.zero || t < joinStart) {
+      // Not on screen: a warmed decoder must not be left running behind it.
+      if (controller.value.isPlaying) await controller.pause();
+      return;
+    }
+
+    final target = next.sourcePositionFor(t - joinStart);
+    if (force || (controller.value.position - target).abs() > _maxDrift) {
+      await controller.seekTo(target);
+    }
+    if (controller.value.playbackSpeed != next.effectiveSpeed) {
+      await controller.setPlaybackSpeed(next.effectiveSpeed.clamp(0.1, 8.0));
+    }
+    // Its audio already starts at its own slot in the render, so it comes in
+    // under the transition here too.
+    final wanted = _muted
+        ? 0.0
+        : next.volume *
+            editor.project.masterVolume *
+            next.fadeGainAt(t - joinStart);
+    if ((controller.value.volume - wanted).abs() > 0.01) {
+      await controller.setVolume(wanted.clamp(0.0, 1.0));
     }
     if (playing && !controller.value.isPlaying) {
       await controller.play();
@@ -316,6 +375,23 @@ class PreviewEngine extends ChangeNotifier {
       if (player.speed != layer.speed) {
         await player.setSpeed(layer.speed.clamp(0.25, 4.0));
       }
+      // The pitch slider and the pitched half of the voice changer, which
+      // the renderer does with `asetrate`. Only the platforms that carry a
+      // pitch shifter can preview it — the rest still export it, so a failure
+      // here is not worth losing the rest of the sync over.
+      final semitones = layer.pitch + layer.voiceEffect.semitones;
+      final wantedPitch = math.pow(2, semitones / 12).toDouble();
+      if ((player.pitch - wantedPitch).abs() > 0.01) {
+        try {
+          await player.setPitch(wantedPitch);
+        } catch (_) {
+          // No pitch shifting on this platform.
+        }
+      }
+      final wantedLoop = layer.loop ? ja.LoopMode.one : ja.LoopMode.off;
+      if (player.loopMode != wantedLoop) {
+        await player.setLoopMode(wantedLoop);
+      }
       if (playing && !player.playing) {
         unawaited(player.play());
       } else if (!playing && player.playing) {
@@ -326,7 +402,9 @@ class PreviewEngine extends ChangeNotifier {
 
   /// Applies the layer's fade envelope so the preview matches the render.
   double _audioGainAt(AudioLayer layer, Duration t) {
-    var gain = layer.volume * editor.project.masterVolume;
+    final level = layer.animated(
+        KeyframeProperty.volume, t - layer.start, layer.volume);
+    var gain = level * editor.project.masterVolume;
     final into = t - layer.start;
     final left = layer.end - t;
     if (layer.fadeIn > Duration.zero && into < layer.fadeIn) {

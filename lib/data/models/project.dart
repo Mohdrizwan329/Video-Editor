@@ -4,6 +4,7 @@ import '../../core/utils/id.dart';
 import 'enums.dart';
 import 'layers.dart';
 import 'video_clip.dart';
+import 'video_effect.dart';
 import 'watermark.dart';
 
 /// Canvas background behind letterboxed clips.
@@ -68,7 +69,12 @@ class Project {
     DateTime? updatedAt,
     this.coverPath,
     this.masterVolume = 1.0,
+    String? frameId,
+    String? fxId,
+    this.fxIntensity = 1.0,
   })  : id = id ?? newId(),
+        frameId = frameId ?? 'none',
+        fxId = fxId ?? 'none',
         clips = clips ?? [],
         audios = audios ?? [],
         texts = texts ?? [],
@@ -95,6 +101,18 @@ class Project {
   DateTime updatedAt;
   String? coverPath;
   double masterVolume;
+
+  /// Design frame drawn over every finished frame, like the watermark.
+  String frameId;
+
+  /// FX texture laid over every finished frame, and how strongly.
+  String fxId;
+  double fxIntensity;
+
+  FramePreset get frame => FrameLibrary.fromId(frameId);
+  FxPreset get fx => FxLibrary.fromId(fxId);
+  bool get hasFrame => !frame.isNone;
+  bool get hasFx => !fx.isNone && fxIntensity > 0;
 
   /// Total transition overlap removed from the naive clip sum.
   Duration get transitionOverlap {
@@ -182,6 +200,9 @@ class Project {
         'updated': updatedAt.millisecondsSinceEpoch,
         'cover': coverPath,
         'mvol': masterVolume,
+        'frame': frameId,
+        'fx': fxId,
+        'fxi': fxIntensity,
       };
 
   factory Project.fromJson(Map<String, dynamic> j) {
@@ -206,6 +227,9 @@ class Project {
           (j['updated'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch),
       coverPath: j['cover'] as String?,
       masterVolume: (j['mvol'] as num?)?.toDouble() ?? 1,
+      frameId: j['frame'] as String?,
+      fxId: j['fx'] as String?,
+      fxIntensity: (j['fxi'] as num?)?.toDouble() ?? 1,
     );
   }
 }

@@ -337,59 +337,57 @@ class CropPanel extends StatelessWidget {
         c.offsetX = c.offsetY = 0;
         c.fit = FitMode.contain;
       }),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            _fitRow(clip),
-            AppSlider(
-              label: 'Zoom',
-              value: clip.scale,
-              min: 0.2,
-              max: 4,
-              defaultValue: 1,
-              format: (v) => '${(v * 100).round()}%',
-              onChanged: (v) =>
-                  editor.updateClip(index, (c) => c.scale = v, record: false),
-              onChangeEnd: (v) => editor.updateClip(index, (c) => c.scale = v),
-            ),
-            AppSlider(
-              label: 'Position X',
-              value: clip.offsetX,
-              min: -1,
-              max: 1,
-              bipolar: true,
-              defaultValue: 0,
-              format: (v) => v.toStringAsFixed(2),
-              onChanged: (v) =>
-                  editor.updateClip(index, (c) => c.offsetX = v, record: false),
-              onChangeEnd: (v) => editor.updateClip(index, (c) => c.offsetX = v),
-            ),
-            AppSlider(
-              label: 'Position Y',
-              value: clip.offsetY,
-              min: -1,
-              max: 1,
-              bipolar: true,
-              defaultValue: 0,
-              format: (v) => v.toStringAsFixed(2),
-              onChanged: (v) =>
-                  editor.updateClip(index, (c) => c.offsetY = v, record: false),
-              onChangeEnd: (v) => editor.updateClip(index, (c) => c.offsetY = v),
-            ),
-            const Divider(height: 18),
-            _cropSlider('Left', clip.cropLeft,
-                (v) => editor.updateClip(index, (c) => c.cropLeft = v)),
-            _cropSlider('Right', clip.cropRight,
-                (v) => editor.updateClip(index, (c) => c.cropRight = v)),
-            _cropSlider('Top', clip.cropTop,
-                (v) => editor.updateClip(index, (c) => c.cropTop = v)),
-            _cropSlider('Bottom', clip.cropBottom,
-                (v) => editor.updateClip(index, (c) => c.cropBottom = v)),
-            const SizedBox(height: 8),
-          ],
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          _fitRow(clip),
+          AppSlider(
+            label: 'Zoom',
+            value: clip.scale,
+            min: 0.2,
+            max: 4,
+            defaultValue: 1,
+            format: (v) => '${(v * 100).round()}%',
+            onChanged: (v) =>
+                editor.updateClip(index, (c) => c.scale = v, record: false),
+            onChangeEnd: (v) => editor.updateClip(index, (c) => c.scale = v),
+          ),
+          AppSlider(
+            label: 'Position X',
+            value: clip.offsetX,
+            min: -1,
+            max: 1,
+            bipolar: true,
+            defaultValue: 0,
+            format: (v) => v.toStringAsFixed(2),
+            onChanged: (v) =>
+                editor.updateClip(index, (c) => c.offsetX = v, record: false),
+            onChangeEnd: (v) => editor.updateClip(index, (c) => c.offsetX = v),
+          ),
+          AppSlider(
+            label: 'Position Y',
+            value: clip.offsetY,
+            min: -1,
+            max: 1,
+            bipolar: true,
+            defaultValue: 0,
+            format: (v) => v.toStringAsFixed(2),
+            onChanged: (v) =>
+                editor.updateClip(index, (c) => c.offsetY = v, record: false),
+            onChangeEnd: (v) => editor.updateClip(index, (c) => c.offsetY = v),
+          ),
+          const Divider(height: 18),
+          _cropSlider('Left', clip.cropLeft,
+              (v) => editor.updateClip(index, (c) => c.cropLeft = v)),
+          _cropSlider('Right', clip.cropRight,
+              (v) => editor.updateClip(index, (c) => c.cropRight = v)),
+          _cropSlider('Top', clip.cropTop,
+              (v) => editor.updateClip(index, (c) => c.cropTop = v)),
+          _cropSlider('Bottom', clip.cropBottom,
+              (v) => editor.updateClip(index, (c) => c.cropBottom = v)),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

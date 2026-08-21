@@ -1,5 +1,4 @@
 import 'enums.dart';
-import 'project.dart';
 import 'template.dart';
 
 /// The built-in template gallery.
@@ -467,7 +466,3 @@ class TemplateLibrary {
     ),
   ];
 }
-
-/// Convenience so callers can build the background without importing project.
-BackgroundStyle blurredBackground() =>
-    BackgroundStyle(type: BackgroundType.blur, blurAmount: 24);

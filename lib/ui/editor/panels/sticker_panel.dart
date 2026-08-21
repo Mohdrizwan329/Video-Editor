@@ -7,6 +7,42 @@ import '../../widgets/panel_shell.dart';
 import '../../widgets/app_slider.dart';
 import 'animation_panel.dart';
 
+/// The emoji packs and vector shapes on offer. Kept apart from the panel so
+/// the Effects sheet can show the very same catalogue in its Emoji tab.
+class StickerCatalog {
+  StickerCatalog._();
+
+  static const List<String> packNames = [
+    'Faces', 'Love', 'Hands', 'Party', 'Nature', 'Signs', 'Shapes'
+  ];
+
+  static const Map<int, List<String>> packs = {
+    0: ['😀','😂','🥹','😍','😎','🤩','😭','😡','🤔','🥳','😴','🤯','😱','🙃','😇','🤗'],
+    1: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💖','💘','💝','💕','💞','😻','💐','🌹'],
+    2: ['👍','👎','👏','🙌','🤝','✌️','🤟','👊','🙏','💪','👋','🫶','☝️','🤙','👌','✍️'],
+    3: ['🎉','🎊','🥂','🍾','🎈','🎁','🎂','🍰','🪅','✨','🌟','💫','🔥','⚡','🎵','🎶'],
+    4: ['🌸','🌺','🌻','🌴','🌊','🏔️','☀️','🌙','⭐','☁️','🌈','❄️','🍁','🦋','🐝','🌵'],
+    5: ['✅','❌','⚠️','❗','❓','💯','🔝','🆕','🔴','🟢','🔵','⏰','📍','🎯','🚀','💡'],
+  };
+
+  static const List<(String, IconData)> shapes = [
+    ('circle', Icons.circle),
+    ('ring', Icons.circle_outlined),
+    ('square', Icons.square),
+    ('triangle', Icons.change_history),
+    ('star', Icons.star),
+    ('heart', Icons.favorite),
+    ('arrow', Icons.arrow_forward),
+    ('bubble', Icons.chat_bubble),
+  ];
+
+  /// The shapes pack is the last chip; everything before it is emoji.
+  static bool isShapes(int pack) => pack == packNames.length - 1;
+
+  static int countIn(int pack) =>
+      isShapes(pack) ? shapes.length : (packs[pack]?.length ?? 0);
+}
+
 /// Sticker library: emoji packs and vector shapes, with colour and size for
 /// the shapes.
 class StickerPickerPanel extends StatefulWidget {
@@ -26,44 +62,22 @@ class StickerPickerPanel extends StatefulWidget {
 class _StickerPickerPanelState extends State<StickerPickerPanel> {
   int _pack = 0;
 
-  static const List<String> _packNames = [
-    'Faces', 'Love', 'Hands', 'Party', 'Nature', 'Signs', 'Shapes'
-  ];
-
-  static const Map<int, List<String>> _packs = {
-    0: ['😀','😂','🥹','😍','😎','🤩','😭','😡','🤔','🥳','😴','🤯','😱','🙃','😇','🤗'],
-    1: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💖','💘','💝','💕','💞','😻','💐','🌹'],
-    2: ['👍','👎','👏','🙌','🤝','✌️','🤟','👊','🙏','💪','👋','🫶','☝️','🤙','👌','✍️'],
-    3: ['🎉','🎊','🥂','🍾','🎈','🎁','🎂','🍰','🪅','✨','🌟','💫','🔥','⚡','🎵','🎶'],
-    4: ['🌸','🌺','🌻','🌴','🌊','🏔️','☀️','🌙','⭐','☁️','🌈','❄️','🍁','🦋','🐝','🌵'],
-    5: ['✅','❌','⚠️','❗','❓','💯','🔝','🆕','🔴','🟢','🔵','⏰','📍','🎯','🚀','💡'],
-  };
-
-  static const List<(String, IconData)> _shapes = [
-    ('circle', Icons.circle),
-    ('ring', Icons.circle_outlined),
-    ('square', Icons.square),
-    ('triangle', Icons.change_history),
-    ('star', Icons.star),
-    ('heart', Icons.favorite),
-    ('arrow', Icons.arrow_forward),
-    ('bubble', Icons.chat_bubble),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final isShapes = _pack == _packNames.length - 1;
+    final isShapes = StickerCatalog.isShapes(_pack);
     return PanelShell(
       title: 'Stickers',
       onClose: widget.onClose,
       onConfirm: widget.onClose,
       child: SizedBox(
-        height: 210,
+        // The grid scrolls inside the sheet, so it is exactly as tall as the
+        // sheet's body — never taller, or its last row would sit below it.
+        height: PanelShell.bodyHeight(context),
         child: Column(
           children: [
             const SizedBox(height: 8),
             ChipStrip(
-              labels: _packNames,
+              labels: StickerCatalog.packNames,
               selectedIndex: _pack,
               onSelected: (i) => setState(() => _pack = i),
             ),
@@ -77,18 +91,17 @@ class _StickerPickerPanelState extends State<StickerPickerPanel> {
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,
                 ),
-                itemCount:
-                    isShapes ? _shapes.length : (_packs[_pack]?.length ?? 0),
+                itemCount: StickerCatalog.countIn(_pack),
                 itemBuilder: (context, i) {
                   if (isShapes) {
-                    final (key, icon) = _shapes[i];
+                    final (key, icon) = StickerCatalog.shapes[i];
                     return _cell(
                       child: Icon(icon, size: 24, color: AppColors.text),
                       onTap: () =>
                           widget.editor.addSticker(key, isEmoji: false),
                     );
                   }
-                  final emoji = _packs[_pack]![i];
+                  final emoji = StickerCatalog.packs[_pack]![i];
                   return _cell(
                     child: Text(emoji, style: const TextStyle(fontSize: 24)),
                     onTap: () => widget.editor.addSticker(emoji),
@@ -155,9 +168,9 @@ class _StickerPropertiesPanelState extends State<StickerPropertiesPanel> {
       title: 'Sticker',
       onClose: widget.onClose,
       onConfirm: widget.onClose,
-      child: SizedBox(
-        height: 210,
+      child: PanelBody(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
             ChipStrip(
@@ -166,85 +179,78 @@ class _StickerPropertiesPanelState extends State<StickerPropertiesPanel> {
               onSelected: (i) => setState(() => _tab = i),
             ),
             const SizedBox(height: 8),
-            Expanded(
-              child: _tab == 0
-                  ? SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          AppSlider(
-                            label: 'Size',
-                            value: widget.layer.size,
-                            min: 40,
-                            max: 600,
-                            defaultValue: 200,
-                            format: (v) => v.round().toString(),
-                            onChanged: (v) =>
-                                _update((l) => l.size = v, record: false),
-                            onChangeEnd: (v) => _update((l) => l.size = v),
-                          ),
-                          AppSlider(
-                            label: 'Opacity',
-                            value: widget.layer.transform.opacity,
-                            min: 0,
-                            max: 1,
-                            defaultValue: 1,
-                            format: (v) => '${(v * 100).round()}%',
-                            onChanged: (v) => _update(
-                                (l) => l.transform.opacity = v,
-                                record: false),
-                            onChangeEnd: (v) =>
-                                _update((l) => l.transform.opacity = v),
-                          ),
-                          if (!widget.layer.isEmoji)
-                            Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 6, 16, 10),
-                              child: SizedBox(
-                                height: 30,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  children: [
-                                    for (final c in _palette)
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(right: 8),
-                                        child: GestureDetector(
-                                          onTap: () =>
-                                              _update((l) => l.color = c),
-                                          child: Container(
-                                            width: 28,
-                                            height: 28,
-                                            decoration: BoxDecoration(
-                                              color: Color(c),
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: widget.layer.color == c
-                                                    ? AppColors.accent
-                                                    : AppColors.divider,
-                                                width: widget.layer.color == c
-                                                    ? 2.4
-                                                    : 1,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
+            if (_tab == 0) ...[
+          AppSlider(
+            label: 'Size',
+            value: widget.layer.size,
+            min: 40,
+            max: 600,
+            defaultValue: 200,
+            format: (v) => v.round().toString(),
+            onChanged: (v) =>
+                _update((l) => l.size = v, record: false),
+            onChangeEnd: (v) => _update((l) => l.size = v),
+          ),
+          AppSlider(
+            label: 'Opacity',
+            value: widget.layer.transform.opacity,
+            min: 0,
+            max: 1,
+            defaultValue: 1,
+            format: (v) => '${(v * 100).round()}%',
+            onChanged: (v) => _update(
+                (l) => l.transform.opacity = v,
+                record: false),
+            onChangeEnd: (v) =>
+                _update((l) => l.transform.opacity = v),
+          ),
+          if (!widget.layer.isEmoji)
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(16, 6, 16, 10),
+              child: SizedBox(
+                height: 30,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final c in _palette)
+                      Padding(
+                        padding:
+                            const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () =>
+                              _update((l) => l.color = c),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: Color(c),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: widget.layer.color == c
+                                    ? AppColors.accent
+                                    : AppColors.divider,
+                                width: widget.layer.color == c
+                                    ? 2.4
+                                    : 1,
                               ),
                             ),
-                        ],
+                          ),
+                        ),
                       ),
-                    )
-                  : AnimationPicker(
-                      animationIn: widget.layer.animationIn,
-                      animationOut: widget.layer.animationOut,
-                      duration: widget.layer.animationDuration,
-                      onIn: (a) => _update((l) => l.animationIn = a),
-                      onOut: (a) => _update((l) => l.animationOut = a),
-                      onDuration: (d) => _update((l) => l.animationDuration = d),
-                    ),
+                  ],
+                ),
+              ),
             ),
+            ] else
+              AnimationPicker(
+                animationIn: widget.layer.animationIn,
+                animationOut: widget.layer.animationOut,
+                duration: widget.layer.animationDuration,
+                onIn: (a) => _update((l) => l.animationIn = a),
+                onOut: (a) => _update((l) => l.animationOut = a),
+                onDuration: (d) => _update((l) => l.animationDuration = d),
+              ),
           ],
         ),
       ),

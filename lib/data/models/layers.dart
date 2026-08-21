@@ -24,12 +24,6 @@ abstract class TimelineLayer {
 
   bool isVisibleAt(Duration t) => t >= start && t < end;
 
-  /// 0..1 progress of the playhead inside this layer.
-  double progressAt(Duration t) {
-    if (duration.inMicroseconds <= 0) return 0;
-    return ((t - start).inMicroseconds / duration.inMicroseconds).clamp(0.0, 1.0);
-  }
-
   Map<String, dynamic> toJson();
 }
 

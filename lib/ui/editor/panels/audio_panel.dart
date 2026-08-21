@@ -45,121 +45,118 @@ class _AudioPanelState extends State<AudioPanel> {
         a.fadeIn = Duration.zero;
         a.fadeOut = Duration.zero;
       }),
-      child: SizedBox(
-        height: 252,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              const SizedBox(height: 6),
-              AppSlider(
-                label: 'Volume',
-                icon: Icons.volume_up,
-                value: l.volume,
-                min: 0,
-                max: 2,
-                defaultValue: 1,
-                format: (v) => '${(v * 100).round()}%',
-                onChanged: (v) => _update((a) => a.volume = v, record: false),
-                onChangeEnd: (v) => _update((a) => a.volume = v),
+      child: PanelBody(
+        child: Column(
+          children: [
+            const SizedBox(height: 6),
+            AppSlider(
+              label: 'Volume',
+              icon: Icons.volume_up,
+              value: l.volume,
+              min: 0,
+              max: 2,
+              defaultValue: 1,
+              format: (v) => '${(v * 100).round()}%',
+              onChanged: (v) => _update((a) => a.volume = v, record: false),
+              onChangeEnd: (v) => _update((a) => a.volume = v),
+            ),
+            AppSlider(
+              label: 'Fade in',
+              icon: Icons.north_east,
+              value: (l.fadeIn.seconds).clamp(0.0, maxFade).toDouble(),
+              min: 0,
+              max: maxFade,
+              defaultValue: 0,
+              format: (v) => '${v.toStringAsFixed(1)}s',
+              onChanged: (v) =>
+                  _update((a) => a.fadeIn = durationFromSeconds(v),
+                      record: false),
+              onChangeEnd: (v) =>
+                  _update((a) => a.fadeIn = durationFromSeconds(v)),
+            ),
+            AppSlider(
+              label: 'Fade out',
+              icon: Icons.south_east,
+              value: (l.fadeOut.seconds).clamp(0.0, maxFade).toDouble(),
+              min: 0,
+              max: maxFade,
+              defaultValue: 0,
+              format: (v) => '${v.toStringAsFixed(1)}s',
+              onChanged: (v) =>
+                  _update((a) => a.fadeOut = durationFromSeconds(v),
+                      record: false),
+              onChangeEnd: (v) =>
+                  _update((a) => a.fadeOut = durationFromSeconds(v)),
+            ),
+            AppSlider(
+              label: 'Speed',
+              icon: Icons.speed,
+              value: l.speed,
+              min: 0.5,
+              max: 2,
+              defaultValue: 1,
+              format: (v) => '${v.toStringAsFixed(2)}x',
+              onChanged: (v) => _update((a) => a.speed = v, record: false),
+              onChangeEnd: (v) => _update((a) => a.speed = v),
+            ),
+            AppSlider(
+              label: 'Pitch',
+              icon: Icons.tune,
+              value: l.pitch,
+              min: -12,
+              max: 12,
+              bipolar: true,
+              divisions: 24,
+              defaultValue: 0,
+              format: (v) => '${v.round() > 0 ? '+' : ''}${v.round()} st',
+              onChanged: (v) => _update((a) => a.pitch = v, record: false),
+              onChangeEnd: (v) => _update((a) => a.pitch = v),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Voice changer',
+                    style: TextStyle(fontSize: 11, color: AppColors.textDim)),
               ),
-              AppSlider(
-                label: 'Fade in',
-                icon: Icons.north_east,
-                value: (l.fadeIn.seconds).clamp(0.0, maxFade).toDouble(),
-                min: 0,
-                max: maxFade,
-                defaultValue: 0,
-                format: (v) => '${v.toStringAsFixed(1)}s',
-                onChanged: (v) =>
-                    _update((a) => a.fadeIn = durationFromSeconds(v),
-                        record: false),
-                onChangeEnd: (v) =>
-                    _update((a) => a.fadeIn = durationFromSeconds(v)),
-              ),
-              AppSlider(
-                label: 'Fade out',
-                icon: Icons.south_east,
-                value: (l.fadeOut.seconds).clamp(0.0, maxFade).toDouble(),
-                min: 0,
-                max: maxFade,
-                defaultValue: 0,
-                format: (v) => '${v.toStringAsFixed(1)}s',
-                onChanged: (v) =>
-                    _update((a) => a.fadeOut = durationFromSeconds(v),
-                        record: false),
-                onChangeEnd: (v) =>
-                    _update((a) => a.fadeOut = durationFromSeconds(v)),
-              ),
-              AppSlider(
-                label: 'Speed',
-                icon: Icons.speed,
-                value: l.speed,
-                min: 0.5,
-                max: 2,
-                defaultValue: 1,
-                format: (v) => '${v.toStringAsFixed(2)}x',
-                onChanged: (v) => _update((a) => a.speed = v, record: false),
-                onChangeEnd: (v) => _update((a) => a.speed = v),
-              ),
-              AppSlider(
-                label: 'Pitch',
-                icon: Icons.tune,
-                value: l.pitch,
-                min: -12,
-                max: 12,
-                bipolar: true,
-                divisions: 24,
-                defaultValue: 0,
-                format: (v) => '${v.round() > 0 ? '+' : ''}${v.round()} st',
-                onChanged: (v) => _update((a) => a.pitch = v, record: false),
-                onChangeEnd: (v) => _update((a) => a.pitch = v),
-              ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Voice changer',
-                      style: TextStyle(fontSize: 11, color: AppColors.textDim)),
-                ),
-              ),
-              SizedBox(
-                height: 32,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  itemCount: VoiceEffect.values.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) {
-                    final fx = VoiceEffect.values[i];
-                    final active = l.voiceEffect == fx;
-                    return GestureDetector(
-                      onTap: () => _update((a) => a.voiceEffect = fx),
-                      child: Container(
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color:
-                              active ? AppColors.accent : AppColors.surfaceHigh,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(fx.label,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: active
-                                  ? AppColors.onAccent
-                                  : AppColors.textDim,
-                            )),
+            ),
+            SizedBox(
+              height: 32,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: VoiceEffect.values.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final fx = VoiceEffect.values[i];
+                  final active = l.voiceEffect == fx;
+                  return GestureDetector(
+                    onTap: () => _update((a) => a.voiceEffect = fx),
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color:
+                            active ? AppColors.accent : AppColors.surfaceHigh,
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    );
-                  },
-                ),
+                      child: Text(fx.label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: active
+                                ? AppColors.onAccent
+                                : AppColors.textDim,
+                          )),
+                    ),
+                  );
+                },
               ),
-              const SizedBox(height: 10),
-            ],
-          ),
+            ),
+            const SizedBox(height: 10),
+          ],
         ),
-      ),
+),
     );
   }
 }
@@ -237,76 +234,73 @@ class _OverlayPanelState extends State<OverlayPanel> {
       title: 'Overlay',
       onClose: widget.onClose,
       onConfirm: widget.onClose,
-      child: SizedBox(
-        height: 210,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              const SizedBox(height: 6),
+      child: PanelBody(
+        child: Column(
+          children: [
+            const SizedBox(height: 6),
+            AppSlider(
+              label: 'Size',
+              icon: Icons.photo_size_select_large,
+              value: l.transform.scale,
+              min: 0.05,
+              max: 1.6,
+              defaultValue: 0.5,
+              format: (v) => '${(v * 100).round()}%',
+              onChanged: (v) =>
+                  _update((o) => o.transform.scale = v, record: false),
+              onChangeEnd: (v) => _update((o) => o.transform.scale = v),
+            ),
+            AppSlider(
+              label: 'Opacity',
+              icon: Icons.opacity,
+              value: l.transform.opacity,
+              min: 0,
+              max: 1,
+              defaultValue: 1,
+              format: (v) => '${(v * 100).round()}%',
+              onChanged: (v) =>
+                  _update((o) => o.transform.opacity = v, record: false),
+              onChangeEnd: (v) => _update((o) => o.transform.opacity = v),
+            ),
+            AppSlider(
+              label: 'Corner radius',
+              icon: Icons.rounded_corner,
+              value: l.cornerRadius,
+              min: 0,
+              max: 120,
+              defaultValue: 0,
+              format: (v) => v.round().toString(),
+              onChanged: (v) =>
+                  _update((o) => o.cornerRadius = v, record: false),
+              onChangeEnd: (v) => _update((o) => o.cornerRadius = v),
+            ),
+            if (!l.isImage)
               AppSlider(
-                label: 'Size',
-                icon: Icons.photo_size_select_large,
-                value: l.transform.scale,
-                min: 0.05,
-                max: 1.6,
-                defaultValue: 0.5,
-                format: (v) => '${(v * 100).round()}%',
-                onChanged: (v) =>
-                    _update((o) => o.transform.scale = v, record: false),
-                onChangeEnd: (v) => _update((o) => o.transform.scale = v),
-              ),
-              AppSlider(
-                label: 'Opacity',
-                icon: Icons.opacity,
-                value: l.transform.opacity,
+                label: 'Volume',
+                icon: Icons.volume_up,
+                value: l.volume,
                 min: 0,
-                max: 1,
+                max: 2,
                 defaultValue: 1,
                 format: (v) => '${(v * 100).round()}%',
-                onChanged: (v) =>
-                    _update((o) => o.transform.opacity = v, record: false),
-                onChangeEnd: (v) => _update((o) => o.transform.opacity = v),
+                onChanged: (v) => _update((o) => o.volume = v, record: false),
+                onChangeEnd: (v) => _update((o) => o.volume = v),
               ),
+            if (!l.isImage)
               AppSlider(
-                label: 'Corner radius',
-                icon: Icons.rounded_corner,
-                value: l.cornerRadius,
-                min: 0,
-                max: 120,
-                defaultValue: 0,
-                format: (v) => v.round().toString(),
-                onChanged: (v) =>
-                    _update((o) => o.cornerRadius = v, record: false),
-                onChangeEnd: (v) => _update((o) => o.cornerRadius = v),
+                label: 'Speed',
+                icon: Icons.speed,
+                value: l.speed,
+                min: 0.25,
+                max: 4,
+                defaultValue: 1,
+                format: (v) => '${v.toStringAsFixed(2)}x',
+                onChanged: (v) => _update((o) => o.speed = v, record: false),
+                onChangeEnd: (v) => _update((o) => o.speed = v),
               ),
-              if (!l.isImage)
-                AppSlider(
-                  label: 'Volume',
-                  icon: Icons.volume_up,
-                  value: l.volume,
-                  min: 0,
-                  max: 2,
-                  defaultValue: 1,
-                  format: (v) => '${(v * 100).round()}%',
-                  onChanged: (v) => _update((o) => o.volume = v, record: false),
-                  onChangeEnd: (v) => _update((o) => o.volume = v),
-                ),
-              if (!l.isImage)
-                AppSlider(
-                  label: 'Speed',
-                  icon: Icons.speed,
-                  value: l.speed,
-                  min: 0.25,
-                  max: 4,
-                  defaultValue: 1,
-                  format: (v) => '${v.toStringAsFixed(2)}x',
-                  onChanged: (v) => _update((o) => o.speed = v, record: false),
-                  onChangeEnd: (v) => _update((o) => o.speed = v),
-                ),
-            ],
-          ),
+          ],
         ),
-      ),
+),
     );
   }
 }

@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../state/projects_controller.dart';
 import '../editor/preview/chroma_box.dart';
+import '../editor/preview/grade_extras_box.dart';
 import '../home/home_screen.dart';
 import '../widgets/app_logo.dart';
 
@@ -67,6 +68,7 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.wait([
       Future.wait([
         ChromaBox.warmUp(),
+        GradeExtrasBox.warmUp(),
         _projectsLoaded(projects),
       ]).timeout(SplashScreen.bootTimeout, onTimeout: () => const []),
       Future<void>.delayed(SplashScreen.minimumOnScreen),

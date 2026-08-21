@@ -78,41 +78,33 @@ class _FilmstripState extends State<Filmstrip> {
   @override
   Widget build(BuildContext context) {
     if (widget.clip.isImage) {
-      return SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: Image.file(
-          File(widget.clip.path),
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          errorBuilder: (_, _, _) => _blank(),
-        ),
+      return Image.file(
+        File(widget.clip.path),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => _blank(),
       );
     }
+    // The tile count follows the requested width so it matches the frames that
+    // were fetched, but the tiles share whatever width the parent actually
+    // hands us -- a clip's border eats a pixel or two off `widget.width`, and
+    // laying out for the larger figure would overflow the row.
     final count = _tileCount;
-    return SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: Row(
-        children: List.generate(count, (i) {
-          final path = _frames[i];
-          final w = i == count - 1
-              ? (widget.width - _tileWidth * (count - 1)).clamp(1.0, _tileWidth)
-              : _tileWidth;
-          return SizedBox(
-            width: w,
-            height: widget.height,
-            child: path == null
-                ? _blank()
-                : Image.file(
-                    File(path),
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    errorBuilder: (_, _, _) => _blank(),
-                  ),
-          );
-        }),
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: List.generate(count, (i) {
+        final path = _frames[i];
+        return Expanded(
+          child: path == null
+              ? _blank()
+              : Image.file(
+                  File(path),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) => _blank(),
+                ),
+        );
+      }),
     );
   }
 

@@ -24,9 +24,6 @@ class CaptionLine {
   final String text;
 
   Duration get duration => end - start;
-
-  CaptionLine shifted(Duration by) =>
-      CaptionLine(start: start + by, end: end + by, text: text);
 }
 
 /// Progress of a transcription run.

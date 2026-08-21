@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -11,6 +12,7 @@ import '../../state/projects_controller.dart';
 import '../../data/models/template.dart';
 import '../editor/editor_screen.dart';
 import '../templates/template_gallery_screen.dart';
+import '../image_editor/image_editor_screen.dart';
 import '../picker/media_picker_screen.dart';
 import '../text_to_video/text_to_video_screen.dart';
 import 'widgets/project_tile.dart';
@@ -45,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
               slivers: [
                 SliverToBoxAdapter(child: _newProjectCard(context)),
                 SliverToBoxAdapter(child: _textToVideoCard(context)),
+                SliverToBoxAdapter(child: _imageEditCard(context)),
                 SliverToBoxAdapter(child: _templateCard(context)),
                 SliverToBoxAdapter(child: _quickTools(context)),
                 SliverToBoxAdapter(child: _sectionTitle(context, controller)),
@@ -201,6 +204,46 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => EditorScreen(project: project)),
     );
     await controller.refresh();
+  }
+
+  /// The third way in, and the only one that ends in a photo rather than a
+  /// video: the same grades, sliders, textures and frames the timeline uses,
+  /// pointed at a single still. It takes the ocean gradient so it is never
+  /// mistaken for the violet generator above it.
+  Widget _imageEditCard(BuildContext context) {
+    final r = context.r;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, 0),
+      child: _HeroCard(
+        icon: Icons.photo_filter,
+        iconSize: r.ic(26),
+        title: 'Image Edit',
+        subtitle: 'Crop, retouch, mark up and caption a photo',
+        subtitleColor: const Color(0xE6FFFFFF),
+        gradient: AppColors.oceanGradient,
+        glow: AppColors.glow(AppColors.sky, opacity: 0.34),
+        onTap: () => _startImageEdit(context),
+      ),
+    );
+  }
+
+  /// One photo in, the editor on top of it. The picker is the same one the
+  /// timeline uses, held to a single image.
+  Future<void> _startImageEdit(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final paths = await navigator.push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => const MediaPickerScreen(
+          title: 'Pick a photo',
+          filter: RequestType.image,
+          maxSelection: 1,
+        ),
+      ),
+    );
+    if (paths == null || paths.isEmpty) return;
+    await navigator.push(
+      MaterialPageRoute(builder: (_) => ImageEditorScreen(path: paths.first)),
+    );
   }
 
   Widget _templateCard(BuildContext context) {

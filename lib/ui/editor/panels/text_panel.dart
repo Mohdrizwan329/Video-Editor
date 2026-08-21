@@ -63,9 +63,9 @@ class _TextPanelState extends State<TextPanel> {
       title: 'Text',
       onClose: widget.onClose,
       onConfirm: widget.onClose,
-      child: SizedBox(
-        height: 268,
+      child: PanelBody(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
             ChipStrip(
@@ -74,22 +74,22 @@ class _TextPanelState extends State<TextPanel> {
               onSelected: (i) => setState(() => _tab = i),
             ),
             const SizedBox(height: 10),
-            Expanded(
-              child: switch (_tab) {
-                0 => _contentTab(),
-                1 => _presetTab(),
-                2 => _fontTab(),
-                3 => _styleTab(),
-                _ => AnimationPicker(
-                    animationIn: widget.layer.animationIn,
-                    animationOut: widget.layer.animationOut,
-                    duration: widget.layer.animationDuration,
-                    onIn: (a) => _update((l) => l.animationIn = a),
-                    onOut: (a) => _update((l) => l.animationOut = a),
-                    onDuration: (d) => _update((l) => l.animationDuration = d),
-                  ),
-              },
-            ),
+            // The tab is however tall it is — the sheet is a fixed height for
+            // every tool and scrolls what does not fit.
+            switch (_tab) {
+              0 => _contentTab(),
+              1 => _presetTab(),
+              2 => _fontTab(),
+              3 => _styleTab(),
+              _ => AnimationPicker(
+                  animationIn: widget.layer.animationIn,
+                  animationOut: widget.layer.animationOut,
+                  duration: widget.layer.animationDuration,
+                  onIn: (a) => _update((l) => l.animationIn = a),
+                  onOut: (a) => _update((l) => l.animationOut = a),
+                  onDuration: (d) => _update((l) => l.animationDuration = d),
+                ),
+            },
           ],
         ),
       ),
@@ -97,10 +97,7 @@ class _TextPanelState extends State<TextPanel> {
   }
 
   Widget _contentTab() {
-    // The field and its format row are a fixed height; on a short window —
-    // a phone in landscape, or with the keyboard up — the tab scrolls rather
-    // than clipping the alignment buttons.
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Column(
         children: [
@@ -153,6 +150,7 @@ class _TextPanelState extends State<TextPanel> {
     final category = TextPresetLibrary.categories[_presetCategory];
     final presets = TextPresetLibrary.byCategory(category);
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         ChipStrip(
           labels: TextPresetLibrary.categories,
@@ -160,7 +158,8 @@ class _TextPanelState extends State<TextPanel> {
           onSelected: (i) => setState(() => _presetCategory = i),
         ),
         const SizedBox(height: 10),
-        Expanded(
+        SizedBox(
+          height: 66,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -255,125 +254,121 @@ class _TextPanelState extends State<TextPanel> {
   }
 
   Widget _fontTab() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          SizedBox(
-            height: 56,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              itemCount: _fonts.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 9),
-              itemBuilder: (context, i) {
-                final f = _fonts[i];
-                final active = widget.layer.fontFamily == f;
-                return GestureDetector(
-                  onTap: () => _update((l) => l.fontFamily = f),
-                  child: Container(
-                    width: 82,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: active
-                          ? AppColors.accent.withValues(alpha: 0.16)
-                          : AppColors.surfaceHigh,
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(
-                        color: active ? AppColors.accent : Colors.transparent,
-                      ),
+    return Column(
+      children: [
+        SizedBox(
+          height: 56,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            itemCount: _fonts.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 9),
+            itemBuilder: (context, i) {
+              final f = _fonts[i];
+              final active = widget.layer.fontFamily == f;
+              return GestureDetector(
+                onTap: () => _update((l) => l.fontFamily = f),
+                child: Container(
+                  width: 82,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? AppColors.accent.withValues(alpha: 0.16)
+                        : AppColors.surfaceHigh,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: active ? AppColors.accent : Colors.transparent,
                     ),
-                    child: Text('Aa',
-                        style: TextStyle(
-                          fontFamily: f,
-                          fontSize: 20,
-                          color: active ? AppColors.accent : AppColors.text,
-                        )),
                   ),
-                );
-              },
-            ),
+                  child: Text('Aa',
+                      style: TextStyle(
+                        fontFamily: f,
+                        fontSize: 20,
+                        color: active ? AppColors.accent : AppColors.text,
+                      )),
+                ),
+              );
+            },
           ),
-          AppSlider(
-            label: 'Size',
-            value: widget.layer.fontSize,
-            min: 16,
-            max: 220,
-            defaultValue: 64,
-            format: (v) => v.round().toString(),
-            onChanged: (v) => _update((l) => l.fontSize = v, record: false),
-            onChangeEnd: (v) => _update((l) => l.fontSize = v),
-          ),
-          AppSlider(
-            label: 'Letter spacing',
-            value: widget.layer.letterSpacing,
-            min: -6,
-            max: 24,
-            bipolar: true,
-            defaultValue: 0,
-            format: (v) => v.toStringAsFixed(1),
-            onChanged: (v) => _update((l) => l.letterSpacing = v, record: false),
-            onChangeEnd: (v) => _update((l) => l.letterSpacing = v),
-          ),
-          AppSlider(
-            label: 'Line height',
-            value: widget.layer.lineHeight,
-            min: 0.8,
-            max: 2.4,
-            defaultValue: 1.2,
-            format: (v) => v.toStringAsFixed(2),
-            onChanged: (v) => _update((l) => l.lineHeight = v, record: false),
-            onChangeEnd: (v) => _update((l) => l.lineHeight = v),
-          ),
-        ],
-      ),
+        ),
+        AppSlider(
+          label: 'Size',
+          value: widget.layer.fontSize,
+          min: 16,
+          max: 220,
+          defaultValue: 64,
+          format: (v) => v.round().toString(),
+          onChanged: (v) => _update((l) => l.fontSize = v, record: false),
+          onChangeEnd: (v) => _update((l) => l.fontSize = v),
+        ),
+        AppSlider(
+          label: 'Letter spacing',
+          value: widget.layer.letterSpacing,
+          min: -6,
+          max: 24,
+          bipolar: true,
+          defaultValue: 0,
+          format: (v) => v.toStringAsFixed(1),
+          onChanged: (v) => _update((l) => l.letterSpacing = v, record: false),
+          onChangeEnd: (v) => _update((l) => l.letterSpacing = v),
+        ),
+        AppSlider(
+          label: 'Line height',
+          value: widget.layer.lineHeight,
+          min: 0.8,
+          max: 2.4,
+          defaultValue: 1.2,
+          format: (v) => v.toStringAsFixed(2),
+          onChanged: (v) => _update((l) => l.lineHeight = v, record: false),
+          onChangeEnd: (v) => _update((l) => l.lineHeight = v),
+        ),
+      ],
     );
   }
 
   Widget _styleTab() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _colorRow('Text', widget.layer.color,
-              (c) => _update((l) => l.color = c)),
-          _colorRow('Outline', widget.layer.strokeColor,
-              (c) => _update((l) => l.strokeColor = c)),
-          AppSlider(
-            label: 'Outline width',
-            value: widget.layer.strokeWidth,
-            min: 0,
-            max: 12,
-            defaultValue: 0,
-            format: (v) => v.toStringAsFixed(1),
-            onChanged: (v) => _update((l) => l.strokeWidth = v, record: false),
-            onChangeEnd: (v) => _update((l) => l.strokeWidth = v),
-          ),
-          AppSlider(
-            label: 'Shadow blur',
-            value: widget.layer.shadowBlur,
-            min: 0,
-            max: 40,
-            defaultValue: 0,
-            format: (v) => v.round().toString(),
-            onChanged: (v) => _update((l) => l.shadowBlur = v, record: false),
-            onChangeEnd: (v) => _update((l) => l.shadowBlur = v),
-          ),
-          _colorRow('Backdrop', widget.layer.backgroundColor,
-              (c) => _update((l) => l.backgroundColor = c),
-              includeClear: true),
-          AppSlider(
-            label: 'Opacity',
-            value: widget.layer.transform.opacity,
-            min: 0,
-            max: 1,
-            defaultValue: 1,
-            format: (v) => '${(v * 100).round()}%',
-            onChanged: (v) =>
-                _update((l) => l.transform.opacity = v, record: false),
-            onChangeEnd: (v) => _update((l) => l.transform.opacity = v),
-          ),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _colorRow('Text', widget.layer.color,
+            (c) => _update((l) => l.color = c)),
+        _colorRow('Outline', widget.layer.strokeColor,
+            (c) => _update((l) => l.strokeColor = c)),
+        AppSlider(
+          label: 'Outline width',
+          value: widget.layer.strokeWidth,
+          min: 0,
+          max: 12,
+          defaultValue: 0,
+          format: (v) => v.toStringAsFixed(1),
+          onChanged: (v) => _update((l) => l.strokeWidth = v, record: false),
+          onChangeEnd: (v) => _update((l) => l.strokeWidth = v),
+        ),
+        AppSlider(
+          label: 'Shadow blur',
+          value: widget.layer.shadowBlur,
+          min: 0,
+          max: 40,
+          defaultValue: 0,
+          format: (v) => v.round().toString(),
+          onChanged: (v) => _update((l) => l.shadowBlur = v, record: false),
+          onChangeEnd: (v) => _update((l) => l.shadowBlur = v),
+        ),
+        _colorRow('Backdrop', widget.layer.backgroundColor,
+            (c) => _update((l) => l.backgroundColor = c),
+            includeClear: true),
+        AppSlider(
+          label: 'Opacity',
+          value: widget.layer.transform.opacity,
+          min: 0,
+          max: 1,
+          defaultValue: 1,
+          format: (v) => '${(v * 100).round()}%',
+          onChanged: (v) =>
+              _update((l) => l.transform.opacity = v, record: false),
+          onChangeEnd: (v) => _update((l) => l.transform.opacity = v),
+        ),
+      ],
     );
   }
 

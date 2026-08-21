@@ -383,10 +383,4 @@ class SoundLibrary {
       onProgress?.call(i + 1, all.length);
     }
   }
-
-  Future<void> clearCache() async {
-    final d = await _dir();
-    if (await d.exists()) await d.delete(recursive: true);
-    _cache.clear();
-  }
 }

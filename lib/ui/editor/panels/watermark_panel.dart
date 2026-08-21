@@ -86,9 +86,8 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
         activeThumbColor: AppColors.accent,
         onChanged: (v) => _update((w) => w.enabled = v),
       ),
-      child: SizedBox(
-        height: 244,
-        child: SingleChildScrollView(
+      child: PanelBody(
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,31 +202,36 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
         ),
         const SizedBox(height: 12),
         const _SectionLabel('Colour'),
-        Wrap(
-          spacing: 9,
-          runSpacing: 9,
-          children: [
-            for (final c in _palette)
-              GestureDetector(
+        // One scrolling row, not a wrap: a second row of swatches pushed the
+        // controls below it out of the sheet and left the sheet taller than
+        // what it was showing.
+        SizedBox(
+          height: 30,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _palette.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              final c = _palette[i];
+              final active = mark.color == c;
+              return GestureDetector(
                 onTap: () => _update((w) => w.color = c),
                 child: Container(
-                  width: 32,
-                  height: 32,
+                  width: 30,
                   decoration: BoxDecoration(
                     color: Color(c),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: mark.color == c
-                          ? AppColors.accent
-                          : AppColors.divider,
-                      width: mark.color == c ? 2.4 : 1,
+                      color: active ? AppColors.accent : AppColors.divider,
+                      width: active ? 2.4 : 1,
                     ),
                   ),
                 ),
-              ),
-          ],
+              );
+            },
+          ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 10),
         // Wrap, not Row: in the editor's side rail, or at a large system
         // font, the three chips no longer fit on one line.
         Wrap(

@@ -105,9 +105,9 @@ class _MaskPanelState extends State<MaskPanel> {
           (o) => o.maskInverted = !o.maskInverted,
         ),
       ),
-      child: SizedBox(
-        height: 216,
+      child: PanelBody(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 10),
             SizedBox(
@@ -157,80 +157,76 @@ class _MaskPanelState extends State<MaskPanel> {
                 },
               ),
             ),
-            if (_shape != MaskShape.none)
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    AppSlider(
-                      label: 'Size',
-                      value: _size,
-                      min: 0.05,
-                      max: 1.5,
-                      defaultValue: 0.6,
-                      format: (v) => '${(v * 100).round()}%',
-                      onChanged: (v) => _apply(
-                          (c) => c.maskSize = v, (o) => o.maskSize = v,
-                          record: false),
-                      onChangeEnd: (v) =>
-                          _apply((c) => c.maskSize = v, (o) => o.maskSize = v),
-                    ),
-                    AppSlider(
-                      label: 'Feather',
-                      value: _feather,
-                      min: 0.005,
-                      max: 0.8,
-                      defaultValue: 0.1,
-                      format: (v) => '${(v * 100).round()}%',
-                      onChanged: (v) => _apply(
-                          (c) => c.maskFeather = v, (o) => o.maskFeather = v,
-                          record: false),
-                      onChangeEnd: (v) => _apply(
-                          (c) => c.maskFeather = v, (o) => o.maskFeather = v),
-                    ),
-                    AppSlider(
-                      label: 'Position X',
-                      value: _x,
-                      min: 0,
-                      max: 1,
-                      defaultValue: 0.5,
-                      format: (v) => v.toStringAsFixed(2),
-                      onChanged: (v) =>
-                          _apply((c) => c.maskX = v, (o) => o.maskX = v,
-                              record: false),
-                      onChangeEnd: (v) =>
-                          _apply((c) => c.maskX = v, (o) => o.maskX = v),
-                    ),
-                    AppSlider(
-                      label: 'Position Y',
-                      value: _y,
-                      min: 0,
-                      max: 1,
-                      defaultValue: 0.5,
-                      format: (v) => v.toStringAsFixed(2),
-                      onChanged: (v) =>
-                          _apply((c) => c.maskY = v, (o) => o.maskY = v,
-                              record: false),
-                      onChangeEnd: (v) =>
-                          _apply((c) => c.maskY = v, (o) => o.maskY = v),
-                    ),
-                    AppSlider(
-                      label: 'Rotation',
-                      value: _rotation,
-                      min: -3.15,
-                      max: 3.15,
-                      bipolar: true,
-                      defaultValue: 0,
-                      format: (v) => '${(v * 57.2958).round()}°',
-                      onChanged: (v) => _apply(
-                          (c) => c.maskRotation = v, (o) => o.maskRotation = v,
-                          record: false),
-                      onChangeEnd: (v) => _apply((c) => c.maskRotation = v,
-                          (o) => o.maskRotation = v),
-                    ),
-                  ],
-                ),
-              ),
+            // No shape means no sliders, and then the sheet is the shape
+            // strip and nothing else.
+            if (_shape != MaskShape.none) ...[
+            AppSlider(
+              label: 'Size',
+              value: _size,
+              min: 0.05,
+              max: 1.5,
+              defaultValue: 0.6,
+              format: (v) => '${(v * 100).round()}%',
+              onChanged: (v) => _apply(
+                  (c) => c.maskSize = v, (o) => o.maskSize = v,
+                  record: false),
+              onChangeEnd: (v) =>
+                  _apply((c) => c.maskSize = v, (o) => o.maskSize = v),
+            ),
+            AppSlider(
+              label: 'Feather',
+              value: _feather,
+              min: 0.005,
+              max: 0.8,
+              defaultValue: 0.1,
+              format: (v) => '${(v * 100).round()}%',
+              onChanged: (v) => _apply(
+                  (c) => c.maskFeather = v, (o) => o.maskFeather = v,
+                  record: false),
+              onChangeEnd: (v) => _apply(
+                  (c) => c.maskFeather = v, (o) => o.maskFeather = v),
+            ),
+            AppSlider(
+              label: 'Position X',
+              value: _x,
+              min: 0,
+              max: 1,
+              defaultValue: 0.5,
+              format: (v) => v.toStringAsFixed(2),
+              onChanged: (v) =>
+                  _apply((c) => c.maskX = v, (o) => o.maskX = v,
+                      record: false),
+              onChangeEnd: (v) =>
+                  _apply((c) => c.maskX = v, (o) => o.maskX = v),
+            ),
+            AppSlider(
+              label: 'Position Y',
+              value: _y,
+              min: 0,
+              max: 1,
+              defaultValue: 0.5,
+              format: (v) => v.toStringAsFixed(2),
+              onChanged: (v) =>
+                  _apply((c) => c.maskY = v, (o) => o.maskY = v,
+                      record: false),
+              onChangeEnd: (v) =>
+                  _apply((c) => c.maskY = v, (o) => o.maskY = v),
+            ),
+            AppSlider(
+              label: 'Rotation',
+              value: _rotation,
+              min: -3.15,
+              max: 3.15,
+              bipolar: true,
+              defaultValue: 0,
+              format: (v) => '${(v * 57.2958).round()}°',
+              onChanged: (v) => _apply(
+                  (c) => c.maskRotation = v, (o) => o.maskRotation = v,
+                  record: false),
+              onChangeEnd: (v) => _apply((c) => c.maskRotation = v,
+                  (o) => o.maskRotation = v),
+            ),
+            ],
           ],
         ),
       ),
@@ -263,9 +259,13 @@ class _ChromaPanelState extends State<ChromaPanel> {
     0xFFFF0000, 0xFF000000, 0xFFFFFFFF, 0xFFFF00FF,
   ];
 
-  int? get _key =>
-      widget.overlay?.chromaKeyColor ??
-      widget.editor.project.clips[widget.clipIndex!].chromaKeyColor;
+  // Branch on the target, not on its value: the key colour is itself
+  // nullable, so `overlay?.chromaKeyColor ?? clips[clipIndex!]` fell through
+  // to the clip lookup for every overlay that had no key picked yet — and
+  // clipIndex is null on that path, which took the whole panel down.
+  int? get _key => widget.overlay != null
+      ? widget.overlay!.chromaKeyColor
+      : widget.editor.project.clips[widget.clipIndex!].chromaKeyColor;
 
   double get _similarity =>
       widget.overlay?.chromaSimilarity ??
@@ -299,83 +299,83 @@ class _ChromaPanelState extends State<ChromaPanel> {
         (c) => c.chromaKeyColor = null,
         (o) => o.chromaKeyColor = null,
       ),
-      child: SizedBox(
-        height: 190,
+      child: PanelBody(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 10, 16, 6),
-              child: Text('Key colour',
-                  style: TextStyle(fontSize: 11, color: AppColors.textDim)),
-            ),
-            SizedBox(
-              height: 36,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                children: [
-                  for (final c in _presets)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 9),
-                      child: GestureDetector(
-                        onTap: () => _apply((v) => v.chromaKeyColor = c,
-                            (o) => o.chromaKeyColor = c),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Color(c),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: key == c
-                                  ? AppColors.accent
-                                  : AppColors.divider,
-                              width: key == c ? 2.6 : 1,
-                            ),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 6),
+            child: Text('Key colour',
+                style: TextStyle(fontSize: 11, color: AppColors.textDim)),
+          ),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              children: [
+                for (final c in _presets)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 9),
+                    child: GestureDetector(
+                      onTap: () => _apply((v) => v.chromaKeyColor = c,
+                          (o) => o.chromaKeyColor = c),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Color(c),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: key == c
+                                ? AppColors.accent
+                                : AppColors.divider,
+                            width: key == c ? 2.6 : 1,
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-            if (key != null) ...[
-              AppSlider(
-                label: 'Similarity',
-                value: _similarity,
-                min: 0.01,
-                max: 0.8,
-                defaultValue: 0.25,
-                format: (v) => '${(v * 100).round()}%',
-                onChanged: (v) => _apply((c) => c.chromaSimilarity = v,
-                    (o) => o.chromaSimilarity = v,
-                    record: false),
-                onChangeEnd: (v) => _apply(
-                    (c) => c.chromaSimilarity = v, (o) => o.chromaSimilarity = v),
-              ),
-              AppSlider(
-                label: 'Edge blend',
-                value: _blend,
-                min: 0,
-                max: 0.6,
-                defaultValue: 0.1,
-                format: (v) => '${(v * 100).round()}%',
-                onChanged: (v) => _apply(
-                    (c) => c.chromaBlend = v, (o) => o.chromaBlend = v,
-                    record: false),
-                onChangeEnd: (v) =>
-                    _apply((c) => c.chromaBlend = v, (o) => o.chromaBlend = v),
-              ),
-            ] else
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 22, 16, 0),
-                child: Text('Pick the colour to remove.',
-                    style: TextStyle(fontSize: 12, color: AppColors.textFaint)),
-              ),
-          ],
-        ),
+          ),
+          if (key != null) ...[
+            AppSlider(
+              label: 'Similarity',
+              value: _similarity,
+              min: 0.01,
+              max: 0.8,
+              defaultValue: 0.25,
+              format: (v) => '${(v * 100).round()}%',
+              onChanged: (v) => _apply((c) => c.chromaSimilarity = v,
+                  (o) => o.chromaSimilarity = v,
+                  record: false),
+              onChangeEnd: (v) => _apply(
+                  (c) => c.chromaSimilarity = v, (o) => o.chromaSimilarity = v),
+            ),
+            AppSlider(
+              label: 'Edge blend',
+              value: _blend,
+              min: 0,
+              max: 0.6,
+              defaultValue: 0.1,
+              format: (v) => '${(v * 100).round()}%',
+              onChanged: (v) => _apply(
+                  (c) => c.chromaBlend = v, (o) => o.chromaBlend = v,
+                  record: false),
+              onChangeEnd: (v) =>
+                  _apply((c) => c.chromaBlend = v, (o) => o.chromaBlend = v),
+            ),
+          ] else
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 22, 16, 0),
+              child: Text('Pick the colour to remove.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textFaint)),
+            ),
+        ],
       ),
+),
     );
   }
 }
@@ -402,7 +402,8 @@ class BlendPanel extends StatelessWidget {
       onReset: () => editor.updateLayer<OverlayLayer>(
           layer, (o) => o.blendMode = BlendMode2.normal),
       child: SizedBox(
-        height: 130,
+        // A grid scrolls inside the sheet rather than past the bottom of it.
+        height: PanelShell.bodyHeight(context),
         child: GridView.builder(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

@@ -59,7 +59,9 @@ class _SoundPanelState extends State<SoundPanel> {
         onPressed: _import,
       ),
       child: SizedBox(
-        height: 232,
+        // The track list scrolls inside the sheet, so the box it scrolls in
+        // is the sheet's body and not a point more.
+        height: PanelShell.bodyHeight(context),
         child: Column(
           children: [
             const SizedBox(height: 8),

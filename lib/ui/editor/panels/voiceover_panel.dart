@@ -119,9 +119,9 @@ class _VoiceOverPanelState extends State<VoiceOverPanel> {
         if (_recording) _stop();
         widget.onClose();
       },
-      child: SizedBox(
-        height: 150,
+      child: PanelBody(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (_permissionDenied)

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -174,8 +173,6 @@ class EditorController extends ChangeNotifier {
     if (t > total) t = total;
     position.value = t;
   }
-
-  void nudge(Duration by) => seek(position.value + by);
 
   void setZoom(double pps) {
     pixelsPerSecond.value =
@@ -526,6 +523,23 @@ class EditorController extends ChangeNotifier {
     await saveNow();
   }
 
+  /// Re-cut the timeline the user already has with [template]'s pacing, moves
+  /// and titles, reusing the clips on the track as the template's media.
+  ///
+  /// Like [applyTemplate] this replaces the timeline, so it goes through
+  /// [edit] and stays one undo step away.
+  Future<void> applyTemplateToCurrentMedia(VideoTemplate template) async {
+    if (_project.clips.isEmpty) return;
+    final media = _project.clips.map((c) => c.copyWith()).toList();
+    edit(() {
+      TemplateApplier.apply(
+          template: template, project: _project, media: media);
+      _selection = const EditorSelection.none();
+    });
+    position.value = Duration.zero;
+    await saveNow();
+  }
+
   // ------------------------------------------------------------ keyframes
 
   /// The keyframable thing the selection points at, plus the playhead offset
@@ -760,16 +774,6 @@ class EditorController extends ChangeNotifier {
     });
   }
 
-  /// Restyle every caption at once — the reason captions are flagged rather
-  /// than being ordinary text layers.
-  void restyleCaptions(void Function(TextLayer) mutate) {
-    edit(() {
-      for (final t in _project.texts.where((t) => t.isCaption)) {
-        mutate(t);
-      }
-    });
-  }
-
   Future<String?> readSrtFile() async {
     final picked = await MediaLibrary.instance
         .pickFiles(allowMultiple: false, extensions: ['srt', 'vtt', 'txt']);
@@ -818,10 +822,6 @@ class EditorController extends ChangeNotifier {
 
   void setMasterVolume(double v) =>
       edit(record: false, () => _project.masterVolume = v.clamp(0, 2));
-
-  /// Timeline pixel width at the current zoom.
-  double get timelineWidth =>
-      math.max(1, totalDuration.inMicroseconds / 1000000 * pixelsPerSecond.value);
 }
 
 extension _FirstById on List<VideoClip> {

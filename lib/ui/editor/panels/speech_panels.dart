@@ -69,8 +69,7 @@ class _TtsPanelState extends State<TtsPanel> {
       title: 'Text to speech',
       onClose: widget.onClose,
       onConfirm: widget.onClose,
-      child: SizedBox(
-        height: 258,
+      child: PanelBody(
         child: _loading
             ? const Center(
                 child: SizedBox(
@@ -80,111 +79,109 @@ class _TtsPanelState extends State<TtsPanel> {
                       strokeWidth: 2, color: AppColors.accent),
                 ),
               )
-            : SingleChildScrollView(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-                      child: TextField(
-                        controller: _text,
-                        maxLines: 3,
-                        style: const TextStyle(fontSize: 13.5),
-                        decoration: InputDecoration(
-                          hintText: 'What should the narrator say?',
-                          filled: true,
-                          fillColor: AppColors.surfaceHigh,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                    child: TextField(
+                      controller: _text,
+                      maxLines: 3,
+                      style: const TextStyle(fontSize: 13.5),
+                      decoration: InputDecoration(
+                        hintText: 'What should the narrator say?',
+                        filled: true,
+                        fillColor: AppColors.surfaceHigh,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
                         ),
-                        onChanged: (_) => setState(() {}),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                       ),
+                      onChanged: (_) => setState(() {}),
                     ),
-                    if (_voices.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: Text(
-                          'No speech voices are installed on this device. '
-                          'Add one in the system settings.',
-                          style: TextStyle(
-                              fontSize: 11, color: AppColors.warning),
+                  ),
+                  if (_voices.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Text(
+                        'No speech voices are installed on this device. '
+                        'Add one in the system settings.',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.warning),
+                      ),
+                    )
+                  else
+                    _voicePicker(),
+                  AppSlider(
+                    label: 'Speed',
+                    icon: Icons.speed,
+                    value: _rate,
+                    min: 0.2,
+                    max: 1.0,
+                    defaultValue: 0.5,
+                    format: (v) => v.toStringAsFixed(2),
+                    onChanged: (v) => setState(() => _rate = v),
+                  ),
+                  AppSlider(
+                    label: 'Pitch',
+                    icon: Icons.tune,
+                    value: _pitch,
+                    min: 0.5,
+                    max: 2.0,
+                    defaultValue: 1.0,
+                    format: (v) => v.toStringAsFixed(2),
+                    onChanged: (v) => setState(() => _pitch = v),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+                    child: Row(
+                      children: [
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 38),
+                              foregroundColor: AppColors.text,
+                              side: const BorderSide(
+                                  color: AppColors.divider)),
+                          icon: const Icon(Icons.volume_up, size: 16),
+                          label: const Text('Preview'),
+                          onPressed: _text.text.trim().isEmpty
+                              ? null
+                              : () => _tts.preview(
+                                    _text.text,
+                                    voice: _voice,
+                                    rate: _rate,
+                                    pitch: _pitch,
+                                  ),
                         ),
-                      )
-                    else
-                      _voicePicker(),
-                    AppSlider(
-                      label: 'Speed',
-                      icon: Icons.speed,
-                      value: _rate,
-                      min: 0.2,
-                      max: 1.0,
-                      defaultValue: 0.5,
-                      format: (v) => v.toStringAsFixed(2),
-                      onChanged: (v) => setState(() => _rate = v),
-                    ),
-                    AppSlider(
-                      label: 'Pitch',
-                      icon: Icons.tune,
-                      value: _pitch,
-                      min: 0.5,
-                      max: 2.0,
-                      defaultValue: 1.0,
-                      format: (v) => v.toStringAsFixed(2),
-                      onChanged: (v) => setState(() => _pitch = v),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
-                      child: Row(
-                        children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(0, 38),
-                                foregroundColor: AppColors.text,
-                                side: const BorderSide(
-                                    color: AppColors.divider)),
-                            icon: const Icon(Icons.volume_up, size: 16),
-                            label: const Text('Preview'),
-                            onPressed: _text.text.trim().isEmpty
-                                ? null
-                                : () => _tts.preview(
-                                      _text.text,
-                                      voice: _voice,
-                                      rate: _rate,
-                                      pitch: _pitch,
-                                    ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.accent,
-                                foregroundColor: AppColors.onAccent,
-                                minimumSize: const Size(0, 38),
-                              ),
-                              icon: _working
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 1.8,
-                                          color: Colors.black),
-                                    )
-                                  : const Icon(Icons.add, size: 17),
-                              label: Text(_working ? 'Building…' : 'Add to timeline'),
-                              onPressed:
-                                  _working || _text.text.trim().isEmpty
-                                      ? null
-                                      : _generate,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              foregroundColor: AppColors.onAccent,
+                              minimumSize: const Size(0, 38),
                             ),
+                            icon: _working
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 1.8,
+                                        color: Colors.black),
+                                  )
+                                : const Icon(Icons.add, size: 17),
+                            label: Text(_working ? 'Building…' : 'Add to timeline'),
+                            onPressed:
+                                _working || _text.text.trim().isEmpty
+                                    ? null
+                                    : _generate,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
       ),
     );
@@ -323,8 +320,7 @@ class _CaptionPanelState extends State<CaptionPanel> {
       onClose: widget.onClose,
       onConfirm: widget.onClose,
       onReset: _captionCount > 0 ? _clearCaptions : null,
-      child: SizedBox(
-        height: 244,
+      child: PanelBody(
         child: _working ? _progressView() : _idleView(),
       ),
     );
@@ -359,98 +355,96 @@ class _CaptionPanelState extends State<CaptionPanel> {
   }
 
   Widget _idleView() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 10),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Text('Recognition model',
-                style: TextStyle(fontSize: 11, color: AppColors.textDim)),
-          ),
-          const SizedBox(height: 6),
-          ChipStrip(
-            labels: CaptionModel.values
-                .map((m) => '${m.label} ${m.size}')
-                .toList(),
-            selectedIndex: CaptionModel.values.indexOf(_model),
-            onSelected: (i) {
-              setState(() {
-                _model = CaptionModel.values[i];
-                _modelReady = null;
-              });
-              _checkModel();
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: Text(
-              _modelReady == null
-                  ? 'Checking for the model…'
-                  : _modelReady!
-                      ? 'Model ready on this device.'
-                      : 'The ${_model.label} model (${_model.size}) will be '
-                          'downloaded once before the first run.',
-              style: TextStyle(
-                fontSize: 10.5,
-                color: _modelReady == false
-                    ? AppColors.warning
-                    : AppColors.textFaint,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text('Recognition model',
+              style: TextStyle(fontSize: 11, color: AppColors.textDim)),
+        ),
+        const SizedBox(height: 6),
+        ChipStrip(
+          labels: CaptionModel.values
+              .map((m) => '${m.label} ${m.size}')
+              .toList(),
+          selectedIndex: CaptionModel.values.indexOf(_model),
+          onSelected: (i) {
+            setState(() {
+              _model = CaptionModel.values[i];
+              _modelReady = null;
+            });
+            _checkModel();
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          child: Text(
+            _modelReady == null
+                ? 'Checking for the model…'
+                : _modelReady!
+                    ? 'Model ready on this device.'
+                    : 'The ${_model.label} model (${_model.size}) will be '
+                        'downloaded once before the first run.',
+            style: TextStyle(
+              fontSize: 10.5,
+              color: _modelReady == false
+                  ? AppColors.warning
+                  : AppColors.textFaint,
             ),
           ),
-          const SizedBox(height: 14),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: AppColors.onAccent,
-                minimumSize: const Size.fromHeight(42),
-              ),
-              icon: const Icon(Icons.closed_caption, size: 18),
-              label: const Text('Auto-generate captions',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              onPressed: _e.project.clips.isEmpty ? null : _autoCaption,
+        ),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.onAccent,
+              minimumSize: const Size.fromHeight(42),
             ),
+            icon: const Icon(Icons.closed_caption, size: 18),
+            label: const Text('Auto-generate captions',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            onPressed: _e.project.clips.isEmpty ? null : _autoCaption,
           ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: _outlined,
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: const Text('Import SRT'),
-                    onPressed: _importSrt,
-                  ),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: _outlined,
+                  icon: const Icon(Icons.upload_file, size: 16),
+                  label: const Text('Import SRT'),
+                  onPressed: _importSrt,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: _outlined,
-                    icon: const Icon(Icons.download, size: 16),
-                    label: const Text('Export SRT'),
-                    onPressed: _captionCount == 0 ? null : _exportSrt,
-                  ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: _outlined,
+                  icon: const Icon(Icons.download, size: 16),
+                  label: const Text('Export SRT'),
+                  onPressed: _captionCount == 0 ? null : _exportSrt,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (_captionCount > 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Text('$_captionCount caption lines on the timeline',
-                  style: const TextStyle(
-                      fontSize: 11, color: AppColors.textDim)),
-            )
-          else
-            const SizedBox(height: 12),
-        ],
-      ),
+        ),
+        if (_captionCount > 0)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Text('$_captionCount caption lines on the timeline',
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textDim)),
+          )
+        else
+          const SizedBox(height: 12),
+      ],
     );
   }
 
