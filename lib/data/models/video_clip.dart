@@ -147,10 +147,52 @@ class VideoClip with Keyframable {
     return a.clamp(0.0, 1.0);
   }
 
+  /// Where the clip sits [local] into its slot, once its in and out
+  /// animations are applied: an offset in fractions of the canvas, a scale
+  /// and a rotation in radians.
+  ///
+  /// The exporter builds the same curve as an FFmpeg expression from the
+  /// same [AnimOffset], so what moves on screen is what moves in the file.
+  (double, double, double, double) animationTransformAt(Duration local) {
+    var dx = 0.0, dy = 0.0, scale = 1.0, turns = 0.0;
+    final dur = timelineDuration;
+    if (dur <= Duration.zero) return (dx, dy, scale, turns);
+    final ad = animationDuration.inMicroseconds.clamp(1, dur.inMicroseconds);
+
+    void apply(LayerAnimation anim, Duration since) {
+      final o = anim.offset;
+      if (o.isIdentity) return;
+      final t = (since.inMicroseconds / ad).clamp(0.0, 1.0);
+      // How much of the departure is still left. An oscillating animation
+      // swings either side of rest and damps out; the rest ease straight
+      // back in, quickly at first, which is what reads as arriving.
+      final away = o.oscillates
+          ? (1 - t) * math.sin(t * math.pi * 4)
+          : math.pow(1 - t, 2).toDouble();
+      if (away == 0) return;
+      dx += o.dx * away;
+      dy += o.dy * away;
+      scale *= 1 + (o.scale - 1) * away;
+      turns += o.turns * away;
+    }
+
+    apply(animationIn, local);
+    apply(animationOut, dur - local);
+    return (dx, dy, scale, turns * 2 * math.pi);
+  }
+
+  /// True when either end carries an animation the renderer moves, scales or
+  /// turns — as opposed to one it fades, or none at all.
+  bool get hasTransformAnimation =>
+      !animationIn.offset.isIdentity || !animationOut.offset.isIdentity;
+
   /// True when the clip's own animation is one the renderer can draw.
   bool get hasAlphaAnimation =>
       animationIn.exportKind == AnimExport.alpha ||
       animationOut.exportKind == AnimExport.alpha;
+
+  /// True when anything about the clip's animation has to be drawn.
+  bool get hasAnimation => hasAlphaAnimation || hasTransformAnimation;
 
   int sourceWidth;
   int sourceHeight;

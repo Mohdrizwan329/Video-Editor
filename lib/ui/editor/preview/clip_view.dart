@@ -134,16 +134,20 @@ class ClipView extends StatelessWidget {
           clip.scale,
         );
         final kRot = clip.animated(KeyframeProperty.rotation, localTime, 0);
+        // The in and out animations ride on top of the transform the clip
+        // already has, so a slide plays over whatever pan and zoom the user
+        // set rather than replacing it.
+        final (ax, ay, aScale, aRot) = clip.animationTransformAt(localTime);
         return ClipRect(
           child: Transform.rotate(
-            angle: kRot,
+            angle: kRot + aRot,
             child: Transform.translate(
               offset: Offset(
-                kx * constraints.maxWidth / 2,
-                ky * constraints.maxHeight / 2,
+                (kx + ax * 2) * constraints.maxWidth / 2,
+                (ky + ay * 2) * constraints.maxHeight / 2,
               ),
               child: Transform.scale(
-                scale: kScale,
+                scale: kScale * aScale,
                 child: FittedBox(fit: fit, child: _sized(media)),
               ),
             ),

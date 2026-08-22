@@ -394,6 +394,58 @@ class _GraphBuilder {
     return 'track';
   }
 
+  /// The clip's animation as FFmpeg expressions in `t`.
+  ///
+  /// The shape is the one [VideoClip.animationTransformAt] evaluates for the
+  /// preview, written out here rather than re-invented: the departure eases
+  /// back over the animation's length — squared for the ones that arrive, a
+  /// damped swing for the ones that oscillate. Two spellings of one curve is
+  /// how a preview and a render begin to disagree, so both are driven by the
+  /// same [AnimOffset].
+  static String _awayExpr(LayerAnimation anim, double ad, {String? since}) {
+    final t = 'min(1\\,max(0\\,(${since ?? 't'})/$ad))';
+    return anim.offset.oscillates ? '(1-$t)*sin($t*PI*4)' : 'pow(1-$t\\,2)';
+  }
+
+  /// The offset, scale and rotation the animation adds, as expressions — or
+  /// null when the clip has nothing to move.
+  (String, String, String, String)? _clipAnimationExprs(
+    VideoClip clip,
+    Duration dur,
+  ) {
+    if (!clip.hasTransformAnimation) return null;
+    final ad = clip.animationDuration.seconds.clamp(0.05, 10.0);
+    final total = dur.seconds;
+    final dx = <String>[], dy = <String>[], sc = <String>[], rt = <String>[];
+
+    void add(LayerAnimation anim, {required bool atEnd}) {
+      final o = anim.offset;
+      if (o.isIdentity) return;
+      final away = _awayExpr(
+        anim,
+        ad,
+        since: atEnd ? '(${total.toStringAsFixed(3)}-t)' : null,
+      );
+      if (o.dx != 0) dx.add('(${o.dx.toStringAsFixed(4)})*($away)');
+      if (o.dy != 0) dy.add('(${o.dy.toStringAsFixed(4)})*($away)');
+      if (o.scale != 1) {
+        sc.add('(1+(${(o.scale - 1).toStringAsFixed(4)})*($away))');
+      }
+      if (o.turns != 0) {
+        rt.add('(${(o.turns * 2 * math.pi).toStringAsFixed(5)})*($away)');
+      }
+    }
+
+    add(clip.animationIn, atEnd: false);
+    add(clip.animationOut, atEnd: true);
+    return (
+      dx.isEmpty ? '0' : dx.join('+'),
+      dy.isEmpty ? '0' : dy.join('+'),
+      sc.isEmpty ? '1' : sc.join('*'),
+      rt.isEmpty ? '0' : rt.join('+'),
+    );
+  }
+
   /// One clip: decode window, speed, geometry, grade, canvas fit.
   String _buildClip(VideoClip clip, int index) {
     final dur = clip.timelineDuration;
@@ -553,7 +605,7 @@ class _GraphBuilder {
         clip.fit == FitMode.contain ||
         clip.hasCutout ||
         clip.opacity < 1 ||
-        clip.hasAlphaAnimation;
+        clip.hasAnimation;
 
     final scaleTrack = clip.trackOrNull(KeyframeProperty.scale);
     if (scaleTrack != null) {
@@ -570,6 +622,22 @@ class _GraphBuilder {
       );
     } else {
       chain.add(fitted);
+    }
+
+    // The scale and turn halves of the animation act on the picture rather
+    // than on where it sits, so they go on the clip's own chain — and they
+    // go *after* the fit. Put before it, the fit scales the frame straight
+    // back to the canvas and the animation is wiped: the graph runs, FFmpeg
+    // is happy, and the picture does not move.
+    final motion = _clipAnimationExprs(clip, dur);
+    if (motion != null) {
+      final (_, _, aScale, aRot) = motion;
+      if (aScale != '1') {
+        chain.add("scale=w='iw*($aScale)':h='ih*($aScale)':eval=frame");
+      }
+      if (aRot != '0') {
+        chain.add("rotate='$aRot':c=none:ow=iw:oh=ih");
+      }
     }
 
     if (needsBackground) {
@@ -632,13 +700,30 @@ class _GraphBuilder {
     final start = project.clipStart(index).seconds;
     final xTrack = clip.trackOrNull(KeyframeProperty.x);
     final yTrack = clip.trackOrNull(KeyframeProperty.y);
-    final dx = xTrack != null
+    var dx = xTrack != null
         ? '(${xTrack.toExpression(offset: start, scale: _w / 2)})'
         : (clip.offsetX * _w / 2).round().toString();
-    final dy = yTrack != null
+    var dy = yTrack != null
         ? '(${yTrack.toExpression(offset: start, scale: _h / 2)})'
         : (clip.offsetY * _h / 2).round().toString();
-    final animated = xTrack != null || yTrack != null;
+    var animated = xTrack != null || yTrack != null;
+
+    // A slide, drift or fly rides on the same offset the pan already uses,
+    // which is what makes it play over whatever framing the user set rather
+    // than replacing it. It also forces the composited spelling: `pad` has
+    // no `t`, so a position that moves cannot be padded into place.
+    final anim = _clipAnimationExprs(clip, clip.timelineDuration);
+    if (anim != null) {
+      final (ax, ay, _, _) = anim;
+      if (ax != '0') {
+        dx = '($dx+($ax)*${_w.toString()})';
+        animated = true;
+      }
+      if (ay != '0') {
+        dy = '($dy+($ay)*${_h.toString()})';
+        animated = true;
+      }
+    }
     // Centring for the *overlay* filter, whose variables are W/H (the canvas
     // it draws onto) and w/h (the clip). The blur and gradient backgrounds
     // composite, so this is the spelling they need.
@@ -656,7 +741,7 @@ class _GraphBuilder {
         if (animated ||
             clip.hasCutout ||
             clip.opacity < 1 ||
-            clip.hasAlphaAnimation) {
+            clip.hasAnimation) {
           // pad exposes no `t`, not even with eval=frame, so a keyframed
           // position has to be composited. This is the one path that pays for
           // an extra input, so it is kept to the case that needs it.

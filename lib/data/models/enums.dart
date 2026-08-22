@@ -19,8 +19,10 @@ enum CanvasRatio {
   final String label;
   final IconData icon;
 
-  static CanvasRatio fromName(String? n) =>
-      CanvasRatio.values.firstWhere((e) => e.name == n, orElse: () => CanvasRatio.r9x16);
+  static CanvasRatio fromName(String? n) => CanvasRatio.values.firstWhere(
+    (e) => e.name == n,
+    orElse: () => CanvasRatio.r9x16,
+  );
 }
 
 /// Fit mode of a clip inside the canvas.
@@ -103,14 +105,21 @@ enum TransitionType {
   final String ffmpegName;
 
   static const List<String> categories = [
-    'Basic', 'Slide', 'Wipe', 'Shape', 'Bars', 'Motion'
+    'Basic',
+    'Slide',
+    'Wipe',
+    'Shape',
+    'Bars',
+    'Motion',
   ];
 
   static List<TransitionType> byCategory(String c) =>
       TransitionType.values.where((t) => t.category == c).toList();
 
-  static TransitionType fromName(String? n) => TransitionType.values
-      .firstWhere((e) => e.name == n, orElse: () => TransitionType.none);
+  static TransitionType fromName(String? n) => TransitionType.values.firstWhere(
+    (e) => e.name == n,
+    orElse: () => TransitionType.none,
+  );
 }
 
 /// In/out animations shared by text, sticker and overlay layers.
@@ -166,7 +175,12 @@ enum LayerAnimation {
   final AnimExport exportKind;
 
   static const List<String> categories = [
-    'Basic', 'Slide', 'Scale', 'Rotate', 'Text', 'Emphasis'
+    'Basic',
+    'Slide',
+    'Scale',
+    'Rotate',
+    'Text',
+    'Emphasis',
   ];
 
   static List<LayerAnimation> byCategory(String c) =>
@@ -174,19 +188,86 @@ enum LayerAnimation {
 
   /// Animations that keep running for the whole layer rather than only at
   /// its edges.
-  bool get isContinuous => this == LayerAnimation.shake ||
+  bool get isContinuous =>
+      this == LayerAnimation.shake ||
       this == LayerAnimation.pulse ||
       this == LayerAnimation.blink ||
       this == LayerAnimation.wobble ||
       this == LayerAnimation.wave ||
       this == LayerAnimation.neon;
 
-  static LayerAnimation fromName(String? n) => LayerAnimation.values
-      .firstWhere((e) => e.name == n, orElse: () => LayerAnimation.none);
+  /// Where the picture starts, as a departure from where it settles.
+  ///
+  /// [dx] and [dy] are fractions of the canvas, [scale] a multiplier and
+  /// [turns] a fraction of a full turn. At the animation's end every one of
+  /// them has eased back to rest, so one description covers both the preview,
+  /// which evaluates it per frame, and the exporter, which turns it into the
+  /// same curve as an expression. Writing it twice is how the two drift.
+  ///
+  /// [oscillates] marks the emphasis animations, which swing either side of
+  /// rest and damp out rather than arriving from somewhere.
+  AnimOffset get offset => switch (this) {
+    LayerAnimation.slideUp => const AnimOffset(dy: 1),
+    LayerAnimation.slideDown => const AnimOffset(dy: -1),
+    LayerAnimation.slideLeft => const AnimOffset(dx: 1),
+    LayerAnimation.slideRight => const AnimOffset(dx: -1),
+    LayerAnimation.driftUp => const AnimOffset(dy: 0.18),
+    LayerAnimation.driftDown => const AnimOffset(dy: -0.18),
+    LayerAnimation.swipeIn => const AnimOffset(dx: 0.6),
+    LayerAnimation.flyIn => const AnimOffset(dx: -1, dy: 0.4),
+    LayerAnimation.shake => const AnimOffset(dx: 0.04, oscillates: true),
+    LayerAnimation.scale => const AnimOffset(scale: 0.4),
+    LayerAnimation.scaleDown => const AnimOffset(scale: 1.6),
+    LayerAnimation.pop => const AnimOffset(scale: 0.2),
+    LayerAnimation.bounce => const AnimOffset(scale: 0.5, oscillates: true),
+    LayerAnimation.zoomBlur => const AnimOffset(scale: 1.8),
+    LayerAnimation.stretch => const AnimOffset(scale: 1.35),
+    LayerAnimation.squeeze => const AnimOffset(scale: 0.65),
+    LayerAnimation.pulse => const AnimOffset(scale: 1.12, oscillates: true),
+    LayerAnimation.spin => const AnimOffset(turns: 1),
+    LayerAnimation.spinFast => const AnimOffset(turns: 2),
+    LayerAnimation.swing => const AnimOffset(turns: 0.08, oscillates: true),
+    LayerAnimation.flip => const AnimOffset(turns: 0.5),
+    LayerAnimation.tilt => const AnimOffset(turns: 0.06),
+    LayerAnimation.wobble => const AnimOffset(turns: 0.05, oscillates: true),
+    _ => const AnimOffset(),
+  };
+
+  static LayerAnimation fromName(String? n) => LayerAnimation.values.firstWhere(
+    (e) => e.name == n,
+    orElse: () => LayerAnimation.none,
+  );
 }
 
 /// How closely the renderer can reproduce an animation.
 enum AnimExport { none, alpha, move, scale, rotate }
+
+/// Where an animation starts, relative to where it comes to rest.
+class AnimOffset {
+  const AnimOffset({
+    this.dx = 0,
+    this.dy = 0,
+    this.scale = 1,
+    this.turns = 0,
+    this.oscillates = false,
+  });
+
+  /// Fractions of the canvas. Positive dy starts below, positive dx starts
+  /// to the right — both slide back towards the middle.
+  final double dx;
+  final double dy;
+
+  /// Multiplier at the start; 1 is no scaling.
+  final double scale;
+
+  /// Fraction of a full turn at the start.
+  final double turns;
+
+  /// Swings either side of rest and damps, rather than arriving.
+  final bool oscillates;
+
+  bool get isIdentity => dx == 0 && dy == 0 && scale == 1 && turns == 0;
+}
 
 /// Mask shapes applied to a clip or overlay.
 enum MaskShape {
@@ -202,8 +283,10 @@ enum MaskShape {
   final String label;
   final IconData icon;
 
-  static MaskShape fromName(String? n) =>
-      MaskShape.values.firstWhere((e) => e.name == n, orElse: () => MaskShape.none);
+  static MaskShape fromName(String? n) => MaskShape.values.firstWhere(
+    (e) => e.name == n,
+    orElse: () => MaskShape.none,
+  );
 }
 
 /// Layer compositing modes.
@@ -229,17 +312,32 @@ enum BlendMode2 {
   /// Mode name accepted by FFmpeg's `blend` filter.
   final String ffmpegName;
 
-  static BlendMode2 fromName(String? n) => BlendMode2.values
-      .firstWhere((e) => e.name == n, orElse: () => BlendMode2.normal);
+  static BlendMode2 fromName(String? n) => BlendMode2.values.firstWhere(
+    (e) => e.name == n,
+    orElse: () => BlendMode2.normal,
+  );
 }
 
 /// Speed ramping presets used by the curve tool.
 enum SpeedCurve {
   none('Normal', []),
-  montage('Montage', [(0.0, 1.0), (0.25, 0.4), (0.5, 2.5), (0.75, 0.4), (1.0, 1.0)]),
+  montage('Montage', [
+    (0.0, 1.0),
+    (0.25, 0.4),
+    (0.5, 2.5),
+    (0.75, 0.4),
+    (1.0, 1.0),
+  ]),
   hero('Hero', [(0.0, 1.0), (0.3, 2.0), (0.5, 0.25), (0.7, 2.0), (1.0, 1.0)]),
   bullet('Bullet', [(0.0, 2.5), (0.35, 0.2), (0.65, 0.2), (1.0, 2.5)]),
-  jumper('Jumper', [(0.0, 1.0), (0.2, 3.0), (0.4, 0.5), (0.6, 3.0), (0.8, 0.5), (1.0, 1.0)]),
+  jumper('Jumper', [
+    (0.0, 1.0),
+    (0.2, 3.0),
+    (0.4, 0.5),
+    (0.6, 3.0),
+    (0.8, 0.5),
+    (1.0, 1.0),
+  ]),
   flashIn('Flash In', [(0.0, 3.0), (0.25, 0.5), (1.0, 1.0)]),
   flashOut('Flash Out', [(0.0, 1.0), (0.75, 0.5), (1.0, 3.0)]),
   rampUp('Ramp Up', [(0.0, 0.35), (1.0, 3.0)]),
@@ -252,8 +350,10 @@ enum SpeedCurve {
   /// (normalised position 0..1, speed multiplier) control points.
   final List<(double, double)> points;
 
-  static SpeedCurve fromName(String? n) =>
-      SpeedCurve.values.firstWhere((e) => e.name == n, orElse: () => SpeedCurve.none);
+  static SpeedCurve fromName(String? n) => SpeedCurve.values.firstWhere(
+    (e) => e.name == n,
+    orElse: () => SpeedCurve.none,
+  );
 
   /// Average multiplier, used to work out the clip's new timeline length.
   double get averageSpeed {
@@ -309,8 +409,10 @@ enum VoiceEffect {
   /// Flattens the phase spectrum for a vocoder-like timbre.
   final bool isRobot;
 
-  static VoiceEffect fromName(String? n) =>
-      VoiceEffect.values.firstWhere((e) => e.name == n, orElse: () => VoiceEffect.none);
+  static VoiceEffect fromName(String? n) => VoiceEffect.values.firstWhere(
+    (e) => e.name == n,
+    orElse: () => VoiceEffect.none,
+  );
 }
 
 /// Kind of an audio lane item — drives its colour and default gain.

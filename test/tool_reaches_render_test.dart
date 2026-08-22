@@ -114,7 +114,26 @@ void main() {
     (c) => c.adjustments = Adjustments(denoise: 0.5),
     'hqdn3d',
   );
-  reaches('Animation', (c) => c.animationIn = LayerAnimation.fade, 'fade');
+  reaches(
+    'Animation — fade',
+    (c) => c.animationIn = LayerAnimation.fade,
+    'alpha=1',
+  );
+  reaches(
+    'Animation — slide',
+    (c) => c.animationIn = LayerAnimation.slideUp,
+    'overlay=',
+  );
+  reaches(
+    'Animation — scale',
+    (c) => c.animationIn = LayerAnimation.pop,
+    'eval=frame',
+  );
+  reaches(
+    'Animation — rotate',
+    (c) => c.animationIn = LayerAnimation.spin,
+    'rotate=',
+  );
   reaches(
     'Transition',
     (c) => c.transitionType = TransitionType.fade,
