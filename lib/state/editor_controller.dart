@@ -433,12 +433,41 @@ class EditorController extends ChangeNotifier {
 
   // --------------------------------------------------------------- layers
 
+  /// How far apart two overlays dropped on the same frame are placed.
+  static const double _kDropStep = 0.09;
+
+  /// A spot on the canvas that nothing already on screen is sitting on.
+  ///
+  /// Every new overlay is born in the middle of the frame, so a second one
+  /// added over the first landed exactly on top of it: two 'Tap to edit'
+  /// texts drawn glyph over glyph, which reads as one smeared line rather
+  /// than as two layers. This steps the newcomer down the frame — and up,
+  /// once the room below is taken — until it is somewhere the user can see
+  /// it and grab it.
+  double _freeSpot(Iterable<LayerTransform> taken) {
+    bool free(double y) =>
+        taken.every((t) => (t.y - y).abs() >= _kDropStep / 2);
+    if (free(0.5)) return 0.5;
+    for (var n = 1; n <= 4; n++) {
+      for (final y in [0.5 + _kDropStep * n, 0.5 - _kDropStep * n]) {
+        if (y >= 0.12 && y <= 0.88 && free(y)) return y;
+      }
+    }
+    // Past a stack of nine the frame has no clear room left; the middle is
+    // still where the user is looking.
+    return 0.5;
+  }
+
   TextLayer addText({String? text}) {
+    final at = position.value;
     final layer = TextLayer(
-      start: position.value,
+      start: at,
       duration: const Duration(seconds: 3),
       text: text ?? 'Tap to edit',
     );
+    layer.transform.y = _freeSpot(_project.texts
+        .where((t) => t.isVisibleAt(at))
+        .map((t) => t.transform));
     edit(() {
       _project.texts.add(layer);
       _selection = EditorSelection(kind: LaneKind.text, id: layer.id);
@@ -447,12 +476,16 @@ class EditorController extends ChangeNotifier {
   }
 
   StickerLayer addSticker(String content, {bool isEmoji = true}) {
+    final at = position.value;
     final layer = StickerLayer(
-      start: position.value,
+      start: at,
       duration: const Duration(seconds: 3),
       content: content,
       isEmoji: isEmoji,
     );
+    layer.transform.y = _freeSpot(_project.stickers
+        .where((s) => s.isVisibleAt(at))
+        .map((s) => s.transform));
     edit(() {
       _project.stickers.add(layer);
       _selection = EditorSelection(kind: LaneKind.sticker, id: layer.id);

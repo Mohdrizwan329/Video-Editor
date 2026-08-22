@@ -47,6 +47,9 @@ class TimelineView extends StatefulWidget {
   /// They are a fixed density — an 18pt ruler, a 56pt video track, 26pt lanes
   /// — so this is not scaled to the window: shrinking the box would only clip
   /// a lane. When the window cannot spare it the editor scrolls instead.
+  ///
+  /// Every row's height comes from the widget that draws it, so the two can
+  /// never drift apart.
   static double heightFor(EditorController editor) {
     final project = editor.project;
     var h =
@@ -59,13 +62,16 @@ class TimelineView extends StatefulWidget {
     if (editor.keyframeTarget?.$1.hasKeyframes ?? false) {
       h += KeyframeMarkers.kHeight;
     }
-    for (final lane in [
+    for (final List<TimelineLayer> lane in [
       project.overlays,
       project.texts,
       project.stickers,
       project.audios,
     ]) {
-      if (lane.isNotEmpty) h += kLaneGap + kLaneHeight;
+      // Asked of the lane itself: two bars that overlap in time are drawn on
+      // two sub-rows, and a lane counted flat is a lane the box is too short
+      // for.
+      h += LaneRow.heightFor(lane);
     }
     return h;
   }

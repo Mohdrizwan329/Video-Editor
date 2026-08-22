@@ -31,13 +31,30 @@ class LaneRow extends StatelessWidget {
   final IconData icon;
   final String Function(TimelineLayer)? labelBuilder;
 
+  /// The gap under a lane that had to split into sub-rows, so the next lane
+  /// does not start flush against the last bar.
+  static const double kSubRowGap = 2;
+
+  /// Exactly the height [build] draws for these layers.
+  ///
+  /// The timeline hands its rows a box measured before any of them are
+  /// built, so this is the one place that knows a lane of overlapping bars
+  /// is two rows tall rather than one. Measuring it as one is what painted
+  /// an overflow stripe across the timeline the moment a second text landed
+  /// on top of the first.
+  static double heightFor(List<TimelineLayer> layers) {
+    if (layers.isEmpty) return 0;
+    final rows = pack(layers).length;
+    return kLaneGap + rows * kLaneHeight + (rows > 1 ? kSubRowGap : 0);
+  }
+
   double _x(Duration d) => d.inMicroseconds / 1000000 * pixelsPerSecond;
 
   @override
   Widget build(BuildContext context) {
     if (layers.isEmpty) return const SizedBox.shrink();
     // Pack overlapping bars onto sub-rows so nothing is hidden.
-    final rows = _pack(layers);
+    final rows = pack(layers);
     return Padding(
       padding: const EdgeInsets.only(top: kLaneGap),
       child: Column(
@@ -61,7 +78,7 @@ class LaneRow extends StatelessWidget {
                 ],
               ),
             ),
-          if (rows.length > 1) const SizedBox(height: 2),
+          if (rows.length > 1) const SizedBox(height: kSubRowGap),
         ],
       ),
     );
@@ -179,7 +196,7 @@ class LaneRow extends StatelessWidget {
   }
 
   /// Greedy packing: a bar goes on the first row where it does not overlap.
-  static List<List<TimelineLayer>> _pack(List<TimelineLayer> layers) {
+  static List<List<TimelineLayer>> pack(List<TimelineLayer> layers) {
     final sorted = [...layers]..sort((a, b) => a.start.compareTo(b.start));
     final rows = <List<TimelineLayer>>[];
     for (final layer in sorted) {
