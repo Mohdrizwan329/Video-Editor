@@ -63,6 +63,24 @@ class ExportService {
     if (id != null) await FFmpegKit.cancel(id);
   }
 
+  /// The filter graph the exporter would build for [project], without
+  /// running it.
+  ///
+  /// A setting can be stored, serialised and shown in its panel and still
+  /// reach nothing — clip animation was exactly that for a long time: two
+  /// fields the model carried, the JSON kept and no renderer ever read. A
+  /// test that only presses the button cannot see it. This is how a test
+  /// asks the one question that matters: does the tool reach the render.
+  @visibleForTesting
+  static String debugCommandFor(Project project, ExportSettings settings) =>
+      _GraphBuilder(
+        project: project,
+        settings: settings,
+        rasterized: const {},
+        totalDuration: project.totalDuration,
+        hslLuts: const {},
+      ).build('/tmp/probe.mp4');
+
   Future<ExportResult> export(
     Project project,
     ExportSettings settings, {
@@ -453,7 +471,21 @@ class _GraphBuilder {
     };
 
     var src = '[$idx:v]';
-    final base = 'b$index';
+    var base = 'b$index';
+
+    // Opacity is alpha on the clip, and alpha only means anything once
+    // something is composited under it. Setting it here — before the
+    // background — is what makes the backdrop show through; the branch that
+    // used to name opacity did nothing with it, so the slider moved and the
+    // exported file never changed.
+    if (clip.opacity < 1) {
+      _filters.add(
+        '$src format=yuva420p,'
+        'colorchannelmixer=aa=${clip.opacity.toStringAsFixed(4)} '
+        '[op$index]',
+      );
+      src = '[op$index]';
+    }
 
     // Cutout: the baked matte carries the subject's shape, and `alphamerge`
     // is what turns it into an alpha channel on the footage. It goes in
@@ -476,11 +508,36 @@ class _GraphBuilder {
       _filters.add('[ca$index][ms$index] alphamerge [cut$index]');
       src = '[cut$index]';
     }
+    // The clip's own in and out animation. Only the alpha family is drawn —
+    // the same family an overlay's is drawn from — and it goes on the
+    // foreground chain, not after the composite: alpha added once the
+    // backdrop is already flattened in is alpha the next `format=yuv420p`
+    // throws away, which is a fade nobody sees. Two fields, written by no
+    // panel, read by no renderer, and faithfully kept in the JSON.
+    if (clip.hasAlphaAnimation) {
+      final ad = clip.animationDuration.seconds.clamp(0.05, 10.0);
+      chain.add('format=yuva420p');
+      if (clip.animationIn.exportKind == AnimExport.alpha) {
+        chain.add('fade=t=in:st=0:d=${ad.toStringAsFixed(3)}:alpha=1');
+      }
+      if (clip.animationOut.exportKind == AnimExport.alpha) {
+        final st = (dur.seconds - ad).clamp(0.0, double.infinity);
+        chain.add(
+          'fade=t=out:st=${st.toStringAsFixed(3)}'
+          ':d=${ad.toStringAsFixed(3)}:alpha=1',
+        );
+      }
+    }
+
     // A cut-out clip needs something behind it whatever its fit: the alpha
     // alphamerge gave it only becomes a hole once it is composited, and the
     // `crop` path below would drop the alpha plane and leave the background
     // it was supposed to remove sitting there untouched.
-    final needsBackground = clip.fit == FitMode.contain || clip.hasCutout;
+    final needsBackground =
+        clip.fit == FitMode.contain ||
+        clip.hasCutout ||
+        clip.opacity < 1 ||
+        clip.hasAlphaAnimation;
 
     final scaleTrack = clip.trackOrNull(KeyframeProperty.scale);
     if (scaleTrack != null) {
@@ -522,9 +579,7 @@ class _GraphBuilder {
       );
     }
 
-    if (clip.opacity < 1 ||
-        clip.fadeIn > Duration.zero ||
-        clip.fadeOut > Duration.zero) {
+    if (clip.fadeIn > Duration.zero || clip.fadeOut > Duration.zero) {
       final fades = <String>[];
       if (clip.fadeIn > Duration.zero) {
         fades.add('fade=t=in:st=0:d=${clip.fadeIn.seconds.toStringAsFixed(3)}');
@@ -582,7 +637,10 @@ class _GraphBuilder {
         // under the frame, so a transparent subject stays transparent and
         // `format=yuv420p` then throws the alpha away. Compositing is the
         // only branch that puts the backdrop *behind* the clip.
-        if (animated || clip.hasCutout) {
+        if (animated ||
+            clip.hasCutout ||
+            clip.opacity < 1 ||
+            clip.hasAlphaAnimation) {
           // pad exposes no `t`, not even with eval=frame, so a keyframed
           // position has to be composited. This is the one path that pays for
           // an extra input, so it is kept to the case that needs it.

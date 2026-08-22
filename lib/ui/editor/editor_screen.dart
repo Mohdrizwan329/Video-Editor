@@ -1007,7 +1007,23 @@ class _EditorScreenState extends State<EditorScreen> {
         (l) => l.animationDuration = d,
       );
     } else {
-      return _emptyPanel('Select a layer to animate');
+      // A main-track clip animates too — it has carried the fields all
+      // along. Sending the user away with 'select a layer' was the panel
+      // refusing the one thing the bar's Animation button selects.
+      final index = _editor.selectedClipIndex >= 0
+          ? _editor.selectedClipIndex
+          : _editor.project.clipIndexAt(_editor.position.value);
+      if (index < 0 || index >= _editor.project.clips.length) {
+        return _emptyPanel('Add a clip or layer to animate');
+      }
+      final clip = _editor.project.clips[index];
+      animIn = clip.animationIn;
+      animOut = clip.animationOut;
+      duration = clip.animationDuration;
+      onIn = (a) => _editor.updateClip(index, (c) => c.animationIn = a);
+      onOut = (a) => _editor.updateClip(index, (c) => c.animationOut = a);
+      onDuration = (d) =>
+          _editor.updateClip(index, (c) => c.animationDuration = d);
     }
 
     return PanelShell(

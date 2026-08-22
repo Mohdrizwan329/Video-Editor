@@ -39,6 +39,7 @@ class VideoClip with Keyframable {
     this.fadeOut = Duration.zero,
     this.animationIn = LayerAnimation.none,
     this.animationOut = LayerAnimation.none,
+    this.animationDuration = const Duration(milliseconds: 600),
     this.sourceWidth = 0,
     this.sourceHeight = 0,
     this.cropLeft = 0,
@@ -63,11 +64,11 @@ class VideoClip with Keyframable {
     this.voiceEffect = VoiceEffect.none,
     this.cutoutMattePath,
     this.lutPath,
-  })  : id = id ?? newId(),
-        trimStart = trimStart ?? Duration.zero,
-        trimEnd = trimEnd ?? sourceDuration,
-        filterId = filterId ?? 'none',
-        adjustments = adjustments ?? Adjustments();
+  }) : id = id ?? newId(),
+       trimStart = trimStart ?? Duration.zero,
+       trimEnd = trimEnd ?? sourceDuration,
+       filterId = filterId ?? 'none',
+       adjustments = adjustments ?? Adjustments();
 
   final String id;
   String path;
@@ -109,6 +110,16 @@ class VideoClip with Keyframable {
   Duration fadeOut;
   LayerAnimation animationIn;
   LayerAnimation animationOut;
+
+  /// How long the in and out animations take. Layers have carried one of
+  /// these all along; the clip's animation was two fields and no duration,
+  /// which is part of why nothing ever rendered it.
+  Duration animationDuration;
+
+  /// True when the clip's own animation is one the renderer can draw.
+  bool get hasAlphaAnimation =>
+      animationIn.exportKind == AnimExport.alpha ||
+      animationOut.exportKind == AnimExport.alpha;
 
   int sourceWidth;
   int sourceHeight;
@@ -173,8 +184,10 @@ class VideoClip with Keyframable {
 
   /// Length this clip occupies on the timeline.
   Duration get timelineDuration => Duration(
-      microseconds:
-          (trimmedDuration.inMicroseconds / effectiveSpeed).round().clamp(1, 1 << 62));
+    microseconds: (trimmedDuration.inMicroseconds / effectiveSpeed)
+        .round()
+        .clamp(1, 1 << 62),
+  );
 
   /// How much of the picture the fade envelope leaves at [local], an offset
   /// inside the clip's own span. 1 is the untouched frame, 0 is full black.
@@ -238,14 +251,17 @@ class VideoClip with Keyframable {
     }
     if (voiceEffect.echo) out.add('aecho=0.8:0.85:60:0.35');
     if (voiceEffect.isRobot) {
-      out.add("afftfilt=real='hypot(re,im)*cos(0)':"
-          "imag='hypot(re,im)*sin(0)':win_size=512:overlap=0.75");
+      out.add(
+        "afftfilt=real='hypot(re,im)*cos(0)':"
+        "imag='hypot(re,im)*sin(0)':win_size=512:overlap=0.75",
+      );
     }
     return out;
   }
 
-  double get sourceAspect =>
-      (sourceWidth > 0 && sourceHeight > 0) ? sourceWidth / sourceHeight : 16 / 9;
+  double get sourceAspect => (sourceWidth > 0 && sourceHeight > 0)
+      ? sourceWidth / sourceHeight
+      : 16 / 9;
 
   bool get hasCrop =>
       cropLeft > 0 || cropTop > 0 || cropRight > 0 || cropBottom > 0;
@@ -253,7 +269,8 @@ class VideoClip with Keyframable {
   /// Map a timeline offset inside this clip back to a position in the source file.
   Duration sourcePositionFor(Duration localOffset) {
     final scaled = Duration(
-        microseconds: (localOffset.inMicroseconds * effectiveSpeed).round());
+      microseconds: (localOffset.inMicroseconds * effectiveSpeed).round(),
+    );
     if (reversed) {
       final p = trimEnd - scaled;
       return p < trimStart ? trimStart : p;
@@ -291,6 +308,7 @@ class VideoClip with Keyframable {
       fadeOut: fadeOut,
       animationIn: animationIn,
       animationOut: animationOut,
+      animationDuration: animationDuration,
       sourceWidth: sourceWidth,
       sourceHeight: sourceHeight,
       cropLeft: cropLeft,
@@ -319,64 +337,66 @@ class VideoClip with Keyframable {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'path': path,
-        'isImage': isImage,
-        'hasAudio': hasAudio,
-        'src': sourceDuration.inMicroseconds,
-        'ts': trimStart.inMicroseconds,
-        'te': trimEnd.inMicroseconds,
-        'speed': speed,
-        'volume': volume,
-        'reversed': reversed,
-        'mirrored': mirrored,
-        'flipV': flippedVertical,
-        'rotation': rotation,
-        'opacity': opacity,
-        'filterId': filterId,
-        'filterIntensity': filterIntensity,
-        'adj': adjustments.toJson(),
-        'tr': transitionType.name,
-        'trd': transitionDuration.inMicroseconds,
-        'scale': scale,
-        'ox': offsetX,
-        'oy': offsetY,
-        'fit': fit.name,
-        'fin': fadeIn.inMicroseconds,
-        'fout': fadeOut.inMicroseconds,
-        'ain': animationIn.name,
-        'aout': animationOut.name,
-        'w': sourceWidth,
-        'h': sourceHeight,
-        'cl': cropLeft,
-        'ct': cropTop,
-        'cr': cropRight,
-        'cb': cropBottom,
-        'thumb': thumbnailPath,
-        'sc': speedCurve.name,
-        'mk': maskShape.name,
-        'mkf': maskFeather,
-        'mks': maskSize,
-        'mkx': maskX,
-        'mky': maskY,
-        'mkr': maskRotation,
-        'mki': maskInverted,
-        'ck': chromaKeyColor,
-        'cks': chromaSimilarity,
-        'ckb': chromaBlend,
-        'stab': stabilize,
-        'enh': enhance,
-        'venh': voiceEnhance,
-        'vfx': voiceEffect.name,
-        'matte': cutoutMattePath,
-        'lut': lutPath,
-        'kf': keyframesToJson(),
-      };
+    'id': id,
+    'path': path,
+    'isImage': isImage,
+    'hasAudio': hasAudio,
+    'src': sourceDuration.inMicroseconds,
+    'ts': trimStart.inMicroseconds,
+    'te': trimEnd.inMicroseconds,
+    'speed': speed,
+    'volume': volume,
+    'reversed': reversed,
+    'mirrored': mirrored,
+    'flipV': flippedVertical,
+    'rotation': rotation,
+    'opacity': opacity,
+    'filterId': filterId,
+    'filterIntensity': filterIntensity,
+    'adj': adjustments.toJson(),
+    'tr': transitionType.name,
+    'trd': transitionDuration.inMicroseconds,
+    'scale': scale,
+    'ox': offsetX,
+    'oy': offsetY,
+    'fit': fit.name,
+    'fin': fadeIn.inMicroseconds,
+    'fout': fadeOut.inMicroseconds,
+    'ain': animationIn.name,
+    'aout': animationOut.name,
+    'adur': animationDuration.inMicroseconds,
+    'w': sourceWidth,
+    'h': sourceHeight,
+    'cl': cropLeft,
+    'ct': cropTop,
+    'cr': cropRight,
+    'cb': cropBottom,
+    'thumb': thumbnailPath,
+    'sc': speedCurve.name,
+    'mk': maskShape.name,
+    'mkf': maskFeather,
+    'mks': maskSize,
+    'mkx': maskX,
+    'mky': maskY,
+    'mkr': maskRotation,
+    'mki': maskInverted,
+    'ck': chromaKeyColor,
+    'cks': chromaSimilarity,
+    'ckb': chromaBlend,
+    'stab': stabilize,
+    'enh': enhance,
+    'venh': voiceEnhance,
+    'vfx': voiceEffect.name,
+    'matte': cutoutMattePath,
+    'lut': lutPath,
+    'kf': keyframesToJson(),
+  };
 
   factory VideoClip.fromJson(Map<String, dynamic> j) {
     Duration us(String k, [int fallback = 0]) =>
         Duration(microseconds: (j[k] as num?)?.toInt() ?? fallback);
-    double d(String k, double fallback) => (j[k] as num?)?.toDouble() ?? fallback;
+    double d(String k, double fallback) =>
+        (j[k] as num?)?.toDouble() ?? fallback;
     return VideoClip(
       id: j['id'] as String?,
       path: j['path'] as String,
@@ -400,12 +420,15 @@ class VideoClip with Keyframable {
       scale: d('scale', 1),
       offsetX: d('ox', 0),
       offsetY: d('oy', 0),
-      fit: FitMode.values.firstWhere((e) => e.name == j['fit'],
-          orElse: () => FitMode.contain),
+      fit: FitMode.values.firstWhere(
+        (e) => e.name == j['fit'],
+        orElse: () => FitMode.contain,
+      ),
       fadeIn: us('fin'),
       fadeOut: us('fout'),
       animationIn: LayerAnimation.fromName(j['ain'] as String?),
       animationOut: LayerAnimation.fromName(j['aout'] as String?),
+      animationDuration: us('adur', 600000),
       sourceWidth: (j['w'] as num?)?.toInt() ?? 0,
       sourceHeight: (j['h'] as num?)?.toInt() ?? 0,
       cropLeft: d('cl', 0),
