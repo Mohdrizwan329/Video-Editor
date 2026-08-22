@@ -72,14 +72,30 @@ class ExportService {
   /// test that only presses the button cannot see it. This is how a test
   /// asks the one question that matters: does the tool reach the render.
   @visibleForTesting
-  static String debugCommandFor(Project project, ExportSettings settings) =>
-      _GraphBuilder(
-        project: project,
-        settings: settings,
-        rasterized: const {},
-        totalDuration: project.totalDuration,
-        hslLuts: const {},
-      ).build('/tmp/probe.mp4');
+  static String debugCommandFor(
+    Project project,
+    ExportSettings settings, {
+    Map<String, RasterizedLayer> rasterized = const {},
+    Map<String, String> hslLuts = const {},
+  }) => _GraphBuilder(
+    project: project,
+    settings: settings,
+    rasterized: rasterized,
+    totalDuration: project.totalDuration,
+    hslLuts: hslLuts,
+  ).build('/tmp/probe.mp4');
+
+  /// The key the watermark's baked PNG is filed under, so a test can supply
+  /// one without reaching into the private half of this file.
+  @visibleForTesting
+  static const String watermarkKey = _kWatermarkKey;
+
+  /// The same, for the design frame and the FX texture.
+  @visibleForTesting
+  static const String frameKey = _kFrameKey;
+
+  @visibleForTesting
+  static const String fxKey = _kFxKey;
 
   Future<ExportResult> export(
     Project project,
