@@ -63,6 +63,7 @@ class VideoClip with Keyframable {
     this.voiceEnhance = false,
     this.voiceEffect = VoiceEffect.none,
     this.cutoutMattePath,
+    this.cutoutFramesDir,
     this.lutPath,
   }) : id = id ?? newId(),
        trimStart = trimStart ?? Duration.zero,
@@ -240,6 +241,11 @@ class VideoClip with Keyframable {
   /// `alphamerge` at export. Null means the clip keeps its background.
   String? cutoutMattePath;
 
+  /// Where the same mattes live as stills, for the preview to read. The
+  /// video is what the exporter merges; a player cannot be asked for one
+  /// frame per painted frame, so the preview reads these instead.
+  String? cutoutFramesDir;
+
   bool get hasCutout => cutoutMattePath != null;
 
   /// Optional .cube LUT applied after the grade.
@@ -337,6 +343,12 @@ class VideoClip with Keyframable {
       ..sharpen = (adjustments.sharpen + enhanceSharpen).clamp(0.0, 1.0)
       ..denoise = (adjustments.denoise + enhanceDenoise).clamp(0.0, 1.0);
   }
+
+  /// Whether anything in [audioFilterChain] would change how the clip sounds.
+  ///
+  /// The preview uses it to decide whether the clip's own track can be played
+  /// straight out of the video decoder or has to go through a treated copy.
+  bool get hasVoiceWork => voiceEnhance || voiceEffect != VoiceEffect.none;
 
   /// The clip's own audio treatment: [voiceEnhance] first — it is a clean-up,
   /// and cleaning up after a pitch shift would fight the shift's artefacts —
@@ -444,6 +456,7 @@ class VideoClip with Keyframable {
       voiceEnhance: voiceEnhance,
       voiceEffect: voiceEffect,
       cutoutMattePath: cutoutMattePath,
+      cutoutFramesDir: cutoutFramesDir,
       lutPath: lutPath,
     )..copyKeyframesFrom(this);
   }
@@ -567,6 +580,7 @@ class VideoClip with Keyframable {
         orElse: () => VoiceEffect.none,
       ),
       cutoutMattePath: j['matte'] as String?,
+      cutoutFramesDir: j['matteDir'] as String?,
       lutPath: j['lut'] as String?,
     )..keyframesFromJson(j['kf'] as List?);
   }

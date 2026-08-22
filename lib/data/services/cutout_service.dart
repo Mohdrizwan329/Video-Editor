@@ -49,9 +49,14 @@ class CutoutService {
   /// [onProgress] is called with 0..1 as the frames are worked through, and
   /// null comes back when the clip holds no person the model is sure of — the
   /// caller says so rather than handing back a clip gone entirely transparent.
+  /// Frames a second in the matte the preview reads. The same rate the
+  /// matte video is baked at, so one index means the same instant to both.
+  static int get previewFps => _fps;
+
   static Future<String?> bakeMatte(
     VideoClip clip, {
     void Function(double)? onProgress,
+    Directory? keepFramesIn,
   }) async {
     if (clip.isImage) return null;
     Directory? work;
@@ -105,6 +110,19 @@ class CutoutService {
       // clip the model found nobody in, and merging it would leave the user
       // with a few seconds of nothing.
       if (withSubject < frames.length * _minSubjectShare) return null;
+
+      // The preview cannot decode a video frame per painted frame, so the
+      // mattes are kept as small stills beside the matte video. They are the
+      // same numbers the video is built from, at the same rate, which is what
+      // lets the preview show the cutout the render will make.
+      if (keepFramesIn != null) {
+        if (!await keepFramesIn.exists()) {
+          await keepFramesIn.create(recursive: true);
+        }
+        for (final f in masksDir.listSync().whereType<File>()) {
+          await f.copy('${keepFramesIn.path}/${f.uri.pathSegments.last}');
+        }
+      }
 
       final dir = await ProjectRepository.instance.mediaDir();
       final out =

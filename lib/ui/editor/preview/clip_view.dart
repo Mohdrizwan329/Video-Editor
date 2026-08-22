@@ -8,8 +8,10 @@ import '../../../data/models/enums.dart';
 import '../../../data/models/filter_preset.dart';
 import '../../../data/models/keyframe.dart';
 import '../../../data/models/video_clip.dart';
+import '../../../data/services/cutout_service.dart';
 import 'chroma_box.dart';
 import 'grade_extras_box.dart';
+import 'matte_box.dart';
 import 'mask_box.dart';
 
 /// Renders one clip exactly the way the exporter will: crop, rotate, mirror,
@@ -91,6 +93,19 @@ class ClipView extends StatelessWidget {
         );
       }
     }
+    // The cutout, read from the same mattes the exporter merges. It goes on
+    // before the chroma key so a clip carrying both is cut the way the
+    // render cuts it: the model first, then the colour.
+    final matteDir = clip.cutoutFramesDir;
+    if (matteDir != null) {
+      media = MatteBox(
+        framesDir: matteDir,
+        fps: CutoutService.previewFps,
+        localTime: localTime,
+        child: media,
+      );
+    }
+
     if (clip.hasChroma) {
       media = ChromaBox(
         keyColor: Color(clip.chromaKeyColor!),

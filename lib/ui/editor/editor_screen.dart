@@ -12,6 +12,7 @@ import '../../core/utils/responsive.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/layers.dart';
 import '../../data/services/clip_operations.dart';
+import '../../data/repositories/project_repository.dart';
 import '../../data/services/cutout_service.dart';
 import '../../data/services/media_library.dart';
 import '../../data/models/project.dart';
@@ -1369,7 +1370,10 @@ class _EditorScreenState extends State<EditorScreen> {
     if (index < 0 || index >= _editor.project.clips.length) return;
     final clip = _editor.project.clips[index];
     if (clip.hasCutout) {
-      _editor.updateClip(index, (c) => c.cutoutMattePath = null);
+      _editor.updateClip(index, (c) {
+        c.cutoutMattePath = null;
+        c.cutoutFramesDir = null;
+      });
       _toastUndo('Background put back');
       return;
     }
@@ -1378,8 +1382,13 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     _editor.setBusy('Cutting out the subject… 0%');
+    final media = await ProjectRepository.instance.mediaDir();
+    final frames = Directory(
+      '${media.path}/matte_${clip.id}_${DateTime.now().millisecondsSinceEpoch}',
+    );
     final matte = await CutoutService.bakeMatte(
       clip,
+      keepFramesIn: frames,
       onProgress: (p) {
         if (!mounted) return;
         _editor.setBusy('Cutting out the subject… ${(p * 100).round()}%');
@@ -1394,7 +1403,10 @@ class _EditorScreenState extends State<EditorScreen> {
       _toast('No one found in this clip to cut out');
       return;
     }
-    _editor.updateClip(index, (c) => c.cutoutMattePath = matte);
+    _editor.updateClip(index, (c) {
+      c.cutoutMattePath = matte;
+      c.cutoutFramesDir = frames.path;
+    });
     _toastUndo('Background cut out');
   }
 
