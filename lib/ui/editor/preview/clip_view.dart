@@ -70,10 +70,14 @@ class ClipView extends StatelessWidget {
         localTime,
         clip.filterIntensity,
       );
-      final adj = clip.adjustments;
-      final grade = adj.merge(
-        FilterPreset.fromId(clip.filterId).lerpFromIdentity(intensity),
-      );
+      // Enhance's sharpening and denoise ride in here, so a clip that has
+      // it on looks on screen the way it will come out of the render.
+      final adj = clip.shownAdjustments;
+      final grade = clip.enhance
+          ? clip.gradedFilter
+          : adj.merge(
+              FilterPreset.fromId(clip.filterId).lerpFromIdentity(intensity),
+            );
       // Innermost of the three, so grain and sharpening land on the softened
       // picture — the order the exporter's own filter chain has them in.
       if (adj.blur > 0) media = SoftenedBox(blur: adj.blur, child: media);

@@ -284,20 +284,59 @@ class VideoClip with Keyframable {
       FilterPreset.fromId(filterId).lerpFromIdentity(filterIntensity);
 
   /// Preview/export grade = preset (scaled by intensity) + manual adjustments.
-  FilterPreset get gradedFilter => adjustments.merge(filter);
+  FilterPreset get gradedFilter {
+    final base = adjustments.merge(filter);
+    if (!enhance) return base;
+    // Enhance's tonal lift, folded into the grade so the preview's matrix
+    // and the exporter's `eq` are the same numbers rather than two guesses.
+    return FilterPreset(
+      id: '${base.id}+enh',
+      name: base.name,
+      category: base.category,
+      brightness: base.brightness,
+      contrast: base.contrast + enhanceContrast,
+      saturation: (base.saturation + enhanceSaturation).clamp(0.0, 3.0),
+      temperature: base.temperature,
+      tint: base.tint,
+      gamma: base.gamma * enhanceGamma,
+      fade: base.fade,
+      vignette: base.vignette,
+      hue: base.hue,
+    );
+  }
 
   /// The picture clean-up [enhance] stands for, as FFmpeg filters.
   ///
   /// Denoise first so the sharpener has nothing granular to bite on, then a
   /// small tonal lift, then unsharp — the order a stills workflow uses, and
   /// the one that keeps the noise from being amplified into speckle.
+  /// What Enhance is, in the units the sliders count in.
+  ///
+  /// Named here rather than written into a filter string, because the
+  /// preview has to show the same clean-up and the only way two halves stay
+  /// in step is by reading one set of numbers. The tonal part rides in with
+  /// the grade — both the matrix the preview paints and the `eq` the
+  /// exporter emits come from [gradedFilter] — so [enhanceFilters] carries
+  /// only what a matrix cannot say. Emitting the tone here as well would
+  /// apply it twice.
+  static const double enhanceSharpen = 0.6;
+  static const double enhanceDenoise = 1 / 3;
+  static const double enhanceContrast = 0.06;
+  static const double enhanceSaturation = 0.06;
+  static const double enhanceGamma = 1.02;
+
   List<String> enhanceFilters() => enhance
-      ? const [
-          'hqdn3d=2:1.5:3:3',
-          'eq=contrast=1.06:saturation=1.06:gamma=1.02',
-          'unsharp=5:5:0.9:5:5:0.0',
-        ]
+      ? const ['hqdn3d=2:1.5:3:3', 'unsharp=5:5:0.9:5:5:0.0']
       : const [];
+
+  /// The adjustments the preview should paint: the user's, plus whatever
+  /// Enhance adds on top of them.
+  Adjustments get shownAdjustments {
+    if (!enhance) return adjustments;
+    return adjustments.copy()
+      ..sharpen = (adjustments.sharpen + enhanceSharpen).clamp(0.0, 1.0)
+      ..denoise = (adjustments.denoise + enhanceDenoise).clamp(0.0, 1.0);
+  }
 
   /// The clip's own audio treatment: [voiceEnhance] first — it is a clean-up,
   /// and cleaning up after a pitch shift would fight the shift's artefacts —
