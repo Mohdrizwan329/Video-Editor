@@ -57,16 +57,23 @@ class ClipView extends StatelessWidget {
       media = Transform(
         alignment: Alignment.center,
         transform: Matrix4.diagonal3Values(
-            clip.mirrored ? -1.0 : 1.0, clip.flippedVertical ? -1.0 : 1.0, 1.0),
+          clip.mirrored ? -1.0 : 1.0,
+          clip.flippedVertical ? -1.0 : 1.0,
+          1.0,
+        ),
         child: media,
       );
     }
     if (showGrade) {
       final intensity = clip.animated(
-          KeyframeProperty.filterIntensity, localTime, clip.filterIntensity);
+        KeyframeProperty.filterIntensity,
+        localTime,
+        clip.filterIntensity,
+      );
       final adj = clip.adjustments;
       final grade = adj.merge(
-          FilterPreset.fromId(clip.filterId).lerpFromIdentity(intensity));
+        FilterPreset.fromId(clip.filterId).lerpFromIdentity(intensity),
+      );
       // Innermost of the three, so grain and sharpening land on the softened
       // picture — the order the exporter's own filter chain has them in.
       if (adj.blur > 0) media = SoftenedBox(blur: adj.blur, child: media);
@@ -100,7 +107,14 @@ class ClipView extends StatelessWidget {
         child: media,
       );
     }
-    final opacity = clip.animated(KeyframeProperty.opacity, localTime, clip.opacity);
+    // The ease and the alpha animation are opacity over time, and the
+    // exporter has always drawn them. The preview did not, so both read as
+    // sliders that moved and changed nothing until the file came out.
+    final opacity = clip.animated(
+      KeyframeProperty.opacity,
+      localTime,
+      clip.opacityAt(localTime),
+    );
     if (opacity < 1) {
       media = Opacity(opacity: opacity.clamp(0.0, 1.0), child: media);
     }
@@ -114,21 +128,24 @@ class ClipView extends StatelessWidget {
         };
         final kx = clip.animated(KeyframeProperty.x, localTime, clip.offsetX);
         final ky = clip.animated(KeyframeProperty.y, localTime, clip.offsetY);
-        final kScale = clip.animated(KeyframeProperty.scale, localTime, clip.scale);
-        final kRot =
-            clip.animated(KeyframeProperty.rotation, localTime, 0);
+        final kScale = clip.animated(
+          KeyframeProperty.scale,
+          localTime,
+          clip.scale,
+        );
+        final kRot = clip.animated(KeyframeProperty.rotation, localTime, 0);
         return ClipRect(
           child: Transform.rotate(
             angle: kRot,
             child: Transform.translate(
-            offset: Offset(
-              kx * constraints.maxWidth / 2,
-              ky * constraints.maxHeight / 2,
-            ),
-            child: Transform.scale(
-              scale: kScale,
-              child: FittedBox(fit: fit, child: _sized(media)),
-            ),
+              offset: Offset(
+                kx * constraints.maxWidth / 2,
+                ky * constraints.maxHeight / 2,
+              ),
+              child: Transform.scale(
+                scale: kScale,
+                child: FittedBox(fit: fit, child: _sized(media)),
+              ),
             ),
           ),
         );
@@ -138,11 +155,7 @@ class ClipView extends StatelessWidget {
 
   Widget _sized(Widget media) {
     final aspect = _croppedAspect;
-    return SizedBox(
-      width: 1000 * aspect,
-      height: 1000,
-      child: media,
-    );
+    return SizedBox(width: 1000 * aspect, height: 1000, child: media);
   }
 
   double get _croppedAspect {
@@ -164,7 +177,9 @@ class ClipView extends StatelessWidget {
     if (c != null && c.value.isInitialized) return VideoPlayer(c);
     // A file that will not open never becomes a picture, so saying so beats
     // a black rectangle the user has no way to read.
-    return unopenable ? const MissingMedia() : const ColoredBox(color: Colors.black);
+    return unopenable
+        ? const MissingMedia()
+        : const ColoredBox(color: Colors.black);
   }
 }
 

@@ -116,6 +116,37 @@ class VideoClip with Keyframable {
   /// which is part of why nothing ever rendered it.
   Duration animationDuration;
 
+  /// How solid the clip is [local] into its own slot, once the ease and the
+  /// alpha animation are folded into [opacity].
+  ///
+  /// Shared by the preview and read from the same fields the exporter emits
+  /// `fade` for, so the two cannot tell different stories about when the
+  /// picture arrives. Both of them used to: the export drew the fade and the
+  /// preview showed a clip that was simply there.
+  double opacityAt(Duration local) {
+    var a = opacity;
+    final dur = timelineDuration;
+    if (dur <= Duration.zero) return a.clamp(0.0, 1.0);
+
+    double ramp(Duration span, Duration since) {
+      if (span <= Duration.zero) return 1;
+      final t = since.inMicroseconds / span.inMicroseconds;
+      return t.clamp(0.0, 1.0);
+    }
+
+    if (fadeIn > Duration.zero) a *= ramp(fadeIn, local);
+    if (fadeOut > Duration.zero) a *= ramp(fadeOut, dur - local);
+
+    if (hasAlphaAnimation) {
+      final ad = animationDuration;
+      if (animationIn.exportKind == AnimExport.alpha) a *= ramp(ad, local);
+      if (animationOut.exportKind == AnimExport.alpha) {
+        a *= ramp(ad, dur - local);
+      }
+    }
+    return a.clamp(0.0, 1.0);
+  }
+
   /// True when the clip's own animation is one the renderer can draw.
   bool get hasAlphaAnimation =>
       animationIn.exportKind == AnimExport.alpha ||
