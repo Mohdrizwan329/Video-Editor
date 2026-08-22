@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:video_player/video_player.dart';
 
+import '../data/services/voice_preview.dart';
 import '../data/models/keyframe.dart';
 import '../data/models/layers.dart';
 import '../data/models/video_clip.dart';
@@ -228,7 +229,10 @@ class PreviewEngine extends ChangeNotifier {
     await _syncAudio(force: force, playing: playing);
   }
 
-  Future<void> _syncMainTrack({required bool force, required bool playing}) async {
+  Future<void> _syncMainTrack({
+    required bool force,
+    required bool playing,
+  }) async {
     final project = editor.project;
     if (project.clips.isEmpty) {
       _activeIndex = -1;
@@ -250,6 +254,10 @@ class PreviewEngine extends ChangeNotifier {
         if (old != null && old.value.isInitialized && old.value.isPlaying) {
           await old.pause();
         }
+        // Its treated audio too, or the clip we just left goes on talking
+        // underneath the one we moved to.
+        final oldVoice = _audio[_voiceId(previous)];
+        if (oldVoice != null && oldVoice.playing) await oldVoice.pause();
       }
       notifyListeners();
     }
@@ -294,9 +302,14 @@ class PreviewEngine extends ChangeNotifier {
     // The volume *track* when there is one: a keyframed level that only moved
     // in the render is a keyframe the user cannot hear themselves setting.
     final level = clip.animated(KeyframeProperty.volume, local, clip.volume);
-    final wantedVolume = _muted
+    var wantedVolume = _muted
         ? 0.0
         : level * editor.project.masterVolume * clip.fadeGainAt(local);
+    // Voice Enhance and the voice changer are FFmpeg work the decoder cannot
+    // do, so they are heard from a treated copy. While it is being made the
+    // clip keeps its own sound: untreated audio beats silence.
+    final voice = await _syncVoice(clip, target, wantedVolume, playing);
+    if (voice) wantedVolume = 0;
     if ((controller.value.volume - wantedVolume).abs() > 0.01) {
       await controller.setVolume(wantedVolume.clamp(0.0, 1.0));
     }
@@ -306,6 +319,77 @@ class PreviewEngine extends ChangeNotifier {
       await controller.pause();
     }
   }
+
+  /// Keeps the clip's treated audio alongside its picture.
+  ///
+  /// Returns whether the treated copy is the one being heard, which is the
+  /// caller's cue to mute the decoder. The copy runs on the source's own
+  /// clock — the chain does not move anything in time — so it is seeked to
+  /// the same position the decoder was.
+  Future<bool> _syncVoice(
+    VideoClip clip,
+    Duration target,
+    double volume,
+    bool playing,
+  ) async {
+    final id = _voiceId(clip.id);
+    if (!clip.hasVoiceWork) {
+      final stale = _audio.remove(id);
+      if (stale != null) await stale.dispose();
+      return false;
+    }
+    final path = VoicePreview.ready(clip);
+    if (path == null) {
+      unawaited(
+        VoicePreview.ensure(clip).then((made) {
+          // The bake lands seconds later, long after the pass that asked for
+          // it returned; nudging the engine is what gets it picked up without
+          // the user having to hit play again.
+          if (made != null && !_disposed) unawaited(prime());
+        }),
+      );
+      return false;
+    }
+
+    var player = _audio[id];
+    if (player == null) {
+      if (_loading.contains(id)) return false;
+      _loading.add(id);
+      try {
+        player = ja.AudioPlayer();
+        await player.setFilePath(path);
+        if (_disposed) {
+          await player.dispose();
+          return false;
+        }
+        _audio[id] = player;
+      } catch (e) {
+        debugPrint('preview: cannot open treated audio $path: $e');
+        return false;
+      } finally {
+        _loading.remove(id);
+      }
+    }
+
+    if ((player.position - target).abs() > _maxDrift) {
+      await player.seek(target);
+    }
+    if ((player.volume - volume).abs() > 0.01) {
+      await player.setVolume(volume.clamp(0.0, 1.0));
+    }
+    final speed = clip.effectiveSpeed.clamp(0.25, 4.0);
+    if ((player.speed - speed).abs() > 0.01) await player.setSpeed(speed);
+    if (_shouldRun(playing) && !player.playing) {
+      unawaited(player.play());
+    } else if (!_shouldRun(playing) && player.playing) {
+      await player.pause();
+    }
+    return true;
+  }
+
+  /// The key a clip's treated audio is held under. Prefixed so it cannot
+  /// collide with an audio layer's own id.
+  static String _voiceId(String clipId) => 'voice:$clipId';
 
   /// The clip on the far side of a transition, while the playhead is inside
   /// the overlap between the two.
@@ -344,8 +428,8 @@ class PreviewEngine extends ChangeNotifier {
     final wanted = _muted
         ? 0.0
         : next.volume *
-            editor.project.masterVolume *
-            next.fadeGainAt(t - joinStart);
+              editor.project.masterVolume *
+              next.fadeGainAt(t - joinStart);
     if ((controller.value.volume - wanted).abs() > 0.01) {
       await controller.setVolume(wanted.clamp(0.0, 1.0));
     }
@@ -356,7 +440,10 @@ class PreviewEngine extends ChangeNotifier {
     }
   }
 
-  Future<void> _syncOverlays({required bool force, required bool playing}) async {
+  Future<void> _syncOverlays({
+    required bool force,
+    required bool playing,
+  }) async {
     final t = editor.position.value;
     for (final pip in editor.project.overlays) {
       if (pip.isImage) continue;
@@ -376,7 +463,8 @@ class PreviewEngine extends ChangeNotifier {
       final c = _video[pip.id];
       if (c == null || !c.value.isInitialized) continue;
       final local = t - pip.start;
-      final target = pip.trimStart +
+      final target =
+          pip.trimStart +
           Duration(microseconds: (local.inMicroseconds * pip.speed).round());
       if (force || (c.value.position - target).abs() > _maxDrift) {
         await c.seekTo(target);
@@ -443,7 +531,10 @@ class PreviewEngine extends ChangeNotifier {
   /// Applies the layer's fade envelope so the preview matches the render.
   double _audioGainAt(AudioLayer layer, Duration t) {
     final level = layer.animated(
-        KeyframeProperty.volume, t - layer.start, layer.volume);
+      KeyframeProperty.volume,
+      t - layer.start,
+      layer.volume,
+    );
     var gain = level * editor.project.masterVolume;
     final into = t - layer.start;
     final left = layer.end - t;
@@ -562,22 +653,29 @@ class PreviewEngine extends ChangeNotifier {
   /// Drop players for media that is no longer in the project, and prime the
   /// canvas the first time a clip appears.
   void _onProjectChanged() {
-    if (!isPlaying && _activeClipId == null && editor.project.clips.isNotEmpty) {
+    if (!isPlaying &&
+        _activeClipId == null &&
+        editor.project.clips.isNotEmpty) {
       Future.microtask(prime);
     }
     final live = <String>{
       ...editor.project.clips.map((c) => c.id),
       ...editor.project.overlays.map((o) => o.id),
     };
-    final deadVideo =
-        _video.keys.where((k) => !live.contains(k)).toList(growable: false);
+    final deadVideo = _video.keys
+        .where((k) => !live.contains(k))
+        .toList(growable: false);
     for (final k in deadVideo) {
       if (k == _activeClipId) continue;
       _video.remove(k)?.dispose();
     }
-    final liveAudio = editor.project.audios.map((a) => a.id).toSet();
-    final deadAudio =
-        _audio.keys.where((k) => !liveAudio.contains(k)).toList(growable: false);
+    final liveAudio = {
+      ...editor.project.audios.map((a) => a.id),
+      ...editor.project.clips.map((c) => _voiceId(c.id)),
+    };
+    final deadAudio = _audio.keys
+        .where((k) => !liveAudio.contains(k))
+        .toList(growable: false);
     for (final k in deadAudio) {
       _audio.remove(k)?.dispose();
     }
