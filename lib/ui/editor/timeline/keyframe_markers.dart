@@ -12,8 +12,11 @@ class KeyframeMarkers extends StatelessWidget {
     required this.pixelsPerSecond,
     required this.width,
     required this.onSeek,
-    this.height = 12,
+    this.height = kHeight,
   });
+
+  /// The row's default height — [TimelineView.heightFor] adds it up.
+  static const double kHeight = 12;
 
   final Keyframable owner;
   final double pixelsPerSecond;

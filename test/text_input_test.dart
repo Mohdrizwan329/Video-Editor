@@ -11,11 +11,11 @@ import 'package:video_editor/data/models/project.dart';
 import 'package:video_editor/data/models/video_clip.dart';
 import 'package:video_editor/state/projects_controller.dart';
 import 'package:video_editor/ui/editor/editor_screen.dart';
-import 'package:video_editor/ui/editor/toolbar/editor_toolbar.dart';
+
+import 'helpers/editor_tools.dart';
 import 'package:video_editor/ui/text_to_video/text_slides_screen.dart';
 import 'package:video_editor/ui/text_to_video/text_to_video_screen.dart';
 
-import 'helpers/editor_tools.dart';
 
 /// The windows a text field has to stay usable in.
 const Map<String, Size> _windows = {
@@ -88,27 +88,13 @@ void _expectUsable(
           'window ${window.height}, keyboard floor $floor, field $rect');
 }
 
-/// The editor toolbar is a lazily-built horizontal strip: a tool far enough
-/// along it is not mounted until it is scrolled into view.
+/// The editor toolbar is a lazily-built strip — sideways under the preview,
+/// downwards in the wide layout's rail — so a tool far enough along it is not
+/// mounted until it has been scrolled into view.
 Future<void> _tapTool(WidgetTester tester, String label) async {
-  await openToolCategory(tester, label);
-  // Scoped to the strip: the category bar along the bottom carries some of
-  // the same words, so an unscoped finder would match twice.
-  final button = find.descendant(
-      of: find.byType(EditorToolbar), matching: find.text(label));
-  if (button.evaluate().isEmpty) {
-    await tester.dragUntilVisible(
-      button,
-      find.byType(EditorToolbar),
-      const Offset(-120, 0),
-      maxIteration: 40,
-    );
-  }
-  // dragUntilVisible stops as soon as the button is mounted, which can leave
-  // it half off the edge; ensureVisible finishes the job so the tap lands.
-  await tester.ensureVisible(button);
-  await tester.pumpAndSettle();
-  await tester.tap(button);
+  // No pumpAndSettle after the tap: some panels — the speech ones — keep a
+  // spinner running, and settling would wait for an animation that never ends.
+  await tapEditorTool(tester, label);
 }
 
 /// Some panels wait on a platform answer (voices, saved settings) that only

@@ -635,6 +635,36 @@ void main() {
     });
 
 
+    testWidgets('a panel is only as tall as the controls in it',
+        (tester) async {
+      // A phone, where the ceiling is what the window can spare once the
+      // photo has kept its minimum.
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester
+          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      double panel() =>
+          tester.getSize(find.byKey(const ValueKey('photo-panel'))).height;
+
+      // Filter is a chip row over a strip of swatches and fits with room to
+      // spare; Adjust is seventeen sliders and runs well past the ceiling.
+      await _tapTool(tester, 'Filter');
+      final short = panel();
+      await _tapTool(tester, 'Adjust');
+      final full = panel();
+
+      expect(short, lessThan(full),
+          reason: 'the short panel is still opening at the full height, so '
+              'the space under its last control is empty');
+      // Nothing is allowed past the ceiling either — that room is the
+      // photo's, and it keeps the larger half of the window.
+      expect(full, lessThan(844 * 0.5));
+    });
+
     testWidgets('a sticker is placed, selected, and can be taken off again',
         (tester) async {
       await tester

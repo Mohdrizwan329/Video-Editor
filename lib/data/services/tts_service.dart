@@ -75,18 +75,6 @@ class TtsService {
     _configured = true;
   }
 
-  Future<List<String>> languages() async {
-    try {
-      final raw = await _tts.getLanguages;
-      if (raw is List) {
-        return raw.map((e) => e.toString()).toList()..sort();
-      }
-    } catch (e) {
-      debugPrint('tts languages failed: $e');
-    }
-    return const [];
-  }
-
   Future<List<TtsVoice>> voices({String? languagePrefix}) async {
     try {
       final raw = await _tts.getVoices;

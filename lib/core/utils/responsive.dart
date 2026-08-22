@@ -33,23 +33,20 @@ const double _kDesignHeight = 780.0;
 /// enough to build per widget and it depends on [MediaQuery], so a window
 /// resize, a rotation or a keyboard rebuilds everything that uses it.
 class Responsive {
-  Responsive._(this.size, this.orientation, this.viewPadding, this.viewInsets);
+  Responsive._(this.size, this.viewPadding, this.viewInsets);
 
   factory Responsive.of(BuildContext context) {
     final mq = MediaQuery.of(context);
-    return Responsive._(mq.size, mq.orientation, mq.viewPadding, mq.viewInsets);
+    return Responsive._(mq.size, mq.viewPadding, mq.viewInsets);
   }
 
   final Size size;
-  final Orientation orientation;
   final EdgeInsets viewPadding;
   final EdgeInsets viewInsets;
 
   double get width => size.width;
   double get height => size.height;
   double get shortestSide => size.shortestSide;
-
-  bool get isLandscape => orientation == Orientation.landscape;
 
   ScreenClass get screen {
     if (width < 600) return ScreenClass.compact;
@@ -59,10 +56,6 @@ class Responsive {
   }
 
   bool get isCompact => screen == ScreenClass.compact;
-  bool get isExpanded => screen == ScreenClass.expanded;
-
-  /// A phone-sized window, whichever way round it is held.
-  bool get isPhone => shortestSide < 600;
 
   /// A window short enough that stacked fixed-height strips stop fitting —
   /// a phone in landscape, or a browser window dragged down to a sliver.
@@ -145,20 +138,18 @@ extension ResponsiveContext on BuildContext {
 
 /// Centres its child and stops it growing past [Responsive.maxContentWidth],
 /// so a page that reads well on a phone does not turn into a single stretched
-/// row on a desktop monitor. [padded] adds the page gutter as well.
+/// row on a desktop monitor.
 class ContentBox extends StatelessWidget {
   const ContentBox({
     super.key,
     required this.child,
     this.maxWidth,
-    this.padded = false,
     this.alignment = Alignment.topCenter,
     this.hugHeight = false,
   });
 
   final Widget child;
   final double? maxWidth;
-  final bool padded;
   final AlignmentGeometry alignment;
 
   /// Take the child's height instead of the full height on offer. A page
@@ -174,12 +165,7 @@ class ContentBox extends StatelessWidget {
       heightFactor: hugHeight ? 1.0 : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: limit),
-        child: padded
-            ? Padding(
-                padding: EdgeInsets.symmetric(horizontal: r.gutter),
-                child: child,
-              )
-            : child,
+        child: child,
       ),
     );
   }

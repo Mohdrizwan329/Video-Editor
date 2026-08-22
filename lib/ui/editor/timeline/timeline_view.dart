@@ -14,6 +14,14 @@ import 'keyframe_markers.dart';
 import 'lane_row.dart';
 import 'time_ruler.dart';
 
+/// The timeline's own vertical rhythm. [TimelineView.heightFor] and the build
+/// below read the same numbers, so the box can never be taller than what it
+/// draws — a band of dead grey under the track is what that drift looked like.
+const double _kTopGap = 4;
+const double _kRulerGap = 4;
+const double _kKeyframeGap = 2;
+const double _kTailGap = 4;
+
 /// The timeline: a fixed centre playhead with the track scrolling underneath,
 /// pinch to zoom, and a lane per overlay type — the main editing surface.
 class TimelineView extends StatefulWidget {
@@ -22,11 +30,45 @@ class TimelineView extends StatefulWidget {
     required this.editor,
     required this.onAddMedia,
     required this.onTransitionTap,
+    required this.onScrubStart,
   });
 
   final EditorController editor;
   final VoidCallback onAddMedia;
   final void Function(int index) onTransitionTap;
+
+  /// Called when the user puts a finger on the track. Reaching for the
+  /// timeline is the user saying "I want to be here, not there" — it has to
+  /// stop playback for real, decoders and clock included.
+  final VoidCallback onScrubStart;
+
+  /// Exactly the room the rows below need, and no more.
+  ///
+  /// They are a fixed density — an 18pt ruler, a 56pt video track, 26pt lanes
+  /// — so this is not scaled to the window: shrinking the box would only clip
+  /// a lane. When the window cannot spare it the editor scrolls instead.
+  static double heightFor(EditorController editor) {
+    final project = editor.project;
+    var h =
+        _kTopGap +
+        TimeRuler.kHeight +
+        _kRulerGap +
+        kVideoTrackHeight +
+        _kKeyframeGap +
+        _kTailGap;
+    if (editor.keyframeTarget?.$1.hasKeyframes ?? false) {
+      h += KeyframeMarkers.kHeight;
+    }
+    for (final lane in [
+      project.overlays,
+      project.texts,
+      project.stickers,
+      project.audios,
+    ]) {
+      if (lane.isNotEmpty) h += kLaneGap + kLaneHeight;
+    }
+    return h;
+  }
 
   @override
   State<TimelineView> createState() => _TimelineViewState();
@@ -74,8 +116,12 @@ class _TimelineViewState extends State<TimelineView> {
     final target = _offsetFor(_editor.position.value);
     if ((_scroll.offset - target).abs() < 0.5) return;
     _programmatic = true;
-    _scroll.jumpTo(target.clamp(
-        _scroll.position.minScrollExtent, _scroll.position.maxScrollExtent));
+    _scroll.jumpTo(
+      target.clamp(
+        _scroll.position.minScrollExtent,
+        _scroll.position.maxScrollExtent,
+      ),
+    );
     _programmatic = false;
   }
 
@@ -93,6 +139,11 @@ class _TimelineViewState extends State<TimelineView> {
 
   void _onPointerDown(PointerDownEvent e) {
     _pointers[e.pointer] = e.position;
+    // A finger on the track means the user wants to be somewhere else in the
+    // timeline, so playback stops here rather than on the scroll that
+    // follows: the track also scrolls *itself* to follow the playhead, and
+    // that scroll is indistinguishable from a drag once it is under way.
+    if (_editor.isPlaying.value) widget.onScrubStart();
     if (_pointers.length == 2) {
       final list = _pointers.values.toList();
       _pinchStartDistance = (list[0] - list[1]).distance;
@@ -114,8 +165,12 @@ class _TimelineViewState extends State<TimelineView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
       _programmatic = true;
-      _scroll.jumpTo(_offsetFor(_pinchAnchor).clamp(
-          _scroll.position.minScrollExtent, _scroll.position.maxScrollExtent));
+      _scroll.jumpTo(
+        _offsetFor(_pinchAnchor).clamp(
+          _scroll.position.minScrollExtent,
+          _scroll.position.maxScrollExtent,
+        ),
+      );
       _programmatic = false;
     });
   }
@@ -140,7 +195,9 @@ class _TimelineViewState extends State<TimelineView> {
         final project = _editor.project;
         final total = project.totalDuration;
         final contentWidth = math.max(
-            total.inMicroseconds / 1000000 * _pps, 1.0);
+          total.inMicroseconds / 1000000 * _pps,
+          1.0,
+        );
         final pad = _viewportWidth / 2;
 
         return Listener(
@@ -153,10 +210,12 @@ class _TimelineViewState extends State<TimelineView> {
               NotificationListener<ScrollNotification>(
                 onNotification: (n) {
                   if (n is ScrollStartNotification) {
+                    // The track scrolls itself to follow the playhead, and
+                    // `jumpTo` announces that like any other scroll — so a
+                    // programmatic one must not be read as the user taking
+                    // hold. Pausing is handled on pointer-down instead.
+                    if (_programmatic) return false;
                     _userDriving = true;
-                    if (_editor.isPlaying.value) {
-                      _editor.isPlaying.value = false;
-                    }
                   } else if (n is ScrollEndNotification) {
                     _userDriving = false;
                   }
@@ -173,13 +232,13 @@ class _TimelineViewState extends State<TimelineView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 4),
+                        const SizedBox(height: _kTopGap),
                         TimeRuler(
                           duration: total,
                           pixelsPerSecond: _pps,
                           width: contentWidth,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: _kRulerGap),
                         ClipStrip(
                           editor: _editor,
                           pixelsPerSecond: _pps,
@@ -188,7 +247,7 @@ class _TimelineViewState extends State<TimelineView> {
                         ),
                         _keyframeRow(contentWidth),
                         _lanes(contentWidth),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: _kTailGap),
                       ],
                     ),
                   ),
@@ -206,13 +265,15 @@ class _TimelineViewState extends State<TimelineView> {
   /// Keyframe diamonds for whatever is selected, aligned to its own start.
   Widget _keyframeRow(double width) {
     final target = _editor.keyframeTarget;
-    if (target == null) return const SizedBox(height: 2);
+    if (target == null) return const SizedBox(height: _kKeyframeGap);
     final (owner, local) = target;
-    if (!owner.hasKeyframes) return const SizedBox(height: 2);
+    if (!owner.hasKeyframes) return const SizedBox(height: _kKeyframeGap);
     final ownerStart = _editor.position.value - local;
     return Padding(
       padding: EdgeInsets.only(
-          left: ownerStart.inMicroseconds / 1e6 * _pps, top: 2),
+        left: ownerStart.inMicroseconds / 1e6 * _pps,
+        top: _kKeyframeGap,
+      ),
       child: KeyframeMarkers(
         owner: owner,
         pixelsPerSecond: _pps,
@@ -285,12 +346,12 @@ class _TimelineViewState extends State<TimelineView> {
               decoration: const BoxDecoration(
                 color: AppColors.playhead,
                 borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(3), top: Radius.circular(1)),
+                  bottom: Radius.circular(3),
+                  top: Radius.circular(1),
+                ),
               ),
             ),
-            Expanded(
-              child: Container(width: 2, color: AppColors.playhead),
-            ),
+            Expanded(child: Container(width: 2, color: AppColors.playhead)),
           ],
         ),
       ),
@@ -308,8 +369,10 @@ class _TimelineViewState extends State<TimelineView> {
           color: Colors.black.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Text('${_pps.round()} px/s',
-            style: const TextStyle(fontSize: 10, color: Colors.white)),
+        child: Text(
+          '${_pps.round()} px/s',
+          style: const TextStyle(fontSize: 10, color: Colors.white),
+        ),
       ),
     );
   }
@@ -351,10 +414,13 @@ class TimelineHeader extends StatelessWidget {
           ValueListenableBuilder<bool>(
             valueListenable: editor.isPlaying,
             builder: (context, playing, _) => IconButton(
+              tooltip: playing ? 'Pause' : 'Play',
               padding: EdgeInsets.zero,
               constraints: box,
-              icon: Icon(playing ? Icons.pause : Icons.play_arrow,
-                  size: r.ic(22)),
+              icon: Icon(
+                playing ? Icons.pause : Icons.play_arrow,
+                size: r.ic(22),
+              ),
               color: AppColors.text,
               onPressed: onPlayPause,
             ),
@@ -365,6 +431,8 @@ class TimelineHeader extends StatelessWidget {
               valueListenable: editor.position,
               builder: (context, t, _) => Text(
                 '${t.timecode}  /  ${editor.totalDuration.timecode}',
+                semanticsLabel:
+                    'Playhead at ${t.timecode} of ${editor.totalDuration.timecode}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -404,6 +472,7 @@ class TimelineHeader extends StatelessWidget {
               onPressed: onAddKeyframe,
             ),
           IconButton(
+            tooltip: 'Undo',
             padding: EdgeInsets.zero,
             constraints: box,
             icon: Icon(Icons.undo, size: r.ic(18)),
@@ -411,6 +480,7 @@ class TimelineHeader extends StatelessWidget {
             onPressed: editor.canUndo ? onUndo : null,
           ),
           IconButton(
+            tooltip: 'Redo',
             padding: EdgeInsets.zero,
             constraints: box,
             icon: Icon(Icons.redo, size: r.ic(18)),
@@ -418,6 +488,7 @@ class TimelineHeader extends StatelessWidget {
             onPressed: editor.canRedo ? onRedo : null,
           ),
           IconButton(
+            tooltip: 'Full screen preview',
             padding: EdgeInsets.zero,
             constraints: box,
             icon: Icon(Icons.fullscreen, size: r.ic(20)),

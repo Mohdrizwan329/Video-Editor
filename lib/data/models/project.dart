@@ -114,18 +114,6 @@ class Project {
   bool get hasFrame => !frame.isNone;
   bool get hasFx => !fx.isNone && fxIntensity > 0;
 
-  /// Total transition overlap removed from the naive clip sum.
-  Duration get transitionOverlap {
-    var total = Duration.zero;
-    for (var i = 0; i < clips.length - 1; i++) {
-      final c = clips[i];
-      if (c.transitionType == TransitionType.none) continue;
-      final maxOverlap = _maxOverlapAt(i);
-      total += c.transitionDuration <= maxOverlap ? c.transitionDuration : maxOverlap;
-    }
-    return total;
-  }
-
   Duration _maxOverlapAt(int i) {
     final a = clips[i].timelineDuration;
     final b = clips[i + 1].timelineDuration;

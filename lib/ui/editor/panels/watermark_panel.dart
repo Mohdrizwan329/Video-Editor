@@ -29,8 +29,24 @@ class WatermarkPanel extends StatefulWidget {
 }
 
 class _WatermarkPanelState extends State<WatermarkPanel> {
-  late final TextEditingController _text =
-      TextEditingController(text: widget.editor.project.watermark.text);
+  /// The caption is the only control now, so the box has to show exactly what
+  /// the canvas shows. It is seeded from the mark only when the mark really is
+  /// drawing a caption; anything else — no mark at all, or a logo, which turns
+  /// the mark on without anybody typing — opens empty, so reaching for the
+  /// tool never brands the video with a default nobody asked for.
+  late final TextEditingController _text;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seeded eagerly, not lazily: a lazy `late` field would first be read from
+    // inside the Text/Logo handler, which has already changed the kind by
+    // then, and would seed itself from the state it was about to overwrite.
+    final mark = widget.editor.project.watermark;
+    _text = TextEditingController(
+      text: mark.isReady && mark.type == WatermarkType.text ? mark.text : '',
+    );
+  }
 
   static const List<String> _fonts = [
     'Poppins',
@@ -81,11 +97,6 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
       title: 'Watermark',
       onClose: widget.onClose,
       onConfirm: widget.onClose,
-      trailing: Switch(
-        value: mark.enabled,
-        activeThumbColor: AppColors.accent,
-        onChanged: (v) => _update((w) => w.enabled = v),
-      ),
       child: PanelBody(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
@@ -95,8 +106,20 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
               ChipStrip(
                 labels: WatermarkType.values.map((t) => t.label).toList(),
                 selectedIndex: WatermarkType.values.indexOf(mark.type),
-                onSelected: (i) =>
-                    _update((w) => w.type = WatermarkType.values[i]),
+                onSelected: (i) => _update((w) {
+                  w.type = WatermarkType.values[i];
+                  // The box is the caption of record, so bring the project
+                  // back in line with it first.
+                  if (w.type == WatermarkType.text) w.text = _text.text;
+                  // Each kind carries its own content, so the mark is on
+                  // exactly when the kind just picked has something to draw
+                  // — switching to Logo before choosing one no longer leaves
+                  // an enabled mark with nothing behind it.
+                  w.enabled = switch (w.type) {
+                    WatermarkType.text => w.text.trim().isNotEmpty,
+                    WatermarkType.image => (w.imagePath ?? '').isNotEmpty,
+                  };
+                }),
               ),
               const SizedBox(height: 12),
               if (mark.type == WatermarkType.text) ..._textControls(),
@@ -157,8 +180,10 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
           ),
           onChanged: (v) => _update(record: false, (w) {
             w.text = v;
-            // Typing the first character is the moment the mark becomes real.
-            if (v.trim().isNotEmpty) w.enabled = true;
+            // With no switch above, the caption is the switch: the first
+            // character puts the mark on the canvas and clearing the box
+            // takes it off again.
+            w.enabled = v.trim().isNotEmpty;
           }),
         ),
         const SizedBox(height: 12),

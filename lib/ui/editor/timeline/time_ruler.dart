@@ -15,11 +15,14 @@ class TimeRuler extends StatelessWidget {
   final double pixelsPerSecond;
   final double width;
 
+  /// The strip's fixed height — [TimelineView.heightFor] adds it up.
+  static const double kHeight = 18;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      height: 18,
+      height: kHeight,
       child: CustomPaint(
         painter: _RulerPainter(
           seconds: duration.inMicroseconds / 1000000,

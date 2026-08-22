@@ -9,9 +9,7 @@ import '../../data/models/enums.dart';
 import '../../data/models/project.dart';
 import '../../data/repositories/project_backup.dart';
 import '../../state/projects_controller.dart';
-import '../../data/models/template.dart';
 import '../editor/editor_screen.dart';
-import '../templates/template_gallery_screen.dart';
 import '../image_editor/image_editor_screen.dart';
 import '../picker/media_picker_screen.dart';
 import '../text_to_video/text_to_video_screen.dart';
@@ -26,10 +24,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  /// Past this many projects the list stops being something you can scan, so
+  /// the filter appears. Below it the field would be one more row between the
+  /// user and the two projects they have.
+  static const int _searchThreshold = 6;
+
+  final TextEditingController _search = TextEditingController();
+
+  /// What the field currently holds, lower-cased once rather than per row.
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<Project> _visible(ProjectsController c) {
+    if (_query.isEmpty) return c.projects;
+    return [
+      for (final p in c.projects)
+        if (p.name.toLowerCase().contains(_query)) p,
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<ProjectsController>();
     final r = context.r;
+    final visible = _visible(controller);
+    final searchable = controller.projects.length >= _searchThreshold;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _appBar(context),
@@ -48,9 +72,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 SliverToBoxAdapter(child: _newProjectCard(context)),
                 SliverToBoxAdapter(child: _textToVideoCard(context)),
                 SliverToBoxAdapter(child: _imageEditCard(context)),
-                SliverToBoxAdapter(child: _templateCard(context)),
                 SliverToBoxAdapter(child: _quickTools(context)),
-                SliverToBoxAdapter(child: _sectionTitle(context, controller)),
+                SliverToBoxAdapter(
+                  child: _sectionTitle(context, controller, visible.length),
+                ),
+                if (searchable)
+                  SliverToBoxAdapter(child: _searchField(context)),
                 if (controller.loading)
                   const SliverFillRemaining(
                     hasScrollBody: false,
@@ -66,8 +93,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     hasScrollBody: false,
                     child: _empty(context),
                   )
+                else if (visible.isEmpty)
+                  SliverToBoxAdapter(child: _noMatches(context))
                 else
-                  _projectSliver(context, controller, r),
+                  _projectSliver(context, visible, r),
               ],
             ),
           ),
@@ -81,13 +110,14 @@ class _HomeScreenState extends State<HomeScreen> {
   /// rows.
   Widget _projectSliver(
     BuildContext context,
-    ProjectsController controller,
+    List<Project> projects,
     Responsive r,
   ) {
+    final controller = context.read<ProjectsController>();
     final padding = EdgeInsets.fromLTRB(r.gutter, r.vp(4), r.gutter, r.vp(40));
 
     Widget tileAt(int i) {
-      final p = controller.projects[i];
+      final p = projects[i];
       return ProjectTile(
         project: p,
         onTap: () => _open(context, p),
@@ -102,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return SliverPadding(
         padding: padding,
         sliver: SliverList.separated(
-          itemCount: controller.projects.length,
+          itemCount: projects.length,
           separatorBuilder: (_, _) => SizedBox(height: r.vp(10)),
           itemBuilder: (context, i) => tileAt(i),
         ),
@@ -119,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // the extent keeps every tile aligned whatever the name length.
           mainAxisExtent: ProjectTile.extentFor(context),
         ),
-        itemCount: controller.projects.length,
+        itemCount: projects.length,
         itemBuilder: (context, i) => tileAt(i),
       ),
     );
@@ -132,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return AppBar(
       titleSpacing: 0,
       leadingWidth: 52,
-      title: const Text('Home Screen'),
+      title: const Text('Video Editor'),
       actions: [
         IconButton(
           tooltip: 'Restore project',
@@ -246,113 +276,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _templateCard(BuildContext context) {
-    final r = context.r;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, 0),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => _startFromTemplate(context),
-        child: Container(
-          constraints: BoxConstraints(minHeight: r.vp(76)),
-          padding: EdgeInsets.symmetric(vertical: r.vp(8)),
-          decoration: BoxDecoration(
-            gradient: AppColors.tint(AppColors.appBar),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.appBar.withValues(alpha: 0.16)),
-          ),
-          child: Row(
-            children: [
-              SizedBox(width: r.dp(16)),
-              Container(
-                width: r.dp(42),
-                height: r.dp(42),
-                decoration: BoxDecoration(
-                  gradient: AppColors.appBarGradient,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(
-                  Icons.auto_awesome,
-                  color: AppColors.onAppBar,
-                  size: r.ic(21),
-                ),
-              ),
-              SizedBox(width: r.dp(14)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Start from a template',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: r.sp(14.5),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: r.vp(2)),
-                    Text(
-                      'Cuts, moves and titles already set up',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: r.sp(11),
-                        color: AppColors.textDim,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: AppColors.appBarMuted,
-                size: r.ic(24),
-              ),
-              SizedBox(width: r.dp(12)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _startFromTemplate(BuildContext context) async {
-    final navigator = Navigator.of(context);
-    final controller = context.read<ProjectsController>();
-
-    final template = await navigator.push<VideoTemplate>(
-      MaterialPageRoute(builder: (_) => const TemplateGalleryScreen()),
-    );
-    if (template == null) return;
-
-    final paths = await navigator.push<List<String>>(
-      MaterialPageRoute(
-        builder: (_) => MediaPickerScreen(
-          title: 'Pick ${template.slotCount} for ${template.name}',
-        ),
-      ),
-    );
-    if (paths == null || paths.isEmpty) return;
-
-    final project = await controller.create(
-      name: template.name,
-      ratio: template.ratio,
-    );
-    await navigator.push(
-      MaterialPageRoute(
-        builder: (_) => EditorScreen(
-          project: project,
-          template: template,
-          initialMedia: paths,
-        ),
-      ),
-    );
-    await controller.refresh();
-  }
-
   Widget _quickTools(BuildContext context) {
     // The four tiles share the header tone rather than one hue each: they are
     // the same action at four ratios, so they should read as one row.
@@ -459,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _sectionTitle(BuildContext context, ProjectsController c) {
+  Widget _sectionTitle(BuildContext context, ProjectsController c, int shown) {
     final r = context.r;
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -492,7 +415,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Text(
-                '${c.projects.length}',
+                shown == c.projects.length
+                    ? '$shown'
+                    : '$shown of ${c.projects.length}',
                 style: TextStyle(
                   fontSize: r.sp(10.5),
                   fontWeight: FontWeight.w700,
@@ -500,6 +425,72 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// Filters the library by name. It appears only once the list is long
+  /// enough to be worth filtering — see [_searchThreshold].
+  Widget _searchField(BuildContext context) {
+    final r = context.r;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(r.gutter, 0, r.gutter, r.vp(8)),
+      child: TextField(
+        controller: _search,
+        textInputAction: TextInputAction.search,
+        onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+        style: TextStyle(fontSize: r.sp(12.5)),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Search projects',
+          prefixIcon: Icon(
+            Icons.search,
+            size: r.ic(18),
+            color: AppColors.textFaint,
+          ),
+          prefixIconConstraints: BoxConstraints(minWidth: r.dp(38)),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear',
+                  icon: Icon(Icons.close, size: r.ic(16)),
+                  color: AppColors.textFaint,
+                  onPressed: () {
+                    _search.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+          contentPadding: EdgeInsets.symmetric(vertical: r.vp(11)),
+        ),
+      ),
+    );
+  }
+
+  /// The library is not empty — the filter is just too narrow. Saying which
+  /// of the two it is, and offering the way back, is the whole point.
+  Widget _noMatches(BuildContext context) {
+    final r = context.r;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(30), r.gutter, r.vp(30)),
+      child: Column(
+        children: [
+          Icon(Icons.search_off, size: r.ic(30), color: AppColors.appBarMuted),
+          SizedBox(height: r.vp(10)),
+          Text(
+            'No project matches "${_search.text.trim()}"',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: r.sp(12.5), color: AppColors.textDim),
+          ),
+          SizedBox(height: r.vp(10)),
+          TextButton(
+            style: AppTheme.outlinedAction(tone: AppColors.appBarMuted),
+            onPressed: () {
+              _search.clear();
+              setState(() => _query = '');
+            },
+            child: const Text('Clear search'),
+          ),
         ],
       ),
     );
@@ -665,8 +656,13 @@ class _HomeScreenState extends State<HomeScreen> {
         maxWidth: context.r.maxDialogWidth,
         maxHeight: context.r.height * 0.85,
       ),
+      // The same corner every sheet in the app turns, and an outline in the
+      // app bar's colour like the editor's sheets carry. This one is already
+      // filled in that colour, so the edge reads as a hairline against the
+      // dimmed page behind it rather than as a border on the fill.
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        side: BorderSide(color: AppColors.appBar, width: 1.2),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
         final r = sheetContext.r;

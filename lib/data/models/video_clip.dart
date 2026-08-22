@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/utils/id.dart';
@@ -56,6 +58,10 @@ class VideoClip with Keyframable {
     this.chromaSimilarity = 0.25,
     this.chromaBlend = 0.1,
     this.stabilize = false,
+    this.enhance = false,
+    this.voiceEnhance = false,
+    this.voiceEffect = VoiceEffect.none,
+    this.cutoutMattePath,
     this.lutPath,
   })  : id = id ?? newId(),
         trimStart = trimStart ?? Duration.zero,
@@ -133,6 +139,25 @@ class VideoClip with Keyframable {
 
   bool stabilize;
 
+  /// One-tap picture clean-up: denoise, a touch of contrast and saturation,
+  /// then unsharp. Applied at export, and flagged in the preview rather than
+  /// simulated there — the sharpening has no cheap colour-matrix equivalent.
+  bool enhance;
+
+  /// One-tap voice clean-up on the clip's own audio: rumble filter, spectral
+  /// denoise, compression and loudness normalisation.
+  bool voiceEnhance;
+
+  /// Pitch/timbre effect on the clip's own audio.
+  VoiceEffect voiceEffect;
+
+  /// A baked grey matte covering the trimmed region: white where the subject
+  /// is. Set by the Cutout tool, and paired back with the footage through
+  /// `alphamerge` at export. Null means the clip keeps its background.
+  String? cutoutMattePath;
+
+  bool get hasCutout => cutoutMattePath != null;
+
   /// Optional .cube LUT applied after the grade.
   String? lutPath;
 
@@ -174,6 +199,50 @@ class VideoClip with Keyframable {
 
   /// Preview/export grade = preset (scaled by intensity) + manual adjustments.
   FilterPreset get gradedFilter => adjustments.merge(filter);
+
+  /// The picture clean-up [enhance] stands for, as FFmpeg filters.
+  ///
+  /// Denoise first so the sharpener has nothing granular to bite on, then a
+  /// small tonal lift, then unsharp — the order a stills workflow uses, and
+  /// the one that keeps the noise from being amplified into speckle.
+  List<String> enhanceFilters() => enhance
+      ? const [
+          'hqdn3d=2:1.5:3:3',
+          'eq=contrast=1.06:saturation=1.06:gamma=1.02',
+          'unsharp=5:5:0.9:5:5:0.0',
+        ]
+      : const [];
+
+  /// The clip's own audio treatment: [voiceEnhance] first — it is a clean-up,
+  /// and cleaning up after a pitch shift would fight the shift's artefacts —
+  /// then [voiceEffect].
+  ///
+  /// Pitch shifting is done by resampling then correcting the tempo, the same
+  /// way [AudioLayer] does it, so the two stay interchangeable.
+  List<String> audioFilterChain() {
+    final out = <String>[];
+    if (voiceEnhance) {
+      out.addAll(const [
+        'highpass=f=90',
+        'afftdn=nf=-25',
+        'acompressor=threshold=-18dB:ratio=3:attack=15:release=180',
+        'loudnorm=I=-16:TP=-1.5:LRA=11',
+      ]);
+    }
+    final semitones = voiceEffect.semitones;
+    if (semitones != 0) {
+      final ratio = math.pow(2, semitones / 12).toDouble();
+      out.add('asetrate=48000*${ratio.toStringAsFixed(5)}');
+      out.add('aresample=48000');
+      out.add('atempo=${(1 / ratio).clamp(0.5, 2.0).toStringAsFixed(5)}');
+    }
+    if (voiceEffect.echo) out.add('aecho=0.8:0.85:60:0.35');
+    if (voiceEffect.isRobot) {
+      out.add("afftfilt=real='hypot(re,im)*cos(0)':"
+          "imag='hypot(re,im)*sin(0)':win_size=512:overlap=0.75");
+    }
+    return out;
+  }
 
   double get sourceAspect =>
       (sourceWidth > 0 && sourceHeight > 0) ? sourceWidth / sourceHeight : 16 / 9;
@@ -241,6 +310,10 @@ class VideoClip with Keyframable {
       chromaSimilarity: chromaSimilarity,
       chromaBlend: chromaBlend,
       stabilize: stabilize,
+      enhance: enhance,
+      voiceEnhance: voiceEnhance,
+      voiceEffect: voiceEffect,
+      cutoutMattePath: cutoutMattePath,
       lutPath: lutPath,
     )..copyKeyframesFrom(this);
   }
@@ -292,6 +365,10 @@ class VideoClip with Keyframable {
         'cks': chromaSimilarity,
         'ckb': chromaBlend,
         'stab': stabilize,
+        'enh': enhance,
+        'venh': voiceEnhance,
+        'vfx': voiceEffect.name,
+        'matte': cutoutMattePath,
         'lut': lutPath,
         'kf': keyframesToJson(),
       };
@@ -348,6 +425,13 @@ class VideoClip with Keyframable {
       chromaSimilarity: d('cks', 0.25),
       chromaBlend: d('ckb', 0.1),
       stabilize: j['stab'] as bool? ?? false,
+      enhance: j['enh'] as bool? ?? false,
+      voiceEnhance: j['venh'] as bool? ?? false,
+      voiceEffect: VoiceEffect.values.firstWhere(
+        (e) => e.name == j['vfx'],
+        orElse: () => VoiceEffect.none,
+      ),
+      cutoutMattePath: j['matte'] as String?,
       lutPath: j['lut'] as String?,
     )..keyframesFromJson(j['kf'] as List?);
   }

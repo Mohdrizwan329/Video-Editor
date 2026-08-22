@@ -11,11 +11,11 @@ import 'package:video_editor/ui/editor/editor_screen.dart';
 import 'package:video_editor/data/models/video_clip.dart';
 import 'package:video_editor/ui/editor/timeline/clip_strip.dart';
 import 'package:video_editor/ui/editor/preview/preview_stage.dart';
+import 'package:video_editor/core/theme/app_colors.dart';
 import 'package:video_editor/ui/widgets/panel_shell.dart';
 import 'package:video_editor/ui/export/export_screen.dart';
 import 'package:video_editor/ui/home/home_screen.dart';
 import 'package:video_editor/ui/image_editor/image_editor_screen.dart';
-import 'package:video_editor/ui/templates/template_gallery_screen.dart';
 import 'package:video_editor/ui/picker/media_picker_screen.dart';
 import 'package:video_editor/ui/splash/splash_screen.dart';
 import 'package:video_editor/ui/text_to_video/text_slides_screen.dart';
@@ -105,10 +105,10 @@ const List<String> _panelTools = [
 
 /// Panels reachable once a clip is selected.
 const List<String> _clipTools = [
-  'Change speed',
+  'Speed',
   'Volume',
   'Filter',
-  'Effects',
+  'Effect',
   'Adjust',
   'Crop',
   'Duration',
@@ -180,12 +180,11 @@ void main() {
     }
   });
 
-  group('every sheet is the same height and scrolls', () {
-    // The preview is whatever the sheet leaves over, so a sheet that sized
-    // itself to its own controls resized the video every time the user moved
-    // from one tool to the next. Every sheet is one height now — whichever
-    // tool opened it, whatever it is holding — and it scrolls what does not
-    // fit rather than growing or stranding a control off the bottom.
+  group('every sheet is as tall as its own controls and scrolls', () {
+    // A sheet takes the room its controls ask for and no more: a tool with a
+    // colour row and a line of help does not open the same height as a tab
+    // bar over a grid of presets, and neither of them leaves empty space
+    // under the last control. What will not fit is capped and scrolls.
     const phone = Size(390, 844);
 
     // Two clips: Transition is a tool about the join between them, and with
@@ -252,7 +251,8 @@ void main() {
       'Keyframe': (clip: false, text: true),
     };
 
-    testWidgets('one height for all of them', (tester) async {
+    testWidgets('a short tool opens short, a full one opens capped',
+        (tester) async {
       tester.view.physicalSize = phone;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -268,36 +268,44 @@ void main() {
         heights[entry.key] = sheet;
       }
 
-      final distinct = heights.values.map((h) => h.toStringAsFixed(1)).toSet();
+      // Half the window is the ceiling: past that there is no preview left
+      // to edit against, however much a panel is holding.
+      const cap = 844 * 0.5;
+      for (final entry in heights.entries) {
+        expect(
+          entry.value,
+          lessThanOrEqualTo(cap + 0.5),
+          reason: '${entry.key} opened past half the window: $heights',
+        );
+      }
+
+      // …and the whole point: they are not all one height any more. At least
+      // one tool comes out shorter than the room a preset grid asks for,
+      // which is the empty space that used to sit under its last control.
       expect(
-        distinct,
-        hasLength(1),
-        reason: 'sheets came out different heights, so the preview resizes as '
-            'the user moves along the toolbar: $heights',
+        heights.values.where((h) => h < PanelShell.kSheetHeight),
+        isNotEmpty,
+        reason: 'every sheet is still opening at the full height, so short '
+            'panels keep their empty space: $heights',
       );
     });
 
-    testWidgets('and the preview keeps its size across them', (tester) async {
+    testWidgets('a short sheet leaves the preview more room than a full one',
+        (tester) async {
       tester.view.physicalSize = phone;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
-      // Text is left out on purpose: opening it adds a text layer, and the
-      // lane that appears on the timeline for it is what takes the height —
-      // not the sheet. Every other tool leaves the timeline as it found it,
-      // so any difference between them would be the sheet's doing.
-      final previews = <String, double>{};
-      for (final tool in _panelTools.where((t) => t != 'Text')) {
-        final (_, preview) = await openTool(tester, tool);
-        previews[tool] = preview;
-      }
+      // Canvas is a ratio row; Sticker is a pack bar over a grid of them.
+      final (shortSheet, shortPreview) = await openTool(tester, 'Canvas');
+      final (fullSheet, fullPreview) = await openTool(tester, 'Sticker');
 
-      final distinct = previews.values.map((h) => h.toStringAsFixed(1)).toSet();
+      expect(shortSheet, lessThan(fullSheet));
       expect(
-        distinct,
-        hasLength(1),
-        reason: 'the video is a different size depending on which tool is '
-            'open: $previews',
+        shortPreview,
+        greaterThan(fullPreview),
+        reason: 'the room the shorter sheet gave up should have gone to the '
+            'video',
       );
     });
 
@@ -335,13 +343,16 @@ void main() {
     // drags the sheet, the body scrolls inside it.
     const phone = Size(390, 844);
 
-    Future<void> openWatermark(WidgetTester tester) async {
+    /// Opens a sheet. Growing one has to start from a tool short enough to
+    /// have somewhere to grow: a full sheet already opens at the cap, and
+    /// dragging that up is a no-op by design.
+    Future<void> openSheet(WidgetTester tester, [String tool = 'Canvas']) async {
       tester.view.physicalSize = phone;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_host(EditorScreen(project: sampleProject())));
       await tester.pump(const Duration(milliseconds: 300));
-      await _tapTool(tester, 'Watermark');
+      await _tapTool(tester, tool);
       await tester.pump(const Duration(milliseconds: 400));
     }
 
@@ -354,22 +365,85 @@ void main() {
       return Offset(sheet.center.dx, sheet.top + PanelShell.kHandleHeight / 2);
     }
 
-    testWidgets('dragging the handle up makes it taller', (tester) async {
-      await openWatermark(tester);
+    testWidgets('dragging down and back up trades video for controls',
+        (tester) async {
+      // Backdrop opens on all of its controls, so the only room a drag has
+      // to work in is between them and the minimum.
+      await openSheet(tester, 'Backdrop');
       final opened = sheetHeight(tester);
 
-      await tester.dragFrom(handle(tester), const Offset(0, -90));
+      await tester.dragFrom(handle(tester), const Offset(0, 60));
+      await tester.pump();
+      final shrunk = sheetHeight(tester);
+      expect(shrunk, lessThan(opened));
+      // What the sheet gave up is the preview's, which is the point of the
+      // gesture: the user is choosing video over controls.
+      expect(tester.getSize(find.byType(PreviewStage).first).height,
+          greaterThan(0));
+
+      // Dragging back up returns the controls it hid — and stops there.
+      await tester.dragFrom(handle(tester), const Offset(0, -400));
+      await tester.pump();
+      expect(sheetHeight(tester), closeTo(opened, 1));
+    });
+
+    testWidgets('is edged in the app bar\'s own colour', (tester) async {
+      await openSheet(tester, 'Backdrop');
+
+      final shell = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byType(PanelShell),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      final shape = (shell.decoration as ShapeDecoration).shape
+          as RoundedRectangleBorder;
+      expect(shape.side.color, AppColors.appBar);
+      // All the way round, so the outline follows the rounded top corners
+      // instead of stopping short of them.
+      expect(shape.borderRadius, isNot(BorderRadius.zero));
+    });
+
+    testWidgets('its rounded corners show the strip it is docked under',
+        (tester) async {
+      await openSheet(tester, 'Backdrop');
+
+      // The colour painted behind the sheet is what fills the two notches
+      // its rounded corners cut out. Under the timeline that has to be the
+      // timeline, or the corners read as shoulders stuck to the sheet.
+      final behind = tester.widgetList<ColoredBox>(
+        find.ancestor(
+          of: find.byType(PanelShell),
+          matching: find.byType(ColoredBox),
+        ),
+      );
+      expect(
+        behind.map((b) => b.color),
+        contains(AppColors.timelineBg),
+      );
+    });
+
+    testWidgets('dragging up stops where the controls end', (tester) async {
+      // Backdrop is a chip row over a dozen swatches: it fits with room to
+      // spare, so there is nothing for a taller sheet to reveal.
+      await openSheet(tester, 'Backdrop');
+      final opened = sheetHeight(tester);
+
+      await tester.dragFrom(handle(tester), const Offset(0, -260));
       await tester.pump();
 
-      expect(sheetHeight(tester), closeTo(opened + 90, 1));
-      // What the sheet took is the preview's, which is the whole point of the
-      // gesture: the user is choosing to trade video for controls.
-      expect(tester.getSize(find.byType(PreviewStage).first).height,
-          lessThan(844));
+      expect(
+        sheetHeight(tester),
+        closeTo(opened, 1),
+        reason: 'the sheet grew past its own controls, so the space it took '
+            'off the preview came out blank',
+      );
     });
 
     testWidgets('dragging it down stops at a usable minimum', (tester) async {
-      await openWatermark(tester);
+      await openSheet(tester, 'Watermark');
 
       await tester.dragFrom(handle(tester), const Offset(0, 400));
       await tester.pump();
@@ -381,7 +455,7 @@ void main() {
     });
 
     testWidgets('tapping the handle puts it back', (tester) async {
-      await openWatermark(tester);
+      await openSheet(tester);
       final opened = sheetHeight(tester);
 
       await tester.dragFrom(handle(tester), const Offset(0, -90));
@@ -393,21 +467,24 @@ void main() {
     });
 
     testWidgets('the title row drags it too', (tester) async {
-      await openWatermark(tester);
+      await openSheet(tester, 'Backdrop');
       final opened = sheetHeight(tester);
 
       await tester.dragFrom(
-        tester.getCenter(find.text('Watermark')),
-        const Offset(0, -60),
+        tester.getCenter(find.text('Background')),
+        const Offset(0, 60),
       );
       await tester.pump();
 
-      expect(sheetHeight(tester), greaterThan(opened));
+      expect(sheetHeight(tester), lessThan(opened));
     });
 
-    testWidgets('scrolling the body does not resize the sheet',
-        (tester) async {
-      await openWatermark(tester);
+    testWidgets('the body does not scroll under a finger', (tester) async {
+      // Watermark has more controls than the sheet can show. Scrolling them
+      // is what the 'More options' button replaced: a sheet whose contents
+      // slide under the finger hides how much of the tool is left, and the
+      // gesture is one the user has to find by accident.
+      await openSheet(tester, 'Watermark');
       final opened = sheetHeight(tester);
       final body = find
           .descendant(
@@ -422,14 +499,41 @@ void main() {
       final scroll = tester.state<ScrollableState>(
         find.descendant(of: body, matching: find.byType(Scrollable)).first,
       );
-      expect(scroll.position.pixels, greaterThan(0),
-          reason: 'the body did not scroll');
+      expect(scroll.position.pixels, 0, reason: 'the body scrolled');
       expect(sheetHeight(tester), opened,
-          reason: 'scrolling the controls resized the sheet as well');
+          reason: 'dragging the controls resized the sheet as well');
+    });
+
+    testWidgets('a tool with more controls than it can show says so',
+        (tester) async {
+      await openSheet(tester, 'Watermark');
+
+      expect(find.text('More options'), findsOneWidget,
+          reason: 'the controls past the fold have no way in');
+
+      await tester.tap(find.text('More options'));
+      await tester.pumpAndSettle();
+
+      // The second sheet holds the whole tool, and it opens taller than the
+      // docked one it came from — that is the point of it.
+      expect(find.text('Watermark'), findsWidgets);
+      final sheets = tester
+          .widgetList<SingleChildScrollView>(find.byType(SingleChildScrollView))
+          .length;
+      expect(sheets, greaterThan(1));
+    });
+
+    testWidgets('a tool that fits offers no way to more of it',
+        (tester) async {
+      // Backdrop opens on all of its controls, so a 'More options' button
+      // would lead to the same panel the user is already looking at.
+      await openSheet(tester, 'Backdrop');
+
+      expect(find.text('More options'), findsNothing);
     });
 
     testWidgets('the buttons in the chrome still take taps', (tester) async {
-      await openWatermark(tester);
+      await openSheet(tester, 'Watermark');
 
       await tester.tap(find.byIcon(Icons.close).first, warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 300));
@@ -566,14 +670,6 @@ void main() {
             entry.value,
             textScale,
             () => ExportScreen(project: sampleProject()),
-          );
-
-          await _expectNoOverflow(
-            tester,
-            'TemplateGalleryScreen',
-            entry.value,
-            textScale,
-            () => const TemplateGalleryScreen(),
           );
 
           await _expectNoOverflow(

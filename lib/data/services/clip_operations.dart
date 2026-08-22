@@ -170,6 +170,59 @@ class ClipOperations {
     File(path).delete().catchError((_) => File(path));
   }
 
+  /// The stretches of the clip's trimmed region that hold no speech, in
+  /// source time.
+  ///
+  /// This is what the AI Cut tool removes. `silencedetect` writes its
+  /// findings to the log rather than to a stream, so the pass decodes audio
+  /// only and the result is read back out of the session's own output — a
+  /// six-second clip costs a fraction of a second.
+  ///
+  /// [threshold] is the level below which a sample counts as quiet, and
+  /// [minSilence] the shortest gap worth cutting: shorter than this and the
+  /// cut lands inside the natural pause between two words.
+  static Future<List<(Duration, Duration)>> detectSilence(
+    VideoClip clip, {
+    double threshold = -32,
+    double minSilence = 0.6,
+  }) async {
+    if (clip.isImage || !clip.hasAudio) return const [];
+    try {
+      final session = await FFmpegKit.execute(
+        '-hide_banner -nostats '
+        '-ss ${clip.trimStart.seconds.toStringAsFixed(3)} '
+        '-t ${clip.trimmedDuration.seconds.toStringAsFixed(3)} '
+        '-i ${_q(clip.path)} -vn '
+        '-af silencedetect=noise=${threshold.toStringAsFixed(0)}dB:'
+        'd=${minSilence.toStringAsFixed(2)} -f null -',
+      );
+      final log = await session.getAllLogsAsString() ?? '';
+      final starts = RegExp(r'silence_start:\s*(-?[\d.]+)');
+      final ends = RegExp(r'silence_end:\s*(-?[\d.]+)');
+      final s = [
+        for (final m in starts.allMatches(log))
+          double.tryParse(m.group(1)!) ?? 0.0,
+      ];
+      final e = [
+        for (final m in ends.allMatches(log)) double.tryParse(m.group(1)!) ?? 0.0,
+      ];
+      final total = clip.trimmedDuration;
+      final out = <(Duration, Duration)>[];
+      for (var i = 0; i < s.length; i++) {
+        // A silence running to the end of the clip has a start and no end.
+        final from = durationFromSeconds(s[i].clamp(0, double.infinity));
+        final to = i < e.length ? durationFromSeconds(e[i]) : total;
+        if (to > from) {
+          out.add((clip.trimStart + from, clip.trimStart + to));
+        }
+      }
+      return out;
+    } catch (err) {
+      debugPrint('silencedetect threw: $err');
+      return const [];
+    }
+  }
+
   /// Run an arbitrary FFmpeg command. Exposed so sibling services can reuse
   /// the same logging and failure handling instead of each rolling their own.
   static Future<bool> runRaw(String command) => _run(command);

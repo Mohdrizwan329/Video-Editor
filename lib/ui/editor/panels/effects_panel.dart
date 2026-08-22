@@ -16,6 +16,7 @@ import '../../../data/services/thumbnail_service.dart';
 import '../../../state/editor_controller.dart';
 import '../../widgets/app_slider.dart';
 import '../../widgets/panel_shell.dart';
+import 'color_tool_tabs.dart';
 import '../preview/effects_view.dart';
 import 'sticker_panel.dart';
 
@@ -32,10 +33,15 @@ class EffectsPanel extends StatefulWidget {
     required this.onClose,
     this.clipIndex,
     this.overlay,
+    this.onTool,
   });
 
   final EditorController editor;
   final VoidCallback onClose;
+
+  /// Switches the sheet to one of the other two colour tools. Null leaves
+  /// the tab bar off.
+  final ValueChanged<ColorTool>? onTool;
 
   /// Exactly one of these is set — the colour tab's target.
   final int? clipIndex;
@@ -196,6 +202,10 @@ class _EffectsPanelState extends State<EffectsPanel> {
       onConfirm: widget.onClose,
       onReset: _onReset,
       applyToAll: _onApplyToAll,
+      footer: ColorToolTabs(
+        current: ColorTool.effect,
+        onSelected: widget.onTool,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -311,7 +321,7 @@ class _EffectsPanelState extends State<EffectsPanel> {
         fit: StackFit.expand,
         children: [
           SwatchSource(path: _swatch),
-          FxView(preset: f as FxPreset, intensity: 1),
+          FxSwatch(preset: f as FxPreset),
         ],
       ),
       slider: project.fxId == 'none'
@@ -488,6 +498,14 @@ class PresetTile extends StatelessWidget {
   /// inside the effects sheet, where the tile has to share the row.
   final double size;
 
+  /// The extra the name box takes over the square above it.
+  static const double _labelSlack = 4;
+
+  /// How wide a tile of [size] actually lays out. The name under the square
+  /// is given a little more room than the square itself, so a strip that
+  /// scrolls by tile — see FilterPanel — has to ask rather than assume.
+  static double widthFor(double size) => size + _labelSlack;
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -511,7 +529,7 @@ class PresetTile extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           SizedBox(
-            width: size + 4,
+            width: size + _labelSlack,
             child: Text(
               label,
               textAlign: TextAlign.center,

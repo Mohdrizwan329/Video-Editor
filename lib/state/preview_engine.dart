@@ -35,6 +35,9 @@ class PreviewEngine extends ChangeNotifier {
   static const Duration _seekCooldown = Duration(milliseconds: 600);
 
   final Map<String, VideoPlayerController> _video = {};
+
+  /// Media that would not open, by layer id, holding the path that failed.
+  final Map<String, String> _unopenable = {};
   final Map<String, ja.AudioPlayer> _audio = {};
   final Set<String> _loading = {};
 
@@ -51,17 +54,34 @@ class PreviewEngine extends ChangeNotifier {
 
   bool get isPlaying => editor.isPlaying.value;
 
-  /// Controller for the clip currently under the playhead, if it is ready.
-  VideoPlayerController? get activeController {
-    final id = _activeClipId;
-    if (id == null) return null;
+  VideoPlayerController? controllerFor(String id) {
     final c = _video[id];
     return (c != null && c.value.isInitialized) ? c : null;
   }
 
-  VideoPlayerController? controllerFor(String id) {
-    final c = _video[id];
-    return (c != null && c.value.isInitialized) ? c : null;
+  /// Whether [path] could not be opened for the layer with [id] — the file
+  /// has been deleted or moved, or nothing on the device can decode it.
+  ///
+  /// The path is part of the question on purpose: replacing a clip's media
+  /// keeps its id, and the new file deserves a fresh attempt rather than
+  /// inheriting the old one's verdict.
+  bool cannotOpen(String id, String path) => _unopenable[id] == path;
+
+  /// Remembers that [path] would not open, and tells the stage so it can say
+  /// so instead of showing a black rectangle for the rest of the session.
+  ///
+  /// Every prime and every seek asks for the controller again, so the same
+  /// missing file comes back through here many times a second; only the first
+  /// one is worth a rebuild or a line in the log.
+  void _markUnopenable(String id, String path, String why) {
+    if (_disposed || _unopenable[id] == path) return;
+    debugPrint('preview: $path $why');
+    _unopenable[id] = path;
+    notifyListeners();
+  }
+
+  void _markOpened(String id) {
+    if (_unopenable.remove(id) != null && !_disposed) notifyListeners();
   }
 
   @override
@@ -111,16 +131,36 @@ class PreviewEngine extends ChangeNotifier {
     _clock.stop();
     _timer?.cancel();
     _timer = null;
+    await _stopEveryPlayer();
+    // A sync pass that was already in flight when the button was hit may
+    // still have a decoder call queued behind ours. _shouldRun keeps it from
+    // starting anything, but a play() it had already begun lands after we
+    // return — so sweep once more, off this frame.
+    scheduleMicrotask(() {
+      if (!_disposed && !editor.isPlaying.value) unawaited(_stopEveryPlayer());
+    });
+    notifyListeners();
+  }
+
+  Future<void> _stopEveryPlayer() async {
     for (final c in _video.values) {
       if (c.value.isInitialized && c.value.isPlaying) await c.pause();
     }
     for (final p in _audio.values) {
       if (p.playing) await p.pause();
     }
-    notifyListeners();
   }
 
   Future<void> toggle() => isPlaying ? pause() : play();
+
+  /// Whether a player a sync pass is about to touch should be running.
+  ///
+  /// A sync pass carries the intent it started with, but each of its steps
+  /// awaits a decoder — a seek, a volume change — and the user can hit pause
+  /// in any of those gaps. Reading the transport again here is what stops the
+  /// tail of an old pass from starting playback the user has just stopped:
+  /// the button said paused while the picture and the sound carried on.
+  bool _shouldRun(bool intended) => intended && editor.isPlaying.value;
 
   /// Open the player for the clip under the playhead and park it on that
   /// frame, so the canvas shows the picture without playing first.
@@ -260,9 +300,9 @@ class PreviewEngine extends ChangeNotifier {
     if ((controller.value.volume - wantedVolume).abs() > 0.01) {
       await controller.setVolume(wantedVolume.clamp(0.0, 1.0));
     }
-    if (playing && !controller.value.isPlaying) {
+    if (_shouldRun(playing) && !controller.value.isPlaying) {
       await controller.play();
-    } else if (!playing && controller.value.isPlaying) {
+    } else if (!_shouldRun(playing) && controller.value.isPlaying) {
       await controller.pause();
     }
   }
@@ -309,9 +349,9 @@ class PreviewEngine extends ChangeNotifier {
     if ((controller.value.volume - wanted).abs() > 0.01) {
       await controller.setVolume(wanted.clamp(0.0, 1.0));
     }
-    if (playing && !controller.value.isPlaying) {
+    if (_shouldRun(playing) && !controller.value.isPlaying) {
       await controller.play();
-    } else if (!playing && controller.value.isPlaying) {
+    } else if (!_shouldRun(playing) && controller.value.isPlaying) {
       await controller.pause();
     }
   }
@@ -345,9 +385,9 @@ class PreviewEngine extends ChangeNotifier {
       if ((c.value.volume - vol).abs() > 0.01) {
         await c.setVolume(vol.clamp(0.0, 1.0));
       }
-      if (playing && !c.value.isPlaying) {
+      if (_shouldRun(playing) && !c.value.isPlaying) {
         await c.play();
-      } else if (!playing && c.value.isPlaying) {
+      } else if (!_shouldRun(playing) && c.value.isPlaying) {
         await c.pause();
       }
     }
@@ -392,9 +432,9 @@ class PreviewEngine extends ChangeNotifier {
       if (player.loopMode != wantedLoop) {
         await player.setLoopMode(wantedLoop);
       }
-      if (playing && !player.playing) {
+      if (_shouldRun(playing) && !player.playing) {
         unawaited(player.play());
-      } else if (!playing && player.playing) {
+      } else if (!_shouldRun(playing) && player.playing) {
         await player.pause();
       }
     }
@@ -431,7 +471,10 @@ class PreviewEngine extends ChangeNotifier {
     _loading.add(clip.id);
     try {
       final file = File(clip.path);
-      if (!await file.exists()) return;
+      if (!await file.exists()) {
+        _markUnopenable(clip.id, clip.path, 'is gone');
+        return;
+      }
       final c = VideoPlayerController.file(file);
       await c.initialize();
       if (_disposed) {
@@ -441,9 +484,10 @@ class PreviewEngine extends ChangeNotifier {
       await c.setVolume(_muted ? 0 : clip.volume.clamp(0.0, 1.0));
       await c.setLooping(false);
       _video[clip.id] = c;
+      _markOpened(clip.id);
       notifyListeners();
     } catch (e) {
-      debugPrint('preview: cannot open ${clip.path}: $e');
+      _markUnopenable(clip.id, clip.path, 'will not open: $e');
     } finally {
       _loading.remove(clip.id);
     }
@@ -455,7 +499,10 @@ class PreviewEngine extends ChangeNotifier {
     _loading.add(pip.id);
     try {
       final file = File(pip.path);
-      if (!await file.exists()) return;
+      if (!await file.exists()) {
+        _markUnopenable(pip.id, pip.path, 'is gone');
+        return;
+      }
       final c = VideoPlayerController.file(file);
       await c.initialize();
       if (_disposed) {
@@ -464,9 +511,10 @@ class PreviewEngine extends ChangeNotifier {
       }
       await c.setVolume(_muted ? 0 : pip.volume.clamp(0.0, 1.0));
       _video[pip.id] = c;
+      _markOpened(pip.id);
       notifyListeners();
     } catch (e) {
-      debugPrint('preview: cannot open overlay ${pip.path}: $e');
+      _markUnopenable(pip.id, pip.path, 'will not open: $e');
     } finally {
       _loading.remove(pip.id);
     }

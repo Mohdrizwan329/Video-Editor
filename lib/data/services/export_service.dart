@@ -15,6 +15,7 @@ import '../models/project.dart';
 import '../models/video_clip.dart';
 import '../repositories/project_repository.dart';
 import 'export_settings.dart';
+import 'hsl_lut.dart';
 import 'overlay_rasterizer.dart';
 import '../models/watermark.dart';
 
@@ -82,17 +83,25 @@ class ExportService {
     final out = outputPath ?? '${dir.path}/${safeName}_$stamp.mp4';
 
     // Bake text and sticker layers to PNG at output resolution.
-    onProgress?.call(const ExportProgress(stage: 'Rendering overlays', value: -1));
+    onProgress?.call(
+      const ExportProgress(stage: 'Rendering overlays', value: -1),
+    );
     final rasterized = <String, RasterizedLayer>{};
     for (final t in project.texts) {
       if (t.text.trim().isEmpty) continue;
-      final r = await OverlayRasterizer.instance
-          .rasterizeText(t, outWidth: settings.width, outHeight: settings.height);
+      final r = await OverlayRasterizer.instance.rasterizeText(
+        t,
+        outWidth: settings.width,
+        outHeight: settings.height,
+      );
       if (r != null) rasterized[t.id] = r;
     }
     for (final s in project.stickers) {
-      final r = await OverlayRasterizer.instance
-          .rasterizeSticker(s, outWidth: settings.width, outHeight: settings.height);
+      final r = await OverlayRasterizer.instance.rasterizeSticker(
+        s,
+        outWidth: settings.width,
+        outHeight: settings.height,
+      );
       if (r != null) rasterized[s.id] = r;
     }
     if (project.hasFx) {
@@ -130,13 +139,32 @@ class ExportService {
             );
       if (r != null) rasterized[_kWatermarkKey] = r;
     }
-    if (_cancelled) return const ExportResult(success: false, error: 'Cancelled');
+    if (_cancelled) {
+      return const ExportResult(success: false, error: 'Cancelled');
+    }
+
+    // Per-hue grading has no FFmpeg filter of its own, so each target that
+    // carries one gets its grade baked into a 3D LUT here and applied with
+    // `lut3d`. Baking is cheap — a 33-point cube — and it happens once per
+    // export rather than once per frame.
+    final hslLuts = <String, String>{};
+    for (final clip in project.clips) {
+      if (clip.adjustments.hsl.isNeutral) continue;
+      final path = await HslLut.write(clip.adjustments.hsl, dir);
+      if (path != null) hslLuts[clip.id] = path;
+    }
+    for (final pip in project.overlays) {
+      if (pip.adjustments.hsl.isNeutral) continue;
+      final path = await HslLut.write(pip.adjustments.hsl, dir);
+      if (path != null) hslLuts[pip.id] = path;
+    }
 
     final graph = _GraphBuilder(
       project: project,
       settings: settings,
       rasterized: rasterized,
       totalDuration: total,
+      hslLuts: hslLuts,
     );
     final command = graph.build(out);
     debugPrint('FFmpeg command:\n$command');
@@ -152,15 +180,18 @@ class ExportService {
       final elapsed = DateTime.now().difference(startedAt);
       final eta = value > 0.02
           ? Duration(
-              milliseconds:
-                  (elapsed.inMilliseconds * (1 - value) / value).round())
+              milliseconds: (elapsed.inMilliseconds * (1 - value) / value)
+                  .round(),
+            )
           : null;
-      onProgress?.call(ExportProgress(
-        stage: 'Exporting',
-        value: value.toDouble(),
-        eta: eta,
-        speed: stats.getSpeed(),
-      ));
+      onProgress?.call(
+        ExportProgress(
+          stage: 'Exporting',
+          value: value.toDouble(),
+          eta: eta,
+          speed: stats.getSpeed(),
+        ),
+      );
     });
 
     final session = await FFmpegKit.executeAsync(
@@ -169,18 +200,20 @@ class ExportService {
         _sessionId = null;
         final rc = await s.getReturnCode();
         if (ReturnCode.isSuccess(rc)) {
-          onProgress
-              ?.call(const ExportProgress(stage: 'Finishing', value: 1));
+          onProgress?.call(const ExportProgress(stage: 'Finishing', value: 1));
           completer.complete(ExportResult(success: true, path: out));
         } else if (ReturnCode.isCancel(rc) || _cancelled) {
           completer.complete(
-              const ExportResult(success: false, error: 'Cancelled'));
+            const ExportResult(success: false, error: 'Cancelled'),
+          );
         } else {
-          completer.complete(ExportResult(
-            success: false,
-            error: 'Render failed (code ${rc?.getValue()})',
-            log: logBuffer.toString(),
-          ));
+          completer.complete(
+            ExportResult(
+              success: false,
+              error: 'Render failed (code ${rc?.getValue()})',
+              log: logBuffer.toString(),
+            ),
+          );
         }
       },
       (log) {
@@ -215,12 +248,16 @@ class _GraphBuilder {
     required this.settings,
     required this.rasterized,
     required this.totalDuration,
+    required this.hslLuts,
   });
 
   final Project project;
   final ExportSettings settings;
   final Map<String, RasterizedLayer> rasterized;
   final Duration totalDuration;
+
+  /// Baked per-hue grades, by the id of the clip or overlay they belong to.
+  final Map<String, String> hslLuts;
 
   final List<String> _inputs = [];
   final List<String> _filters = [];
@@ -279,7 +316,7 @@ class _GraphBuilder {
     // Runs of clips with no transition are concatenated; the boundaries that
     // do carry a transition become xfade joints between those runs.
     final groups = <List<int>>[
-      [0]
+      [0],
     ];
     for (var i = 1; i < project.clips.length; i++) {
       if (project.clips[i - 1].transitionType == TransitionType.none) {
@@ -309,10 +346,12 @@ class _GraphBuilder {
       final overlap = project.overlapAfter(joinIndex);
       final offset = project.clipStart(groups[g].first).seconds;
       final label = 'x$g';
-      _filters.add('[$current][${groupLabels[g]}] '
-          'xfade=transition=${clip.transitionType.ffmpegName}'
-          ':duration=${overlap.seconds.toStringAsFixed(3)}'
-          ':offset=${offset.toStringAsFixed(3)} [$label]');
+      _filters.add(
+        '[$current][${groupLabels[g]}] '
+        'xfade=transition=${clip.transitionType.ffmpegName}'
+        ':duration=${overlap.seconds.toStringAsFixed(3)}'
+        ':offset=${offset.toStringAsFixed(3)} [$label]',
+      );
       current = label;
     }
 
@@ -327,11 +366,15 @@ class _GraphBuilder {
     final srcDur = clip.trimmedDuration;
 
     if (clip.isImage) {
-      _inputs.add('-loop 1 -framerate $_fps '
-          '-t ${dur.seconds.toStringAsFixed(3)} -i ${_quote(clip.path)}');
+      _inputs.add(
+        '-loop 1 -framerate $_fps '
+        '-t ${dur.seconds.toStringAsFixed(3)} -i ${_quote(clip.path)}',
+      );
     } else {
-      _inputs.add('-ss ${clip.trimStart.seconds.toStringAsFixed(3)} '
-          '-t ${srcDur.seconds.toStringAsFixed(3)} -i ${_quote(clip.path)}');
+      _inputs.add(
+        '-ss ${clip.trimStart.seconds.toStringAsFixed(3)} '
+        '-t ${srcDur.seconds.toStringAsFixed(3)} -i ${_quote(clip.path)}',
+      );
     }
     final idx = _inputIndex++;
     _clipInputs[index] = idx;
@@ -352,8 +395,10 @@ class _GraphBuilder {
     if (clip.hasCrop) {
       final cw = (1 - clip.cropLeft - clip.cropRight).clamp(0.05, 1.0);
       final ch = (1 - clip.cropTop - clip.cropBottom).clamp(0.05, 1.0);
-      chain.add('crop=iw*${cw.toStringAsFixed(4)}:ih*${ch.toStringAsFixed(4)}'
-          ':iw*${clip.cropLeft.toStringAsFixed(4)}:ih*${clip.cropTop.toStringAsFixed(4)}');
+      chain.add(
+        'crop=iw*${cw.toStringAsFixed(4)}:ih*${ch.toStringAsFixed(4)}'
+        ':iw*${clip.cropLeft.toStringAsFixed(4)}:ih*${clip.cropTop.toStringAsFixed(4)}',
+      );
     }
     switch (clip.rotation % 360) {
       case 90:
@@ -367,25 +412,36 @@ class _GraphBuilder {
     if (clip.flippedVertical) chain.add('vflip');
 
     if (clip.hasChroma) {
-      chain.add('chromakey=${_hex(clip.chromaKeyColor!)}'
-          ':${clip.chromaSimilarity.toStringAsFixed(3)}'
-          ':${clip.chromaBlend.toStringAsFixed(3)}');
+      chain.add(
+        'chromakey=${_hex(clip.chromaKeyColor!)}'
+        ':${clip.chromaSimilarity.toStringAsFixed(3)}'
+        ':${clip.chromaBlend.toStringAsFixed(3)}',
+      );
     }
+    chain.addAll(clip.enhanceFilters());
     final grade = clip.gradedFilter.toFFmpegFilter();
     if (grade.isNotEmpty) chain.add(grade);
     chain.addAll(clip.adjustments.toFFmpegExtras());
+    // The HSL grade goes on before any LUT the user brought in of their own:
+    // theirs is the look, this is the correction underneath it.
+    final hslLut = hslLuts[clip.id];
+    if (hslLut != null) {
+      chain.add('lut3d=file=${_escapePath(hslLut)}');
+    }
     if (clip.lutPath != null) {
       chain.add('lut3d=file=${_escapePath(clip.lutPath!)}');
     }
     if (clip.hasMask) {
-      chain.add(_maskExpression(
-        shape: clip.maskShape,
-        size: clip.maskSize,
-        feather: clip.maskFeather,
-        x: clip.maskX,
-        y: clip.maskY,
-        inverted: clip.maskInverted,
-      ));
+      chain.add(
+        _maskExpression(
+          shape: clip.maskShape,
+          size: clip.maskSize,
+          feather: clip.maskFeather,
+          x: clip.maskX,
+          y: clip.maskY,
+          inverted: clip.maskInverted,
+        ),
+      );
     }
 
     // User pan/zoom inside the canvas.
@@ -396,9 +452,35 @@ class _GraphBuilder {
       FitMode.contain => 'scale=$_w:$_h:force_original_aspect_ratio=decrease',
     };
 
-    final src = '[$idx:v]';
+    var src = '[$idx:v]';
     final base = 'b$index';
-    final needsBackground = clip.fit == FitMode.contain;
+
+    // Cutout: the baked matte carries the subject's shape, and `alphamerge`
+    // is what turns it into an alpha channel on the footage. It goes in
+    // before the geometry so the background composite below sees a clip that
+    // is already transparent behind the subject — the matte is baked at a
+    // lower rate and size than the footage, so it is stretched onto the
+    // clip's own dimensions first.
+    if (clip.hasCutout && !clip.isImage) {
+      _inputs.add('-i ${_quote(clip.cutoutMattePath!)}');
+      final mIdx = _inputIndex++;
+      // `scale2ref` sizes its first input to its second and passes the second
+      // through untouched, so this is what puts a 512-wide matte onto the
+      // footage's own dimensions without knowing either of them here.
+      _filters.add(
+        '[$mIdx:v] fps=$_fps,setpts=PTS-STARTPTS,format=gray '
+        '[mt$index]',
+      );
+      _filters.add('[mt$index]$src scale2ref [ms$index][cs$index]');
+      _filters.add('[cs$index] format=yuva420p [ca$index]');
+      _filters.add('[ca$index][ms$index] alphamerge [cut$index]');
+      src = '[cut$index]';
+    }
+    // A cut-out clip needs something behind it whatever its fit: the alpha
+    // alphamerge gave it only becomes a hole once it is composited, and the
+    // `crop` path below would drop the alpha plane and leave the background
+    // it was supposed to remove sitting there untouched.
+    final needsBackground = clip.fit == FitMode.contain || clip.hasCutout;
 
     final scaleTrack = clip.trackOrNull(KeyframeProperty.scale);
     if (scaleTrack != null) {
@@ -409,8 +491,10 @@ class _GraphBuilder {
     } else if (zoom != 1.0 || clip.offsetX != 0 || clip.offsetY != 0) {
       final zw = (_w * zoom).round();
       final zh = (_h * zoom).round();
-      chain.add('$fitted,scale=${_even(zw)}:${_even(zh)}'
-          ':force_original_aspect_ratio=decrease');
+      chain.add(
+        '$fitted,scale=${_even(zw)}:${_even(zh)}'
+        ':force_original_aspect_ratio=decrease',
+      );
     } else {
       chain.add(fitted);
     }
@@ -421,13 +505,21 @@ class _GraphBuilder {
       // FFmpeg's own float evaluation of the same curve.
       final peakZoom = scaleTrack != null
           ? scaleTrack.keys.fold<double>(1, (m, k) => math.max(m, k.value)) *
-              1.02
+                1.02
           : zoom;
-      _buildBackgroundComposite(src, chain, base, clip, index,
-          peakZoom: peakZoom);
+      _buildBackgroundComposite(
+        src,
+        chain,
+        base,
+        clip,
+        index,
+        peakZoom: peakZoom,
+      );
     } else {
       chain.add('crop=$_w:$_h');
-      _filters.add('$src ${chain.join(',')},setsar=1,fps=$_fps,format=yuv420p [$base]');
+      _filters.add(
+        '$src ${chain.join(',')},setsar=1,fps=$_fps,format=yuv420p [$base]',
+      );
     }
 
     if (clip.opacity < 1 ||
@@ -439,8 +531,10 @@ class _GraphBuilder {
       }
       if (clip.fadeOut > Duration.zero) {
         final st = (dur - clip.fadeOut).seconds.clamp(0, double.infinity);
-        fades.add('fade=t=out:st=${st.toStringAsFixed(3)}'
-            ':d=${clip.fadeOut.seconds.toStringAsFixed(3)}');
+        fades.add(
+          'fade=t=out:st=${st.toStringAsFixed(3)}'
+          ':d=${clip.fadeOut.seconds.toStringAsFixed(3)}',
+        );
       }
       if (fades.isNotEmpty) {
         final faded = 'f$index';
@@ -458,6 +552,7 @@ class _GraphBuilder {
     String outLabel,
     VideoClip clip,
     int index, {
+
     /// The largest scale the clip reaches. Above 1 the fitted frame outgrows
     /// the canvas, which changes how it can be composited.
     required double peakZoom,
@@ -483,18 +578,25 @@ class _GraphBuilder {
     switch (bg.type) {
       case BackgroundType.color:
         final color = _hex(bg.color);
-        if (animated) {
+        // `pad` fills the letterbox and nothing else — it draws no pixels
+        // under the frame, so a transparent subject stays transparent and
+        // `format=yuv420p` then throws the alpha away. Compositing is the
+        // only branch that puts the backdrop *behind* the clip.
+        if (animated || clip.hasCutout) {
           // pad exposes no `t`, not even with eval=frame, so a keyframed
           // position has to be composited. This is the one path that pays for
           // an extra input, so it is kept to the case that needs it.
           _inputs.add(
-              '-f lavfi -t ${clip.timelineDuration.seconds.toStringAsFixed(3)} '
-              '-i color=c=$color:s=${_w}x$_h:r=$_fps');
+            '-f lavfi -t ${clip.timelineDuration.seconds.toStringAsFixed(3)} '
+            '-i color=c=$color:s=${_w}x$_h:r=$_fps',
+          );
           final cIdx = _inputIndex++;
           final fgLabel = 'fg$index';
           _filters.add('$src ${chain.join(',')},setsar=1 [$fgLabel]');
-          _filters.add('[$cIdx:v][$fgLabel] overlay=$pos:format=auto,'
-              'fps=$_fps,format=yuv420p [$outLabel]');
+          _filters.add(
+            '[$cIdx:v][$fgLabel] overlay=$pos:format=auto,'
+            'fps=$_fps,format=yuv420p [$outLabel]',
+          );
         } else {
           // pad has its own variable names — ow/oh for the padded output and
           // iw/ih for the input. It has no W/H at all, so the overlay
@@ -509,30 +611,40 @@ class _GraphBuilder {
           final grow = peakZoom > 1;
           final pw = grow ? _even((_w * peakZoom).ceil()) : _w;
           final ph = grow ? _even((_h * peakZoom).ceil()) : _h;
-          _filters.add('$src ${chain.join(',')},'
-              'pad=$pw:$ph:(ow-iw)/2+$dx:(oh-ih)/2+$dy:color=$color,'
-              '${grow ? 'crop=$_w:$_h,' : ''}'
-              'setsar=1,fps=$_fps,format=yuv420p [$outLabel]');
+          _filters.add(
+            '$src ${chain.join(',')},'
+            'pad=$pw:$ph:(ow-iw)/2+$dx:(oh-ih)/2+$dy:color=$color,'
+            '${grow ? 'crop=$_w:$_h,' : ''}'
+            'setsar=1,fps=$_fps,format=yuv420p [$outLabel]',
+          );
         }
       case BackgroundType.blur:
         final fgLabel = 'fg$index';
         final bgLabel = 'bgl$index';
         _filters.add('$src split=2 [bs$index][fs$index]');
-        _filters.add('[bs$index] scale=$_w:$_h:force_original_aspect_ratio=increase,'
-            'crop=$_w:$_h,boxblur=luma_radius=${bg.blurAmount.round()}:luma_power=2,'
-            'eq=brightness=-0.06,setsar=1 [$bgLabel]');
+        _filters.add(
+          '[bs$index] scale=$_w:$_h:force_original_aspect_ratio=increase,'
+          'crop=$_w:$_h,boxblur=luma_radius=${bg.blurAmount.round()}:luma_power=2,'
+          'eq=brightness=-0.06,setsar=1 [$bgLabel]',
+        );
         _filters.add('[fs$index] ${chain.join(',')},setsar=1 [$fgLabel]');
-        _filters.add('[$bgLabel][$fgLabel] overlay=$pos:format=auto,'
-            'fps=$_fps,format=yuv420p [$outLabel]');
+        _filters.add(
+          '[$bgLabel][$fgLabel] overlay=$pos:format=auto,'
+          'fps=$_fps,format=yuv420p [$outLabel]',
+        );
       case BackgroundType.gradient:
-        _inputs.add('-f lavfi -t ${clip.timelineDuration.seconds.toStringAsFixed(3)} '
-            '-i gradients=s=${_w}x$_h:c0=${_hex(bg.gradientStart)}'
-            ':c1=${_hex(bg.gradientEnd)}:x0=0:y0=0:x1=$_w:y1=$_h:r=$_fps');
+        _inputs.add(
+          '-f lavfi -t ${clip.timelineDuration.seconds.toStringAsFixed(3)} '
+          '-i gradients=s=${_w}x$_h:c0=${_hex(bg.gradientStart)}'
+          ':c1=${_hex(bg.gradientEnd)}:x0=0:y0=0:x1=$_w:y1=$_h:r=$_fps',
+        );
         final gIdx = _inputIndex++;
         final fgLabel = 'fg$index';
         _filters.add('$src ${chain.join(',')},setsar=1 [$fgLabel]');
-        _filters.add('[$gIdx:v][$fgLabel] overlay=$pos:format=auto,'
-            'fps=$_fps,format=yuv420p [$outLabel]');
+        _filters.add(
+          '[$gIdx:v][$fgLabel] overlay=$pos:format=auto,'
+          'fps=$_fps,format=yuv420p [$outLabel]',
+        );
     }
   }
 
@@ -549,14 +661,32 @@ class _GraphBuilder {
     for (final s in project.stickers) {
       final r = rasterized[s.id];
       if (r == null) continue;
-      current = _overlayImage(current, r, s, s.start, s.end, s.animationIn,
-          s.animationOut, s.animationDuration, n++);
+      current = _overlayImage(
+        current,
+        r,
+        s,
+        s.start,
+        s.end,
+        s.animationIn,
+        s.animationOut,
+        s.animationDuration,
+        n++,
+      );
     }
     for (final t in project.texts) {
       final r = rasterized[t.id];
       if (r == null) continue;
-      current = _overlayImage(current, r, t, t.start, t.end, t.animationIn,
-          t.animationOut, t.animationDuration, n++);
+      current = _overlayImage(
+        current,
+        r,
+        t,
+        t.start,
+        t.end,
+        t.animationIn,
+        t.animationOut,
+        t.animationDuration,
+        n++,
+      );
     }
     // Whole-frame texture then border, both spanning the full timeline — the
     // same order the preview stacks them in.
@@ -616,13 +746,17 @@ class _GraphBuilder {
 
     final ad = animDur.seconds.clamp(0.05, 10.0);
     if (_usesAlpha(animIn)) {
-      chain.add('fade=t=in:st=${offset.toStringAsFixed(3)}'
-          ':d=${ad.toStringAsFixed(3)}:alpha=1');
+      chain.add(
+        'fade=t=in:st=${offset.toStringAsFixed(3)}'
+        ':d=${ad.toStringAsFixed(3)}:alpha=1',
+      );
     }
     if (_usesAlpha(animOut)) {
       final st = (end.seconds - ad).clamp(0.0, double.infinity);
-      chain.add('fade=t=out:st=${st.toStringAsFixed(3)}'
-          ':d=${ad.toStringAsFixed(3)}:alpha=1');
+      chain.add(
+        'fade=t=out:st=${st.toStringAsFixed(3)}'
+        ':d=${ad.toStringAsFixed(3)}:alpha=1',
+      );
     }
     _filters.add('[$idx:v] ${chain.join(',')} [$src]');
 
@@ -638,9 +772,11 @@ class _GraphBuilder {
       animOut: animOut,
       ad: ad,
     );
-    _filters.add('[$base][$src] overlay=$x:$y:format=auto'
-        ':enable=\'between(t,${offset.toStringAsFixed(3)}'
-        ',${end.seconds.toStringAsFixed(3)})\' [$label]');
+    _filters.add(
+      '[$base][$src] overlay=$x:$y:format=auto'
+      ':enable=\'between(t,${offset.toStringAsFixed(3)}'
+      ',${end.seconds.toStringAsFixed(3)})\' [$label]',
+    );
     return label;
   }
 
@@ -648,7 +784,14 @@ class _GraphBuilder {
   /// watermark all take this path. Opacity and rotation are already baked into
   /// the PNG, so this only has to place it.
   String _overlayFullSpan(String base, RasterizedLayer r, int n) {
-    _inputs.add('-loop 1 -framerate $_fps -i ${_quote(r.path)}');
+    // A still is one PNG held for the whole timeline; a moving effect is a
+    // strip of PNGs run at its own rate. `-loop 1` is the image demuxer's
+    // own option and covers both — it repeats the sequence for as long as
+    // the graph asks, and the output's `-t` is what finally ends it. Feeding
+    // the strip at the effect's rate rather than the video's is what puts
+    // the exported motion on the same frames the preview showed.
+    final rate = r.isSequence ? r.frameRate : _fps;
+    _inputs.add('-loop 1 -framerate $rate -i ${_quote(r.path)}');
     final idx = _inputIndex++;
     final label = 'wm$n';
     final src = 'ws$n';
@@ -665,12 +808,16 @@ class _GraphBuilder {
 
   String _overlayPip(String base, OverlayLayer pip, int n) {
     if (pip.isImage) {
-      _inputs.add('-loop 1 -framerate $_fps '
-          '-t ${pip.duration.seconds.toStringAsFixed(3)} -i ${_quote(pip.path)}');
+      _inputs.add(
+        '-loop 1 -framerate $_fps '
+        '-t ${pip.duration.seconds.toStringAsFixed(3)} -i ${_quote(pip.path)}',
+      );
     } else {
-      _inputs.add('-ss ${pip.trimStart.seconds.toStringAsFixed(3)} '
-          '-t ${(pip.duration.seconds * pip.speed).toStringAsFixed(3)} '
-          '-i ${_quote(pip.path)}');
+      _inputs.add(
+        '-ss ${pip.trimStart.seconds.toStringAsFixed(3)} '
+        '-t ${(pip.duration.seconds * pip.speed).toStringAsFixed(3)} '
+        '-i ${_quote(pip.path)}',
+      );
     }
     final idx = _inputIndex++;
     _pipInputs[project.overlays.indexOf(pip)] = idx;
@@ -689,16 +836,20 @@ class _GraphBuilder {
     final scaleTrack = pip.trackOrNull(KeyframeProperty.scale);
     if (scaleTrack != null) {
       final e = scaleTrack.toExpression(offset: offset, scale: _w.toDouble());
-      chain.add("scale=w='($e)':h='($e)/${pip.sourceAspect.toStringAsFixed(5)}'"
-          ":eval=frame");
+      chain.add(
+        "scale=w='($e)':h='($e)/${pip.sourceAspect.toStringAsFixed(5)}'"
+        ":eval=frame",
+      );
     } else {
       chain.add('scale=$targetW:$targetH');
     }
 
     if (pip.chromaKeyColor != null) {
-      chain.add('chromakey=${_hex(pip.chromaKeyColor!)}'
-          ':${pip.chromaSimilarity.toStringAsFixed(3)}'
-          ':${pip.chromaBlend.toStringAsFixed(3)}');
+      chain.add(
+        'chromakey=${_hex(pip.chromaKeyColor!)}'
+        ':${pip.chromaSimilarity.toStringAsFixed(3)}'
+        ':${pip.chromaBlend.toStringAsFixed(3)}',
+      );
     }
     final grade = pip.gradedFilter.toFFmpegFilter();
     if (grade.isNotEmpty) chain.add(grade);
@@ -706,14 +857,16 @@ class _GraphBuilder {
     chain.add('format=rgba');
 
     if (pip.maskShape != MaskShape.none) {
-      chain.add(_maskExpression(
-        shape: pip.maskShape,
-        size: pip.maskSize,
-        feather: pip.maskFeather,
-        x: pip.maskX,
-        y: pip.maskY,
-        inverted: pip.maskInverted,
-      ));
+      chain.add(
+        _maskExpression(
+          shape: pip.maskShape,
+          size: pip.maskSize,
+          feather: pip.maskFeather,
+          x: pip.maskX,
+          y: pip.maskY,
+          inverted: pip.maskInverted,
+        ),
+      );
     }
 
     final opacityTrack = pip.trackOrNull(KeyframeProperty.opacity);
@@ -722,7 +875,8 @@ class _GraphBuilder {
       chain.add("geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*($e)'");
     } else if (pip.transform.opacity < 1) {
       chain.add(
-          'colorchannelmixer=aa=${pip.transform.opacity.toStringAsFixed(3)}');
+        'colorchannelmixer=aa=${pip.transform.opacity.toStringAsFixed(3)}',
+      );
     }
 
     final rotTrack = pip.trackOrNull(KeyframeProperty.rotation);
@@ -740,8 +894,10 @@ class _GraphBuilder {
     }
     if (_usesAlpha(pip.animationOut)) {
       final st = (pip.duration.seconds - ad).clamp(0.0, double.infinity);
-      chain.add('fade=t=out:st=${st.toStringAsFixed(3)}'
-          ':d=${ad.toStringAsFixed(3)}:alpha=1');
+      chain.add(
+        'fade=t=out:st=${st.toStringAsFixed(3)}'
+        ':d=${ad.toStringAsFixed(3)}:alpha=1',
+      );
     }
     // Shift the layer to its slot on the master timeline.
     chain.add('setpts=PTS+${offset.toStringAsFixed(3)}/TB');
@@ -760,12 +916,15 @@ class _GraphBuilder {
       ad: ad,
     );
 
-    final enable = ':enable=\'between(t,${offset.toStringAsFixed(3)}'
+    final enable =
+        ':enable=\'between(t,${offset.toStringAsFixed(3)}'
         ',${pip.end.seconds.toStringAsFixed(3)})\'';
 
     if (pip.blendMode == BlendMode2.normal) {
-      _filters.add('[$base][$src] overlay=$x:$y:format=auto:eof_action=pass'
-          '$enable [$label]');
+      _filters.add(
+        '[$base][$src] overlay=$x:$y:format=auto:eof_action=pass'
+        '$enable [$label]',
+      );
       return label;
     }
 
@@ -773,8 +932,10 @@ class _GraphBuilder {
     // padded onto a transparent canvas first and then blended.
     final padded = 'pb$n';
     _filters.add('[$src] pad=$_w:$_h:$x:$y:color=0x00000000@0.0 [$padded]');
-    _filters.add('[$base][$padded] blend=all_mode=${pip.blendMode.ffmpegName}'
-        ':shortest=0$enable [$label]');
+    _filters.add(
+      '[$base][$padded] blend=all_mode=${pip.blendMode.ffmpegName}'
+      ':shortest=0$enable [$label]',
+    );
     return label;
   }
 
@@ -800,10 +961,18 @@ class _GraphBuilder {
 
     if (xTrack != null || yTrack != null) {
       final xe = xTrack != null
-          ? xTrack.toExpression(offset: offset, scale: _w.toDouble(), bias: -halfW)
+          ? xTrack.toExpression(
+              offset: offset,
+              scale: _w.toDouble(),
+              bias: -halfW,
+            )
           : (staticX - halfW).toStringAsFixed(2);
       final ye = yTrack != null
-          ? yTrack.toExpression(offset: offset, scale: _h.toDouble(), bias: -halfH)
+          ? yTrack.toExpression(
+              offset: offset,
+              scale: _h.toDouble(),
+              bias: -halfH,
+            )
           : (staticY - halfH).toStringAsFixed(2);
       return ("'$xe'", "'$ye'");
     }
@@ -815,7 +984,8 @@ class _GraphBuilder {
     var yExpr = y.round().toString();
 
     String slideIn(double base, double from) {
-      final p = 'min(1,max(0,(t-${offset.toStringAsFixed(3)})'
+      final p =
+          'min(1,max(0,(t-${offset.toStringAsFixed(3)})'
           '/${ad.toStringAsFixed(3)}))';
       return '(${from.round()}+(${base.round()}-${from.round()})*$p)';
     }
@@ -886,10 +1056,13 @@ class _GraphBuilder {
       final chain = <String>['aresample=48000', 'asetpts=PTS-STARTPTS'];
       if (clip.reversed) chain.add('areverse');
       chain.addAll(_atempoChain(clip.effectiveSpeed));
+      chain.addAll(clip.audioFilterChain());
       final volTrack = clip.trackOrNull(KeyframeProperty.volume);
       if (volTrack != null) {
         final e = volTrack.toExpression(
-            offset: start.seconds, scale: project.masterVolume);
+          offset: start.seconds,
+          scale: project.masterVolume,
+        );
         chain.add("volume=volume='$e':eval=frame");
       } else {
         final vol = clip.volume * project.masterVolume;
@@ -899,16 +1072,21 @@ class _GraphBuilder {
       // Volume panel, so a fade that left the sound at full level was the one
       // thing the control could not be read as meaning.
       if (clip.fadeIn > Duration.zero) {
-        chain.add('afade=t=in:st=0:d=${clip.fadeIn.seconds.toStringAsFixed(3)}');
+        chain.add(
+          'afade=t=in:st=0:d=${clip.fadeIn.seconds.toStringAsFixed(3)}',
+        );
       }
       if (clip.fadeOut > Duration.zero) {
         // After atempo the stream runs at timeline length, so the fade starts
         // that far in rather than at the untimed source's end.
-        final st = (clip.timelineDuration - clip.fadeOut)
-            .seconds
-            .clamp(0, double.infinity);
-        chain.add('afade=t=out:st=${st.toStringAsFixed(3)}'
-            ':d=${clip.fadeOut.seconds.toStringAsFixed(3)}');
+        final st = (clip.timelineDuration - clip.fadeOut).seconds.clamp(
+          0,
+          double.infinity,
+        );
+        chain.add(
+          'afade=t=out:st=${st.toStringAsFixed(3)}'
+          ':d=${clip.fadeOut.seconds.toStringAsFixed(3)}',
+        );
       }
       chain.add('adelay=${start.inMilliseconds}|${start.inMilliseconds}');
       chain.add('apad=pad_dur=0.05');
@@ -919,9 +1097,11 @@ class _GraphBuilder {
     for (var i = 0; i < project.audios.length; i++) {
       final a = project.audios[i];
       if (a.volume <= 0) continue;
-      _inputs.add('-ss ${a.trimStart.seconds.toStringAsFixed(3)} '
-          '-t ${(a.duration.seconds * a.speed).toStringAsFixed(3)} '
-          '-i ${_quote(a.path)}');
+      _inputs.add(
+        '-ss ${a.trimStart.seconds.toStringAsFixed(3)} '
+        '-t ${(a.duration.seconds * a.speed).toStringAsFixed(3)} '
+        '-i ${_quote(a.path)}',
+      );
       final idx = _inputIndex++;
       final label = 'la$i';
       final chain = <String>['aresample=48000', 'asetpts=PTS-STARTPTS'];
@@ -931,7 +1111,9 @@ class _GraphBuilder {
       if (volTrack != null) {
         // Keyframed level: `volume` re-evaluates per sample frame.
         final e = volTrack.toExpression(
-            offset: a.start.seconds, scale: project.masterVolume);
+          offset: a.start.seconds,
+          scale: project.masterVolume,
+        );
         chain.add("volume=volume='$e':eval=frame");
       } else {
         final vol = a.volume * project.masterVolume;
@@ -942,8 +1124,10 @@ class _GraphBuilder {
       }
       if (a.fadeOut > Duration.zero) {
         final st = (a.duration.seconds - a.fadeOut.seconds).clamp(0.0, 1e9);
-        chain.add('afade=t=out:st=${st.toStringAsFixed(3)}'
-            ':d=${a.fadeOut.seconds.toStringAsFixed(3)}');
+        chain.add(
+          'afade=t=out:st=${st.toStringAsFixed(3)}'
+          ':d=${a.fadeOut.seconds.toStringAsFixed(3)}',
+        );
       }
       chain.add('adelay=${a.start.inMilliseconds}|${a.start.inMilliseconds}');
       _filters.add('[$idx:a] ${chain.join(',')} [$label]');
@@ -961,22 +1145,28 @@ class _GraphBuilder {
       chain.addAll(_atempoChain(pip.speed));
       final vol = pip.volume * project.masterVolume;
       if (vol != 1.0) chain.add('volume=${vol.toStringAsFixed(3)}');
-      chain.add('adelay=${pip.start.inMilliseconds}|${pip.start.inMilliseconds}');
+      chain.add(
+        'adelay=${pip.start.inMilliseconds}|${pip.start.inMilliseconds}',
+      );
       _filters.add('[$inputIdx:a] ${chain.join(',')} [$label]');
       parts.add(label);
     }
 
     if (parts.isEmpty) return null;
     if (parts.length == 1) {
-      _filters.add('[${parts.first}] aformat=sample_fmts=fltp:'
-          'sample_rates=48000:channel_layouts=stereo [outa]');
+      _filters.add(
+        '[${parts.first}] aformat=sample_fmts=fltp:'
+        'sample_rates=48000:channel_layouts=stereo [outa]',
+      );
       return 'outa';
     }
     final ins = parts.map((p) => '[$p]').join();
-    _filters.add('$ins amix=inputs=${parts.length}:duration=longest'
-        ':dropout_transition=0:normalize=0,'
-        'alimiter=limit=0.97,'
-        'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo [outa]');
+    _filters.add(
+      '$ins amix=inputs=${parts.length}:duration=longest'
+      ':dropout_transition=0:normalize=0,'
+      'alimiter=limit=0.97,'
+      'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo [outa]',
+    );
     return 'outa';
   }
 
@@ -998,7 +1188,6 @@ class _GraphBuilder {
   }
 
   int? _pipInputIndex(int overlayIndex) => _pipInputs[overlayIndex];
-
 
   // ------------------------------------------------------------- helpers
 
@@ -1034,7 +1223,8 @@ class _GraphBuilder {
       final t0 = inputs[i], t1 = inputs[i + 1];
       final o0 = outputs[i], o1 = outputs[i + 1];
       final span = math.max(t1 - t0, 0.0001);
-      final seg = '($o0+(${(o1 - o0).toStringAsFixed(5)})'
+      final seg =
+          '($o0+(${(o1 - o0).toStringAsFixed(5)})'
           '*(T-${t0.toStringAsFixed(5)})/${span.toStringAsFixed(5)})';
       expr = 'if(lt(T,${t1.toStringAsFixed(5)}),$seg,$expr)';
     }
@@ -1078,7 +1268,9 @@ class _GraphBuilder {
     final rgb = argb & 0xFFFFFF;
     final alpha = (argb >> 24) & 0xFF;
     final base = '0x${rgb.toRadixString(16).padLeft(6, '0')}';
-    return alpha == 0xFF ? base : '$base${alpha.toRadixString(16).padLeft(2, '0')}';
+    return alpha == 0xFF
+        ? base
+        : '$base${alpha.toRadixString(16).padLeft(2, '0')}';
   }
 
   static int _even(int v) => v.isEven ? math.max(v, 2) : math.max(v + 1, 2);

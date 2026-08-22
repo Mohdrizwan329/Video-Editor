@@ -35,8 +35,9 @@ class EditorController extends ChangeNotifier {
   final ValueNotifier<bool> isPlaying = ValueNotifier(false);
 
   /// Timeline zoom in pixels per second.
-  final ValueNotifier<double> pixelsPerSecond =
-      ValueNotifier(kDefaultPixelsPerSecond);
+  final ValueNotifier<double> pixelsPerSecond = ValueNotifier(
+    kDefaultPixelsPerSecond,
+  );
 
   EditorSelection _selection = const EditorSelection.none();
   EditorSelection get selection => _selection;
@@ -55,11 +56,25 @@ class EditorController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _saveTimer?.cancel();
     position.dispose();
     isPlaying.dispose();
     pixelsPerSecond.dispose();
     super.dispose();
+  }
+
+  /// The renders this controller kicks off — reverse, freeze, extract, the
+  /// cutout pass — outlive the screen when the user walks away mid-pass, and
+  /// each of them reports back when it lands. Reporting to a controller that
+  /// is already gone is what raises 'used after being disposed', so the
+  /// notification is dropped rather than the caller having to remember.
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
   }
 
   // ------------------------------------------------------------- plumbing
@@ -127,7 +142,10 @@ class EditorController extends ChangeNotifier {
   void selectClip(int index) {
     if (index < 0 || index >= _project.clips.length) return;
     _selection = EditorSelection(
-        kind: LaneKind.video, id: _project.clips[index].id, index: index);
+      kind: LaneKind.video,
+      id: _project.clips[index].id,
+      index: index,
+    );
     notifyListeners();
   }
 
@@ -175,25 +193,50 @@ class EditorController extends ChangeNotifier {
   }
 
   void setZoom(double pps) {
-    pixelsPerSecond.value =
-        pps.clamp(kMinPixelsPerSecond, kMaxPixelsPerSecond);
+    pixelsPerSecond.value = pps.clamp(kMinPixelsPerSecond, kMaxPixelsPerSecond);
   }
 
   // ---------------------------------------------------------- main track
 
+  /// Brings a picked file into the app's own storage and returns its new
+  /// path.
+  ///
+  /// A gallery path is not a promise. The user can delete the photo, Android
+  /// can evict the cache copy the picker hands over for a cloud item, and a
+  /// project pointing at either opens black — every tool then acts on a frame
+  /// that is not there, which is what "nothing works any more" looks like
+  /// from the outside. One copy at import is what keeps a project working,
+  /// the same thing the watermark already does.
+  ///
+  /// A file that is already ours is left where it is, and a copy that fails —
+  /// a full disk — falls back to the original rather than losing the import.
+  Future<String> _keep(String sourcePath) async {
+    try {
+      final dir = await _repo.mediaDir();
+      if (sourcePath.startsWith(dir.path)) return sourcePath;
+      return await MediaLibrary.instance.materialise(sourcePath, dir);
+    } catch (e) {
+      debugPrint('import: keeping $sourcePath where it is ($e)');
+      return sourcePath;
+    }
+  }
+
   Future<void> addMedia(List<String> paths, {int? at}) async {
     setBusy('Importing ${paths.length} item${paths.length == 1 ? '' : 's'}');
     final clips = <VideoClip>[];
-    for (final path in paths) {
+    for (final source in paths) {
+      final path = await _keep(source);
       final info = await MediaProbe.probe(path);
-      clips.add(VideoClip(
-        path: path,
-        isImage: info.isImage,
-        hasAudio: info.hasAudio,
-        sourceDuration: info.duration,
-        sourceWidth: info.displayWidth,
-        sourceHeight: info.displayHeight,
-      ));
+      clips.add(
+        VideoClip(
+          path: path,
+          isImage: info.isImage,
+          hasAudio: info.hasAudio,
+          sourceDuration: info.duration,
+          sourceWidth: info.displayWidth,
+          sourceHeight: info.displayHeight,
+        ),
+      );
     }
     setBusy(null);
     edit(() {
@@ -215,9 +258,10 @@ class EditorController extends ChangeNotifier {
     }
     edit(() {
       final cutInSource = Duration(
-          microseconds:
-              clip.trimStart.inMicroseconds +
-                  (localOffset.inMicroseconds * clip.speed).round());
+        microseconds:
+            clip.trimStart.inMicroseconds +
+            (localOffset.inMicroseconds * clip.speed).round(),
+      );
       final right = clip.copyWith()
         ..trimStart = cutInSource
         ..trimEnd = clip.trimEnd
@@ -227,7 +271,10 @@ class EditorController extends ChangeNotifier {
       clip.transitionType = TransitionType.none;
       _project.clips.insert(index + 1, right);
       _selection = EditorSelection(
-          kind: LaneKind.video, id: right.id, index: index + 1);
+        kind: LaneKind.video,
+        id: right.id,
+        index: index + 1,
+      );
     });
     return true;
   }
@@ -240,13 +287,60 @@ class EditorController extends ChangeNotifier {
     });
   }
 
+  /// Rebuild one clip as the run of segments [keep] describes, in source
+  /// time. Used by AI Cut, which works out which stretches are worth keeping
+  /// and hands the rest back as a single edit the user can undo in one step.
+  ///
+  /// Segments shorter than [kMinClipDuration] are dropped rather than added
+  /// as clips the timeline cannot show. Returns how many clips replaced the
+  /// original, or 0 when nothing usable was left.
+  int replaceClipWithSegments(int index, List<(Duration, Duration)> keep) {
+    if (index < 0 || index >= _project.clips.length) return 0;
+    final source = _project.clips[index];
+    final speed = source.speed;
+    final usable = [
+      for (final (from, to) in keep)
+        if ((to - from).inMicroseconds / speed >=
+            kMinClipDuration.inMicroseconds)
+          (from, to),
+    ];
+    if (usable.isEmpty) return 0;
+    edit(() {
+      final rebuilt = <VideoClip>[];
+      for (var i = 0; i < usable.length; i++) {
+        final (from, to) = usable[i];
+        final part = source.copyWith()
+          ..trimStart = from
+          ..trimEnd = to
+          // Only the last piece keeps the transition into whatever followed;
+          // the joins this cut created are hard cuts, which is the point.
+          ..transitionType = i == usable.length - 1
+              ? source.transitionType
+              : TransitionType.none
+          ..transitionDuration = source.transitionDuration;
+        rebuilt.add(part);
+      }
+      _project.clips.removeAt(index);
+      _project.clips.insertAll(index, rebuilt);
+      _selection = EditorSelection(
+        kind: LaneKind.video,
+        id: rebuilt.first.id,
+        index: index,
+      );
+    });
+    return usable.length;
+  }
+
   void duplicateClip(int index) {
     if (index < 0 || index >= _project.clips.length) return;
     edit(() {
       final copy = _project.clips[index].copyWith();
       _project.clips.insert(index + 1, copy);
-      _selection =
-          EditorSelection(kind: LaneKind.video, id: copy.id, index: index + 1);
+      _selection = EditorSelection(
+        kind: LaneKind.video,
+        id: copy.id,
+        index: index + 1,
+      );
     });
   }
 
@@ -260,7 +354,12 @@ class EditorController extends ChangeNotifier {
 
   /// Live trim: called continuously while a handle is dragged, so it only
   /// records history on the first call of a gesture.
-  void trimClip(int index, {Duration? start, Duration? end, bool record = false}) {
+  void trimClip(
+    int index, {
+    Duration? start,
+    Duration? end,
+    bool record = false,
+  }) {
     if (index < 0 || index >= _project.clips.length) return;
     final clip = _project.clips[index];
     edit(record: record, () {
@@ -284,13 +383,18 @@ class EditorController extends ChangeNotifier {
         clip.trimEnd = d;
       } else {
         clip.trimEnd = (clip.trimStart + d).clamp(
-            clip.trimStart + kMinClipDuration, clip.sourceDuration);
+          clip.trimStart + kMinClipDuration,
+          clip.sourceDuration,
+        );
       }
     });
   }
 
-  void updateClip(int index, void Function(VideoClip) mutate,
-      {bool record = true}) {
+  void updateClip(
+    int index,
+    void Function(VideoClip) mutate, {
+    bool record = true,
+  }) {
     if (index < 0 || index >= _project.clips.length) return;
     edit(record: record, () => mutate(_project.clips[index]));
   }
@@ -356,8 +460,9 @@ class EditorController extends ChangeNotifier {
     return layer;
   }
 
-  Future<OverlayLayer?> addOverlay(String path) async {
+  Future<OverlayLayer?> addOverlay(String source) async {
     setBusy('Adding overlay');
+    final path = await _keep(source);
     final info = await MediaProbe.probe(path);
     setBusy(null);
     final layer = OverlayLayer(
@@ -379,9 +484,13 @@ class EditorController extends ChangeNotifier {
     return layer;
   }
 
-  Future<AudioLayer?> addAudio(String path, {AudioKind kind = AudioKind.music,
-      String? title}) async {
+  Future<AudioLayer?> addAudio(
+    String source, {
+    AudioKind kind = AudioKind.music,
+    String? title,
+  }) async {
     setBusy('Loading audio');
+    final path = await _keep(source);
     final info = await MediaProbe.probe(path);
     setBusy(null);
     final remaining = totalDuration - position.value;
@@ -403,19 +512,30 @@ class EditorController extends ChangeNotifier {
     return layer;
   }
 
-  void updateLayer<T extends TimelineLayer>(T layer, void Function(T) mutate,
-      {bool record = true}) {
+  void updateLayer<T extends TimelineLayer>(
+    T layer,
+    void Function(T) mutate, {
+    bool record = true,
+  }) {
     edit(record: record, () => mutate(layer));
   }
 
-  void moveLayer(TimelineLayer layer, Duration newStart, {bool record = false}) {
+  void moveLayer(
+    TimelineLayer layer,
+    Duration newStart, {
+    bool record = false,
+  }) {
     edit(record: record, () {
       layer.start = newStart < Duration.zero ? Duration.zero : newStart;
     });
   }
 
-  void resizeLayer(TimelineLayer layer,
-      {Duration? start, Duration? end, bool record = false}) {
+  void resizeLayer(
+    TimelineLayer layer, {
+    Duration? start,
+    Duration? end,
+    bool record = false,
+  }) {
     edit(record: record, () {
       if (start != null) {
         final maxStart = layer.end - kMinClipDuration;
@@ -424,8 +544,10 @@ class EditorController extends ChangeNotifier {
         layer.start = s;
       }
       if (end != null) {
-        final e = end.clamp(layer.start + kMinClipDuration,
-            const Duration(hours: 6));
+        final e = end.clamp(
+          layer.start + kMinClipDuration,
+          const Duration(hours: 6),
+        );
         layer.duration = e - layer.start;
       }
     });
@@ -494,46 +616,20 @@ class EditorController extends ChangeNotifier {
     return true;
   }
 
-  /// Probe [paths], then let the template lay them out.
-  ///
-  /// This replaces the timeline wholesale, so it is only offered on a project
-  /// the user has just started or has explicitly chosen to reset.
-  Future<void> applyTemplate(VideoTemplate template, List<String> paths) async {
-    if (paths.isEmpty) return;
-    setBusy('Building ${template.name}');
-    final media = <VideoClip>[];
-    for (final path in paths) {
-      final info = await MediaProbe.probe(path);
-      media.add(VideoClip(
-        path: path,
-        isImage: info.isImage,
-        hasAudio: info.hasAudio,
-        sourceDuration: info.duration,
-        sourceWidth: info.displayWidth,
-        sourceHeight: info.displayHeight,
-      ));
-    }
-    setBusy(null);
-    edit(() {
-      TemplateApplier.apply(
-          template: template, project: _project, media: media);
-      _selection = const EditorSelection.none();
-    });
-    position.value = Duration.zero;
-    await saveNow();
-  }
-
   /// Re-cut the timeline the user already has with [template]'s pacing, moves
   /// and titles, reusing the clips on the track as the template's media.
   ///
-  /// Like [applyTemplate] this replaces the timeline, so it goes through
-  /// [edit] and stays one undo step away.
+  /// This replaces the timeline wholesale, so it goes through [edit] and
+  /// stays one undo step away.
   Future<void> applyTemplateToCurrentMedia(VideoTemplate template) async {
     if (_project.clips.isEmpty) return;
     final media = _project.clips.map((c) => c.copyWith()).toList();
     edit(() {
       TemplateApplier.apply(
-          template: template, project: _project, media: media);
+        template: template,
+        project: _project,
+        media: media,
+      );
       _selection = const EditorSelection.none();
     });
     position.value = Duration.zero;
@@ -619,7 +715,8 @@ class EditorController extends ChangeNotifier {
     if (overlay != null && p == KeyframeProperty.cornerRadius) {
       return overlay.cornerRadius;
     }
-    final t = selectedText?.transform ??
+    final t =
+        selectedText?.transform ??
         selectedSticker?.transform ??
         selectedOverlay?.transform;
     if (t == null) return 0;
@@ -645,11 +742,11 @@ class EditorController extends ChangeNotifier {
     final props = only != null
         ? [only]
         : (owner.hasKeyframes
-            ? owner.keyframes.entries
-                .where((e) => e.value.isNotEmpty)
-                .map((e) => e.key)
-                .toList()
-            : availableProperties.take(3).toList());
+              ? owner.keyframes.entries
+                    .where((e) => e.value.isNotEmpty)
+                    .map((e) => e.key)
+                    .toList()
+              : availableProperties.take(3).toList());
 
     edit(() {
       for (final p in props) {
@@ -675,7 +772,8 @@ class EditorController extends ChangeNotifier {
     if (target == null) return false;
     final (owner, local) = target;
     if (owner.keyframeTimes.every(
-        (t) => (t - local).abs() > KeyframeTrack.snapTolerance)) {
+      (t) => (t - local).abs() > KeyframeTrack.snapTolerance,
+    )) {
       return false;
     }
     edit(() => owner.removeKeyframesAt(local));
@@ -717,8 +815,9 @@ class EditorController extends ChangeNotifier {
     final target = keyframeTarget;
     if (target == null) return false;
     final (owner, local) = target;
-    return owner.keyframeTimes
-        .any((t) => (t - local).abs() <= KeyframeTrack.snapTolerance);
+    return owner.keyframeTimes.any(
+      (t) => (t - local).abs() <= KeyframeTrack.snapTolerance,
+    );
   }
 
   /// Every detected beat on the timeline, in master-timeline time.
@@ -775,8 +874,10 @@ class EditorController extends ChangeNotifier {
   }
 
   Future<String?> readSrtFile() async {
-    final picked = await MediaLibrary.instance
-        .pickFiles(allowMultiple: false, extensions: ['srt', 'vtt', 'txt']);
+    final picked = await MediaLibrary.instance.pickFiles(
+      allowMultiple: false,
+      extensions: ['srt', 'vtt', 'txt'],
+    );
     final path = picked.firstOrNull?.filePath;
     if (path == null) return null;
     try {

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,9 +12,9 @@ import '../../core/utils/responsive.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/layers.dart';
 import '../../data/services/clip_operations.dart';
+import '../../data/services/cutout_service.dart';
 import '../../data/services/media_library.dart';
 import '../../data/models/project.dart';
-import '../../data/models/template.dart';
 import '../../state/editor_controller.dart';
 import '../../state/preview_engine.dart';
 import '../export/export_screen.dart';
@@ -22,7 +23,9 @@ import 'panels/animation_panel.dart';
 import 'panels/audio_panel.dart';
 import 'panels/canvas_panels.dart';
 import 'panels/clip_panels.dart';
+import 'panels/clip_tool_panels.dart';
 import 'panels/color_panels.dart';
+import 'panels/color_tool_tabs.dart';
 import 'panels/effects_panel.dart';
 import 'panels/filter_panel.dart';
 import 'panels/effect_panels.dart';
@@ -36,7 +39,6 @@ import 'panels/voiceover_panel.dart';
 import 'panels/watermark_panel.dart';
 import 'preview/preview_stage.dart';
 import 'timeline/timeline_view.dart';
-import 'toolbar/category_bar.dart';
 import 'toolbar/editor_toolbar.dart';
 import '../widgets/panel_shell.dart';
 
@@ -70,24 +72,19 @@ enum _Panel {
   soundLibrary,
   textToSpeech,
   captions,
+  opacity,
+  ease,
+  voiceEffect,
+  cutout,
 }
 
 /// The editing surface: preview on top, timeline in the middle, contextual
 /// tools at the bottom.
 class EditorScreen extends StatefulWidget {
-  const EditorScreen({
-    super.key,
-    required this.project,
-    this.initialMedia,
-    this.template,
-  });
+  const EditorScreen({super.key, required this.project, this.initialMedia});
 
   final Project project;
   final List<String>? initialMedia;
-
-  /// When set, the initial media is laid out by this template instead of
-  /// being appended to the timeline.
-  final VideoTemplate? template;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -101,7 +98,6 @@ class _EditorScreenState extends State<EditorScreen> {
   int _transitionIndex = 0;
 
   /// Which family of tools the bar along the bottom is pointing at.
-  ToolCategory _category = ToolCategory.trim;
 
   /// Panels whose every control acts on one clip or one layer. They are the
   /// ones that need the playhead kept on what they are editing — see
@@ -135,14 +131,11 @@ class _EditorScreenState extends State<EditorScreen> {
     _editor.addListener(_onSelectionChanged);
     final media = widget.initialMedia;
     if (media != null && media.isNotEmpty) {
-      final template = widget.template;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (template != null) {
-          _editor.applyTemplate(template, media);
-        } else {
-          _import(media);
-        }
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _import(media));
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _warnAboutMissingMedia(),
+      );
     }
   }
 
@@ -158,6 +151,29 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _import(List<String> paths) async {
     await _editor.addMedia(paths);
     await _editor.saveNow();
+  }
+
+  /// Says so when a project's media is not where it was left.
+  ///
+  /// Imports are copied into the app's own storage now, but a project made
+  /// before that — or one whose copy was cleared with the app's data — opens
+  /// on a black canvas, and then every tool looks broken rather than
+  /// pointed at a file that is gone. One line explains the whole screen.
+  Future<void> _warnAboutMissingMedia() async {
+    final paths = <String>{
+      for (final c in _editor.project.clips) c.path,
+      for (final o in _editor.project.overlays) o.path,
+    };
+    var missing = 0;
+    for (final path in paths) {
+      if (!await File(path).exists()) missing++;
+    }
+    if (missing == 0 || !mounted) return;
+    _toast(
+      missing == 1
+          ? "1 clip's file is missing — replace it to keep editing"
+          : '$missing files are missing — replace those clips to keep editing',
+    );
   }
 
   // ---------------------------------------------------------------- layout
@@ -232,14 +248,25 @@ class _EditorScreenState extends State<EditorScreen> {
         ? EditorToolbar(
             editor: _editor,
             onAction: _handle,
-            category: _category,
             axis: wide ? Axis.vertical : Axis.horizontal,
           )
         : KeyedSubtree(key: _panelKey, child: _buildPanel());
 
+    /// A sheet's rounded top corners cut two notches out of it, and what
+    /// belongs behind them is whatever strip the sheet is docked under —
+    /// the timeline in the ordinary layout, the preview's own fill once the
+    /// keyboard has taken the timeline away. Painting the wrong one is what
+    /// leaves two coloured shoulders sticking out past the corners.
+    Widget docked(Color behind) =>
+        _panel == _Panel.none ? tools : ColoredBox(color: behind, child: tools);
+
     final preview = Padding(
       padding: EdgeInsets.symmetric(horizontal: r.dp(12), vertical: r.vp(6)),
-      child: PreviewStage(watermarkFocus: _panel == _Panel.watermark),
+      child: PreviewStage(
+        watermarkFocus: _panel == _Panel.watermark,
+        markKey: _watermarkKey,
+        onEditWatermark: () => setState(() => _panel = _Panel.watermark),
+      ),
     );
 
     final timeline = Container(
@@ -247,6 +274,7 @@ class _EditorScreenState extends State<EditorScreen> {
       child: TimelineView(
         editor: _editor,
         onAddMedia: _pickMoreMedia,
+        onScrubStart: _engine.pause,
         onTransitionTap: (i) {
           _editor.selectClip(i);
           setState(() {
@@ -275,24 +303,9 @@ class _EditorScreenState extends State<EditorScreen> {
       },
     );
 
-    // The bar along the very bottom: it decides which set of tools the strip
-    // above the timeline is showing. It stands down while a panel is open —
-    // the panel is what the bottom of the screen is for then.
+    // The tool strip stands down while a panel is open — the panel is what
+    // the bottom of the screen is for then.
     final showBars = _panel == _Panel.none;
-    final categoryBar = CategoryBar(
-      selected: _category,
-      onSelected: (c) {
-        // A selected overlay lane takes the strip over with its own tools, so
-        // switching family has to let go of it — otherwise the tap looks like
-        // it did nothing. A main-track clip stays selected: the categories
-        // are all about the clip.
-        if (!_editor.selection.isEmpty && !_editor.selection.isClip) {
-          _editor.clearSelection();
-        }
-        setState(() => _category = c);
-      },
-    );
-    final categoryHeight = showBars ? CategoryBar.heightFor(context) : 0.0;
 
     // What the strips below the preview will take, so the preview knows what
     // is left and the whole column knows whether it still fits.
@@ -301,9 +314,12 @@ class _EditorScreenState extends State<EditorScreen> {
     // preview has to give up — the same amount every time, which is the point:
     // the video does not resize as the user moves along the toolbar.
     final toolsHeight = _panel == _Panel.none
-        ? EditorToolbar.heightFor(context, selected: !_editor.selection.isEmpty)
-        : math.min(PanelShell.kSheetHeight, r.height * (r.isShort ? 0.42 : 0.5))
-            + math.max(r.viewPadding.bottom, 8);
+        ? EditorToolbar.heightFor(context)
+        : math.min(
+                PanelShell.kSheetHeight,
+                r.height * (r.isShort ? 0.42 : 0.5),
+              ) +
+              math.max(r.viewPadding.bottom, 8);
 
     // While the keyboard is up, a panel with a field in it is the only thing
     // the user can reach. `constraints` is the honest measure of what is left
@@ -328,7 +344,8 @@ class _EditorScreenState extends State<EditorScreen> {
             // controls need and the preview keeps the rest.
             ConstrainedBox(
               constraints: BoxConstraints(maxHeight: panelHeight),
-              child: tools,
+              // The preview sits directly above, on the page's own fill.
+              child: docked(AppColors.surface),
             ),
           ],
         ),
@@ -362,7 +379,8 @@ class _EditorScreenState extends State<EditorScreen> {
                               constraints: BoxConstraints(
                                 maxHeight: constraints.maxHeight,
                               ),
-                              child: tools,
+                              // Nothing above it in the rail but the page.
+                              child: docked(AppColors.surface),
                             ),
                           ),
                   ),
@@ -372,7 +390,6 @@ class _EditorScreenState extends State<EditorScreen> {
             header,
             SizedBox(height: timelineHeight, child: timeline),
             if (_editor.isBusy) _busyBar(safeBottom: !showBars),
-            if (showBars) categoryBar,
           ],
         ),
       );
@@ -380,11 +397,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     return _fit(
       constraints,
-      headerHeight +
-          timelineHeight +
-          toolsHeight +
-          categoryHeight +
-          _kMinPreviewHeight,
+      headerHeight + timelineHeight + toolsHeight + _kMinPreviewHeight,
       Column(
         children: [
           Expanded(child: preview),
@@ -393,9 +406,10 @@ class _EditorScreenState extends State<EditorScreen> {
           // the row of actions is right next to the clip it acts on.
           if (showBars) tools,
           SizedBox(height: timelineHeight, child: timeline),
-          if (!showBars) tools,
+          // The timeline is what the sheet is docked under here, so that is
+          // what shows through its rounded corners.
+          if (!showBars) docked(AppColors.timelineBg),
           if (_editor.isBusy) _busyBar(safeBottom: !showBars),
-          if (showBars) categoryBar,
         ],
       ),
     );
@@ -406,6 +420,10 @@ class _EditorScreenState extends State<EditorScreen> {
   /// that move; without one the panel is rebuilt from scratch and loses the
   /// tab it was on, its scroll position and anything it had loaded.
   final GlobalKey _panelKey = GlobalKey();
+
+  /// Rides on the watermark as it is drawn on the canvas, so a tap there can
+  /// be told from a tap on the video and open the mark's own panel.
+  final GlobalKey _watermarkKey = GlobalKey();
 
   /// The preview may be squeezed, but not to nothing.
   static const double _kMinPreviewHeight = 88;
@@ -427,20 +445,10 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  /// How tall the timeline has to be for the lanes it is showing. Its rows
-  /// are a fixed density — a ruler, a 56pt video track, 26pt lanes — so this
-  /// is not scaled to the window: shrinking the box would only clip a lane.
-  /// When the window cannot spare the room, [_fit] scrolls instead.
-  double _timelineHeight() {
-    final p = _editor.project;
-    var h = 118.0;
-    if (_editor.keyframeTarget?.$1.hasKeyframes ?? false) h += 16;
-    if (p.overlays.isNotEmpty) h += 30;
-    if (p.texts.isNotEmpty) h += 30;
-    if (p.stickers.isNotEmpty) h += 30;
-    if (p.audios.isNotEmpty) h += 30;
-    return h.clamp(118.0, 240.0);
-  }
+  /// How tall the timeline has to be for the lanes it is showing. The number
+  /// belongs to the widget that draws those rows — asking it is what keeps
+  /// the box from reserving room for rows that are not there.
+  double _timelineHeight() => TimelineView.heightFor(_editor);
 
   /// The bar rebuilds with the editor so a rename or ratio change shows up
   /// immediately — it now sits outside the body's [AnimatedBuilder].
@@ -463,6 +471,7 @@ class _EditorScreenState extends State<EditorScreen> {
       toolbarHeight: height,
       titleSpacing: 0,
       leading: IconButton(
+        tooltip: 'Back — the project saves itself',
         icon: Icon(Icons.arrow_back, size: r.ic(21)),
         onPressed: () async {
           final navigator = Navigator.of(context);
@@ -471,25 +480,28 @@ class _EditorScreenState extends State<EditorScreen> {
           navigator.pop();
         },
       ),
-      title: GestureDetector(
-        onTap: _renameProject,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(
-                _editor.project.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: r.sp(13.5),
-                  fontWeight: FontWeight.w600,
+      title: Tooltip(
+        message: 'Rename project',
+        child: GestureDetector(
+          onTap: _renameProject,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _editor.project.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: r.sp(13.5),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-            SizedBox(width: r.dp(5)),
-            Icon(Icons.edit, size: r.ic(12), color: AppColors.onAppBarDim),
-          ],
+              SizedBox(width: r.dp(5)),
+              Icon(Icons.edit, size: r.ic(12), color: AppColors.onAppBarDim),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -500,6 +512,9 @@ class _EditorScreenState extends State<EditorScreen> {
           child: InkWell(
             onTap: _export,
             borderRadius: BorderRadius.circular(11),
+            // The row inside is a picture-and-word, not a button, until this
+            // says so — a screen reader announced two loose labels.
+            excludeFromSemantics: true,
             child: Container(
               height: math.min(r.dp(33), height - 12),
               padding: EdgeInsets.symmetric(horizontal: r.dp(13)),
@@ -538,23 +553,29 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _ratioBadge() {
     final r = context.r;
-    return GestureDetector(
-      onTap: () => setState(() => _panel = _Panel.ratio),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: r.dp(9), vertical: r.dp(4)),
-        // Tinted off the bar's own foreground, not off a hue — the hues are
-        // tuned for the light page and go muddy on the dark bar.
-        decoration: BoxDecoration(
-          color: AppColors.onAppBar.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.onAppBar.withValues(alpha: 0.24)),
-        ),
-        child: Text(
-          _editor.project.ratio.label,
-          style: TextStyle(
-            fontSize: r.sp(10.5),
-            fontWeight: FontWeight.w700,
-            color: AppColors.onAppBar,
+    return Tooltip(
+      message: 'Canvas size — tap to change',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => setState(() => _panel = _Panel.ratio),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: r.dp(9), vertical: r.dp(4)),
+          // Tinted off the bar's own foreground, not off a hue — the hues are
+          // tuned for the light page and go muddy on the dark bar.
+          decoration: BoxDecoration(
+            color: AppColors.onAppBar.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: AppColors.onAppBar.withValues(alpha: 0.24),
+            ),
+          ),
+          child: Text(
+            _editor.project.ratio.label,
+            style: TextStyle(
+              fontSize: r.sp(10.5),
+              fontWeight: FontWeight.w700,
+              color: AppColors.onAppBar,
+            ),
           ),
         ),
       ),
@@ -609,6 +630,17 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _closePanel() => setState(() => _panel = _Panel.none);
 
+  /// The three colour tools swap in place inside the open sheet rather than
+  /// closing it and sending the user back to the tool strip: picking a look
+  /// and then nudging its contrast is one job, not two.
+  void _switchColorTool(ColorTool tool) => setState(() {
+    _panel = switch (tool) {
+      ColorTool.filter => _Panel.colorFilter,
+      ColorTool.effect => _Panel.filter,
+      ColorTool.adjust => _Panel.adjust,
+    };
+  });
+
   Widget _buildPanel() {
     final index = _editor.selectedClipIndex;
     switch (_panel) {
@@ -622,6 +654,33 @@ class _EditorScreenState extends State<EditorScreen> {
           index,
           (i) => VolumePanel(editor: _editor, index: i, onClose: _closePanel),
         );
+      case _Panel.opacity:
+        return _clipPanel(
+          index,
+          (i) => OpacityPanel(editor: _editor, index: i, onClose: _closePanel),
+        );
+      case _Panel.ease:
+        return _clipPanel(
+          index,
+          (i) => EasePanel(editor: _editor, index: i, onClose: _closePanel),
+        );
+      case _Panel.voiceEffect:
+        return _clipPanel(
+          index,
+          (i) =>
+              VoiceEffectPanel(editor: _editor, index: i, onClose: _closePanel),
+        );
+      case _Panel.cutout:
+        return _clipPanel(
+          index,
+          (i) => CutoutPanel(
+            editor: _editor,
+            index: i,
+            onClose: _closePanel,
+            onRunCutout: () => _runCutout(i),
+            onChroma: () => setState(() => _panel = _Panel.chroma),
+          ),
+        );
       case _Panel.colorFilter:
         return _colorPanel(
           index,
@@ -630,6 +689,7 @@ class _EditorScreenState extends State<EditorScreen> {
             clipIndex: i,
             overlay: o,
             onClose: _closePanel,
+            onTool: _switchColorTool,
           ),
         );
       case _Panel.filter:
@@ -640,6 +700,7 @@ class _EditorScreenState extends State<EditorScreen> {
             clipIndex: i,
             overlay: o,
             onClose: _closePanel,
+            onTool: _switchColorTool,
           ),
         );
       case _Panel.adjust:
@@ -650,6 +711,7 @@ class _EditorScreenState extends State<EditorScreen> {
             clipIndex: i,
             overlay: o,
             onClose: _closePanel,
+            onTool: _switchColorTool,
           ),
         );
       case _Panel.sort:
@@ -1053,6 +1115,42 @@ class _EditorScreenState extends State<EditorScreen> {
         if (_retargetToPlayheadClip()) setState(() => _panel = _Panel.speed);
       case ToolAction.volume:
         if (_retargetToPlayheadClip()) setState(() => _panel = _Panel.volume);
+      case ToolAction.opacity:
+        if (_retargetToPlayheadClip()) setState(() => _panel = _Panel.opacity);
+      case ToolAction.ease:
+        if (_retargetToPlayheadClip()) setState(() => _panel = _Panel.ease);
+      case ToolAction.voiceEffect:
+        if (_retargetToPlayheadClip()) {
+          setState(() => _panel = _Panel.voiceEffect);
+        }
+      case ToolAction.voiceEnhance:
+        final target = _targetClipIndex();
+        if (target < 0) {
+          _toast('Add a video or photo first');
+        } else {
+          _editor.updateClip(target, (c) => c.voiceEnhance = !c.voiceEnhance);
+          _toast(
+            _editor.project.clips[target].voiceEnhance
+                ? 'Voice enhance on — applied at export'
+                : 'Voice enhance off',
+          );
+        }
+      case ToolAction.enhance:
+        final target = _targetClipIndex();
+        if (target < 0) {
+          _toast('Add a video or photo first');
+        } else {
+          _editor.updateClip(target, (c) => c.enhance = !c.enhance);
+          _toast(
+            _editor.project.clips[target].enhance
+                ? 'Enhance on — applied at export'
+                : 'Enhance off',
+          );
+        }
+      case ToolAction.cutout:
+        if (_retargetToPlayheadClip()) setState(() => _panel = _Panel.cutout);
+      case ToolAction.aiCut:
+        await _aiCut(_targetClipIndex());
       case ToolAction.colorFilter:
         if (_retargetToPlayheadClip()) {
           setState(() => _panel = _Panel.colorFilter);
@@ -1112,6 +1210,7 @@ class _EditorScreenState extends State<EditorScreen> {
           _toast('Add a video or photo first');
         } else {
           _editor.deleteClip(target);
+          _toastUndo('Clip deleted');
         }
         _closePanel();
 
@@ -1137,7 +1236,10 @@ class _EditorScreenState extends State<EditorScreen> {
       case ToolAction.duplicateLayer:
         if (layer != null) _editor.duplicateLayer(layer);
       case ToolAction.deleteLayer:
-        if (layer != null) _editor.deleteLayer(layer);
+        if (layer != null) {
+          _editor.deleteLayer(layer);
+          _toastUndo('${_layerNoun(layer)} deleted');
+        }
         _closePanel();
     }
   }
@@ -1190,10 +1292,94 @@ class _EditorScreenState extends State<EditorScreen> {
           record: false,
         );
       }
+      if (!mounted) return;
       _editor.setBusy(null);
       if (beats.isNotEmpty) _toast('${beats.length} beats detected');
     }
     if (mounted) setState(() => _panel = _Panel.audio);
+  }
+
+  /// Drop the dead air out of a clip.
+  ///
+  /// The silences are found once, then inverted into the stretches worth
+  /// keeping and applied as a single edit — one undo puts the clip back.
+  Future<void> _aiCut(int index) async {
+    if (index < 0) return;
+    final clip = _editor.project.clips[index];
+    if (clip.isImage || !clip.hasAudio) {
+      _toast('AI Cut needs a clip with sound');
+      return;
+    }
+    _editor.setBusy('Finding the quiet parts…');
+    final silences = await ClipOperations.detectSilence(clip);
+    // The render outlives the screen when the user walks away mid-pass, and
+    // everything below here writes to a controller the screen disposed on its
+    // way out. Checking first is what stops "used after being disposed".
+    if (!mounted) return;
+    _editor.setBusy(null);
+    if (silences.isEmpty) {
+      _toast('Nothing quiet enough to cut');
+      return;
+    }
+    // Invert: everything between one silence ending and the next beginning.
+    final keep = <(Duration, Duration)>[];
+    var cursor = clip.trimStart;
+    for (final (from, to) in silences) {
+      if (from > cursor) keep.add((cursor, from));
+      cursor = to;
+    }
+    if (clip.trimEnd > cursor) keep.add((cursor, clip.trimEnd));
+
+    final removed =
+        clip.trimmedDuration -
+        keep.fold(Duration.zero, (sum, s) => sum + (s.$2 - s.$1));
+    final pieces = _editor.replaceClipWithSegments(index, keep);
+    if (pieces == 0) {
+      _toast('The whole clip is quiet — nothing left to keep');
+      return;
+    }
+    _toastUndo(
+      'Cut ${(removed.inMilliseconds / 1000).toStringAsFixed(1)}s '
+      'of silence into $pieces ${pieces == 1 ? 'clip' : 'clips'}',
+    );
+  }
+
+  /// Bake — or clear — the clip's cutout matte.
+  ///
+  /// The pass costs seconds, so it runs behind the editor's own busy bar with
+  /// a share rather than a spinner: a user who can see it moving waits, and a
+  /// user who cannot assumes the app has hung.
+  Future<void> _runCutout(int index) async {
+    if (index < 0 || index >= _editor.project.clips.length) return;
+    final clip = _editor.project.clips[index];
+    if (clip.hasCutout) {
+      _editor.updateClip(index, (c) => c.cutoutMattePath = null);
+      _toastUndo('Background put back');
+      return;
+    }
+    if (clip.isImage) {
+      _toast('Cutout needs a video clip');
+      return;
+    }
+    _editor.setBusy('Cutting out the subject… 0%');
+    final matte = await CutoutService.bakeMatte(
+      clip,
+      onProgress: (p) {
+        if (!mounted) return;
+        _editor.setBusy('Cutting out the subject… ${(p * 100).round()}%');
+      },
+    );
+    // The render outlives the screen when the user walks away mid-pass, and
+    // everything below here writes to a controller the screen disposed on its
+    // way out. Checking first is what stops "used after being disposed".
+    if (!mounted) return;
+    _editor.setBusy(null);
+    if (matte == null) {
+      _toast('No one found in this clip to cut out');
+      return;
+    }
+    _editor.updateClip(index, (c) => c.cutoutMattePath = matte);
+    _toastUndo('Background cut out');
   }
 
   Future<void> _reverseClip(int index) async {
@@ -1205,6 +1391,10 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     _editor.setBusy('Reversing clip…');
     final path = await ClipOperations.reverse(clip);
+    // The render outlives the screen when the user walks away mid-pass, and
+    // everything below here writes to a controller the screen disposed on its
+    // way out. Checking first is what stops "used after being disposed".
+    if (!mounted) return;
     _editor.setBusy(null);
     if (path == null) {
       _toast('Reverse failed');
@@ -1222,12 +1412,23 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _freezeFrame(int index) async {
     if (index < 0) return;
     final clip = _editor.project.clips[index];
+    // A photo is already one frame held for a while, so there is nothing to
+    // freeze out of it. Saying so is the point: the tool used to swallow the
+    // tap on a photo and read as a dead button.
+    if (clip.isImage) {
+      _toast('A photo is already a still — use Duration to hold it longer');
+      return;
+    }
     final local = _editor.position.value - _editor.project.clipStart(index);
     _editor.setBusy('Freezing frame…');
     final path = await ClipOperations.freezeFrame(
       clip,
       clip.sourcePositionFor(local),
     );
+    // The render outlives the screen when the user walks away mid-pass, and
+    // everything below here writes to a controller the screen disposed on its
+    // way out. Checking first is what stops "used after being disposed".
+    if (!mounted) return;
     _editor.setBusy(null);
     if (path == null) {
       _toast('Could not capture the frame');
@@ -1245,6 +1446,10 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     _editor.setBusy('Extracting audio…');
     final path = await ClipOperations.extractAudio(clip);
+    // The render outlives the screen when the user walks away mid-pass, and
+    // everything below here writes to a controller the screen disposed on its
+    // way out. Checking first is what stops "used after being disposed".
+    if (!mounted) return;
     _editor.setBusy(null);
     if (path == null) {
       _toast('Extract failed');
@@ -1263,7 +1468,10 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _replaceClip(int index) async {
-    if (index < 0) return;
+    if (index < 0) {
+      _toast('Add a video or photo first');
+      return;
+    }
     final paths = await Navigator.push<List<String>>(
       context,
       MaterialPageRoute(
@@ -1345,6 +1553,39 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
       );
   }
+
+  /// A message with the way back attached.
+  ///
+  /// Deleting is one tap and it takes a clip — with everything graded onto
+  /// it — off the timeline. Undo has always been in the header, but a user
+  /// who has just lost something is looking at the gap, not at the toolbar,
+  /// so the way out is offered where the loss is announced.
+  void _toastUndo(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message, style: const TextStyle(fontSize: 12.5)),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Undo',
+            textColor: AppColors.accentDim,
+            onPressed: () {
+              if (_editor.canUndo) _editor.undo();
+            },
+          ),
+        ),
+      );
+  }
+
+  String _layerNoun(TimelineLayer layer) => switch (layer) {
+    TextLayer() => 'Text',
+    StickerLayer() => 'Sticker',
+    OverlayLayer() => 'Overlay',
+    AudioLayer() => 'Audio',
+    _ => 'Layer',
+  };
 }
 
 /// Distraction-free playback with a scrub bar.

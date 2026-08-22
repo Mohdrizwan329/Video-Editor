@@ -20,11 +20,24 @@ class RasterizedLayer {
     required this.height,
     required this.centerX,
     required this.centerY,
+    this.frameCount = 1,
+    this.frameRate = 0,
   });
 
+  /// The file the renderer feeds in. For a sequence this is a `%03d` pattern
+  /// rather than a single file, which is what FFmpeg's image demuxer wants.
   final String path;
   final int width;
   final int height;
+
+  /// Frames in the loop. One means a still PNG, which is the old path and
+  /// still what every static layer takes.
+  final int frameCount;
+
+  /// The rate the loop is played back at. Only meaningful for a sequence.
+  final int frameRate;
+
+  bool get isSequence => frameCount > 1;
 
   /// Centre of the layer in output-pixel coordinates.
   final double centerX;
@@ -175,18 +188,62 @@ class OverlayRasterizer {
 
   /// Bakes the project's FX texture at full output size. [intensity] is folded
   /// into the pattern's alpha here, exactly as the preview folds it in.
+  ///
+  /// A still effect is one PNG, as it always was. A moving one is its whole
+  /// loop, one PNG per frame, which the renderer then plays on repeat — the
+  /// cost is the length of the *loop*, not the length of the video, so a
+  /// ten-minute export of falling snow bakes the same forty frames a
+  /// two-second one does.
   Future<RasterizedLayer?> rasterizeFx(
     FxPreset preset,
     double intensity, {
     required int outWidth,
     required int outHeight,
-  }) {
-    if (preset.isNone || intensity <= 0) return Future.value(null);
-    return _rasterizeFullCanvas(
-      'fx_${preset.id}',
-      outWidth,
-      outHeight,
-      (canvas, size) => EffectPainter.paintFx(canvas, size, preset, intensity),
+  }) async {
+    if (preset.isNone || intensity <= 0) return null;
+    if (!preset.isAnimated) {
+      return _rasterizeFullCanvas(
+        'fx_${preset.id}',
+        outWidth,
+        outHeight,
+        (canvas, size) =>
+            EffectPainter.paintFx(canvas, size, preset, intensity),
+      );
+    }
+    if (outWidth <= 0 || outHeight <= 0) return null;
+
+    final dir = await _dir();
+    final stem = 'fx_${preset.id}';
+    // An earlier export of the same effect at a longer loop would leave
+    // frames behind that the `%03d` pattern would happily pick up, splicing
+    // two takes together.
+    await for (final f in dir.list()) {
+      final name = f.uri.pathSegments.last;
+      if (f is File && name.startsWith('${stem}_')) await f.delete();
+    }
+
+    final size = Size(outWidth.toDouble(), outHeight.toDouble());
+    final frames = preset.frameCount;
+    for (var i = 0; i < frames; i++) {
+      final recorder = ui.PictureRecorder();
+      EffectPainter.paintFx(
+          Canvas(recorder), size, preset, intensity, frame: i);
+      final picture = recorder.endRecording();
+      final bytes = await pictureToPng(picture, outWidth, outHeight);
+      picture.dispose();
+      if (bytes == null) return null;
+      await File('${dir.path}/${stem}_${i.toString().padLeft(3, '0')}.png')
+          .writeAsBytes(bytes, flush: true);
+    }
+
+    return RasterizedLayer(
+      path: '${dir.path}/${stem}_%03d.png',
+      width: outWidth,
+      height: outHeight,
+      centerX: outWidth / 2,
+      centerY: outHeight / 2,
+      frameCount: frames,
+      frameRate: preset.frameRate,
     );
   }
 

@@ -319,11 +319,16 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           // a dark box of its own, so the two screens read as one app.
           backgroundColor: AppColors.surface,
           appBar: _appBar(context),
-          body: Column(
-            children: [
-              Expanded(child: _stage()),
-              _tools(context),
-            ],
+          // The tools need to know what the window can spare before they
+          // decide how tall to be, and `constraints` is the only honest
+          // measure of that.
+          body: LayoutBuilder(
+            builder: (context, c) => Column(
+              children: [
+                Expanded(child: _stage()),
+                _tools(context, c.maxHeight),
+              ],
+            ),
           ),
         ),
       ),
@@ -781,22 +786,44 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
 
   // ------------------------------------------------------------------ tools
 
-  Widget _tools(BuildContext context) {
+  /// What the photo keeps whatever the open tool asks for. Below this there
+  /// is not enough picture left to judge an edit against.
+  static const double _kMinStageHeight = 260;
+
+  Widget _tools(BuildContext context, double available) {
     final r = context.r;
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        // The same hairline the editor's toolbar draws now that the stage
-        // above shares this fill.
-        border: Border(top: BorderSide(color: AppColors.divider)),
+        // The app bar's colour, the same line the editor's sheets are edged
+        // with — the stage above shares this fill, so the line is what marks
+        // where the picture ends and the tools begin.
+        border: Border(
+          top: BorderSide(color: AppColors.appBar, width: 1.2),
+        ),
       ),
       child: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              height: math.min(r.vp(_tall ? 212 : 178), r.height * 0.38),
+            // A ceiling, not a height: the panel is as tall as the controls
+            // in it and no taller, so a tool with one slider does not open
+            // the same box a preset grid needs and leave the bottom of it
+            // empty. Anything past the ceiling scrolls.
+            //
+            // The ceiling is what the window can actually spare rather than a
+            // number picked per tool — the fixed 178 was shorter than what
+            // Core, Markup, Retouch and Pixelate draw, so each of them hid a
+            // row behind a scroll while the photo above floated in white.
+            ConstrainedBox(
+              key: const ValueKey('photo-panel'),
+              constraints: BoxConstraints(
+                maxHeight: math.max(
+                  math.min(available - _kMinStageHeight, available * 0.46),
+                  r.vp(178),
+                ),
+              ),
               child: SingleChildScrollView(
                 child: switch (_tool) {
                   _Tool.core => _cropTools(),
@@ -819,12 +846,6 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       ),
     );
   }
-
-  /// The panels that carry a picker as well as sliders need the extra room.
-  bool get _tall =>
-      _tool == _Tool.text ||
-      _tool == _Tool.sticker ||
-      _tool == _Tool.watermark;
 
   /// The row of tools along the bottom. It takes its height from what is in
   /// it rather than a constant, so a large system font grows the row instead

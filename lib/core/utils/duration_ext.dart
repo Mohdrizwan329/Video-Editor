@@ -15,15 +15,6 @@ extension DurationFormat on Duration {
     return '$m:$s.$d';
   }
 
-  /// `hh:mm:ss.mmm` — what FFmpeg wants.
-  String get ffmpeg {
-    final h = inHours.toString().padLeft(2, '0');
-    final m = inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = inSeconds.remainder(60).toString().padLeft(2, '0');
-    final ms = inMilliseconds.remainder(1000).toString().padLeft(3, '0');
-    return '$h:$m:$s.$ms';
-  }
-
   double get seconds => inMicroseconds / 1000000.0;
 
   String get pretty {

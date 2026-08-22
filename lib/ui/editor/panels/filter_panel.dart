@@ -9,13 +9,18 @@ import '../../../data/models/video_clip.dart';
 import '../../../data/services/thumbnail_service.dart';
 import '../../../state/editor_controller.dart';
 import '../../widgets/panel_shell.dart';
+import 'color_tool_tabs.dart';
 import 'effects_panel.dart' show PresetTile, SwatchSource, hasTonalRange;
 
-/// The one-tap grade picker, modelled on the phone gallery editor's Filter
-/// tool: a single strip of the user's own frame graded every way the library
-/// knows, applied the moment it is tapped. Tapping the tile that is already
-/// on reveals its strength, so the common case — try looks until one fits —
-/// never has to walk past a slider.
+/// The one-tap grade picker, laid out the way the phone editors lay theirs
+/// out: strength, then a strip of the user's own frame graded every way the
+/// library knows, then the packs, then the tab bar onto the two sibling
+/// colour tools.
+///
+/// A look goes on the moment its tile is tapped, and its strength is on
+/// screen from that moment too — the row it lives in is held open by the
+/// prompt beforehand, so picking a look never shunts the strip up the sheet.
+/// The strip opens on whatever look the clip is already wearing.
 ///
 /// The effects sheet still carries the same grades under its Color tab
 /// alongside frames, FX and templates. This is the shortcut, not a rival:
@@ -27,10 +32,15 @@ class FilterPanel extends StatefulWidget {
     required this.onClose,
     this.clipIndex,
     this.overlay,
+    this.onTool,
   });
 
   final EditorController editor;
   final VoidCallback onClose;
+
+  /// Switches the sheet to one of the other two colour tools. Null leaves the
+  /// tab bar off, for a caller that has nowhere to switch to.
+  final ValueChanged<ColorTool>? onTool;
 
   /// Exactly one of these is set.
   final int? clipIndex;
@@ -50,9 +60,9 @@ class _FilterPanelState extends State<FilterPanel> {
 
   int _category = 0;
 
-  /// Revealed by tapping the active tile a second time, the way the phone's
-  /// filter row does it.
-  bool _showStrength = false;
+  /// The strip's own scroll, so the look a clip already carries can be put
+  /// on screen rather than left somewhere down a row of a hundred tiles.
+  final ScrollController _strip = ScrollController();
 
   /// The frame under the playhead, graded live behind every tile. Null until
   /// it lands, and left null for footage too flat to grade — there the tiles
@@ -77,10 +87,48 @@ class _FilterPanelState extends State<FilterPanel> {
     ];
   }
 
+  /// Edge of a tile, and the gap after it. The strip scrolls by these, so
+  /// they are shared with the builder rather than written out twice.
+  static const double _tile = 58;
+  static const double _gap = 10;
+  static const double _stripPad = 14;
+
   @override
   void initState() {
     super.initState();
     _loadFrame();
+    // After the first layout, so the strip has a viewport to centre against.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
+  }
+
+  @override
+  void dispose() {
+    _strip.dispose();
+    super.dispose();
+  }
+
+  /// Brings the live look into view. Opening the tool on a clip that is
+  /// already graded and showing the head of the library instead reads as
+  /// 'nothing is applied' — in a library this size the applied tile is
+  /// usually well off the right edge.
+  void _revealActive({int tries = 8}) {
+    if (!mounted) return;
+    // The sheet animates in, so the first frame after initState can land
+    // before the strip has a viewport to measure. Wait for the frame that
+    // gives it one rather than giving up on the first miss.
+    if (!_strip.hasClients || !_strip.position.hasContentDimensions) {
+      if (tries <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _revealActive(tries: tries - 1),
+      );
+      return;
+    }
+    final i = _items.indexWhere((f) => f.id == _filterId);
+    if (i < 0) return;
+    final viewport = _strip.position.viewportDimension;
+    final width = PresetTile.widthFor(_tile);
+    final centre = _stripPad + i * (width + _gap) + width / 2 - viewport / 2;
+    _strip.jumpTo(centre.clamp(0.0, _strip.position.maxScrollExtent));
   }
 
   @override
@@ -90,6 +138,7 @@ class _FilterPanelState extends State<FilterPanel> {
         old.overlay?.id != widget.overlay?.id) {
       _frame = null;
       _loadFrame();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
     }
   }
 
@@ -108,8 +157,10 @@ class _FilterPanelState extends State<FilterPanel> {
     } else {
       final at = overlay != null
           ? overlay.trimStart
-          : clip!.sourcePositionFor(widget.editor.position.value -
-              widget.editor.project.clipStart(widget.clipIndex!));
+          : clip!.sourcePositionFor(
+              widget.editor.position.value -
+                  widget.editor.project.clipStart(widget.clipIndex!),
+            );
       candidate = await ThumbnailService.instance.frame(path, at, height: 128);
       // A decode can fail on a seek past the last keyframe; the strip the
       // timeline already has is a better fallback than a gradient.
@@ -132,8 +183,11 @@ class _FilterPanelState extends State<FilterPanel> {
   }) {
     final overlay = widget.overlay;
     if (overlay != null) {
-      widget.editor
-          .updateLayer<OverlayLayer>(overlay, onOverlay, record: record);
+      widget.editor.updateLayer<OverlayLayer>(
+        overlay,
+        onOverlay,
+        record: record,
+      );
     } else {
       widget.editor.updateClip(widget.clipIndex!, onClip, record: record);
     }
@@ -141,13 +195,9 @@ class _FilterPanelState extends State<FilterPanel> {
   }
 
   void _pick(FilterPreset preset) {
-    if (preset.id == _filterId) {
-      // Second tap on the look that is already on: the strength control is
-      // what the user can still want from a tile they have already chosen.
-      setState(() => _showStrength = preset.id != 'none' && !_showStrength);
-      return;
-    }
-    _showStrength = false;
+    // Re-tapping the look that is already on does nothing: its strength is
+    // already on screen, which is the only thing left to want from it.
+    if (preset.id == _filterId) return;
     _apply(
       (c) {
         c.filterId = preset.id;
@@ -161,39 +211,29 @@ class _FilterPanelState extends State<FilterPanel> {
   }
 
   void _setIntensity(double v, {bool record = true}) => _apply(
-        (c) => c.filterIntensity = v,
-        (o) => o.filterIntensity = v,
-        record: record,
-      );
+    (c) => c.filterIntensity = v,
+    (o) => o.filterIntensity = v,
+    record: record,
+  );
 
   @override
   Widget build(BuildContext context) {
     final items = _items;
     final active = _filterId;
-    final showSlider = _showStrength && active != 'none';
 
     // A tile is a square over its name, and that name's line box grows with
     // the system font — measured through the text scaler rather than assumed,
     // the way the toolbar measures its own row. Assumed, a large system font
     // overflows the strip by a hair and stripes it.
-    const tile = 58.0;
     final stripHeight =
-        tile + 4 + MediaQuery.textScalerOf(context).scale(9.5) * 1.6;
+        _tile + 4 + MediaQuery.textScalerOf(context).scale(9.5) * 1.6;
 
     return PanelShell(
       title: 'Filter',
       onClose: widget.onClose,
       onConfirm: widget.onClose,
-      onReset: () => _apply(
-        (c) {
-          c.filterId = 'none';
-          c.filterIntensity = 1;
-        },
-        (o) {
-          o.filterId = 'none';
-          o.filterIntensity = 1;
-        },
-      ),
+      // No reset icon: the head of the strip is 'Original', which is the
+      // same thing and is already under the user's thumb.
       // A grade is per-clip, so spreading it over the timeline is the way to
       // get the phone's one-video behaviour on a multi-clip project.
       applyToAll: widget.overlay != null
@@ -206,42 +246,42 @@ class _FilterPanelState extends State<FilterPanel> {
                 c.filterIntensity = intensity;
               });
             },
-      // The sheet is one height for every tool and scrolls the rest, so this
-      // column is built to need no scrolling: the strip is what the user
-      // came for, and a row they have to drag into view is a row they will
-      // not find. That is why strength takes the category row's place rather
-      // than sitting under the tiles — the two are never wanted at once, and
-      // stacked they push the strip off the bottom. [_StrengthRow] is built
-      // to the same height as the pills it stands in for, so the tiles do
-      // not jump as the user turns a look up and down.
+      // The order is the one a phone's filter tool uses, top to bottom: which
+      // of the two colour tools, how strong, which look, then which pack.
+      // The pill leads because it is the switch between the looks and the
+      // sliders, and strength follows because it belongs to the look already
+      // applied — the thing the user is looking at. Strength keeps a fixed
+      // row whether or not there is a look to fade, so picking one never
+      // shunts the strip up the sheet.
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 4),
-          if (showSlider)
-            _StrengthRow(
-              value: _intensity,
-              onChanged: (v) => _setIntensity(v, record: false),
-              onChangeEnd: _setIntensity,
-            )
-          else
-            ChipStrip(
-              labels: _categories,
-              selectedIndex: _category,
-              onSelected: (i) => setState(() => _category = i),
-            ),
-          const SizedBox(height: 8),
+          ColorToolPill(current: ColorTool.filter, onSelected: widget.onTool),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: _StrengthRow.kHeight,
+            child: active == 'none'
+                ? const _Hint('Tap a look to apply it')
+                : _StrengthRow(
+                    value: _intensity,
+                    onChanged: (v) => _setIntensity(v, record: false),
+                    onChangeEnd: _setIntensity,
+                  ),
+          ),
+          const SizedBox(height: 4),
           SizedBox(
             height: stripHeight,
             child: ListView.separated(
+              controller: _strip,
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: _stripPad),
               itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: _gap),
               itemBuilder: (context, i) {
                 final preset = items[i];
                 return PresetTile(
-                  size: tile,
+                  size: _tile,
                   label: preset.id == 'none' ? 'Original' : preset.name,
                   active: preset.id == active,
                   onTap: () => _pick(preset),
@@ -253,38 +293,56 @@ class _FilterPanelState extends State<FilterPanel> {
               },
             ),
           ),
-          if (!showSlider)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                active == 'none'
-                    ? 'Tap a look to apply it'
-                    : 'Tap ${FilterPreset.fromId(active).name} again for '
-                        'strength',
-                style: const TextStyle(
-                  fontSize: 9.5,
-                  color: AppColors.textDim,
-                ),
-              ),
-            ),
           const SizedBox(height: 6),
+          TextTabStrip(
+            labels: _categories,
+            selectedIndex: _category,
+            onSelected: (i) {
+              setState(() => _category = i);
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _revealActive(),
+              );
+            },
+          ),
+          const SizedBox(height: 4),
         ],
       ),
     );
   }
 }
 
+/// The line the strength row stands in when there is no look to fade.
+class _Hint extends StatelessWidget {
+  const _Hint(this.text);
 
-/// Strength on one line — name, track and value — so it fits the row the
-/// category pills leave behind. The panel-wide [AppSlider] stacks its label
-/// over its track, which is the right shape for a sheet of many sliders and
-/// the wrong one for a sheet with a single slider and no room to spare.
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 10.5, color: AppColors.textDim),
+      ),
+    );
+  }
+}
+
+/// Strength on one line — name, track and value.
+///
+/// The panel-wide [AppSlider] stacks its label over its track, which is the
+/// right shape for a sheet of many sliders and the wrong one for a sheet
+/// whose single slider has one row to live in.
 class _StrengthRow extends StatelessWidget {
   const _StrengthRow({
     required this.value,
     required this.onChanged,
     required this.onChangeEnd,
   });
+
+  /// Also the height of the hint that stands in for this row, so the strip
+  /// below sits at the same y whether or not a look is on.
+  static const double kHeight = 30;
 
   final double value;
   final ValueChanged<double> onChanged;
@@ -293,7 +351,7 @@ class _StrengthRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: ChipStrip.kHeight,
+      height: kHeight,
       child: Row(
         children: [
           const SizedBox(width: 16),

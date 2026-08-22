@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../data/models/adjustments.dart';
+import '../../../data/models/hsl_grade.dart';
 
 /// The second half of the live grade: gamma, the tone curve, sharpening,
 /// noise reduction and grain.
@@ -45,8 +46,9 @@ class GradeExtrasBox extends StatefulWidget {
   static Future<void> warmUp() async {
     if (_program != null || _loadFailed) return;
     try {
-      _program =
-          await ui.FragmentProgram.fromAsset('shaders/grade_extras.frag');
+      _program = await ui.FragmentProgram.fromAsset(
+        'shaders/grade_extras.frag',
+      );
     } catch (e) {
       _loadFailed = true;
       debugPrint('grade shader unavailable: $e');
@@ -58,8 +60,9 @@ class GradeExtrasBox extends StatefulWidget {
 }
 
 class _GradeExtrasBoxState extends State<GradeExtrasBox> {
-  final SnapshotController _controller =
-      SnapshotController(allowSnapshotting: true);
+  final SnapshotController _controller = SnapshotController(
+    allowSnapshotting: true,
+  );
   late final _GradeExtrasPainter _painter = _GradeExtrasPainter();
 
   @override
@@ -98,6 +101,9 @@ class _GradeExtrasBoxState extends State<GradeExtrasBox> {
       ..sharpen = adj.sharpen * 1.5
       ..denoise = adj.denoise
       ..grain = adj.grain * 30 / 255
+      ..filmGrain = adj.filmGrain * 34 / 255
+      ..hsl = adj.hsl
+      ..colorCast = adj.colorCastFactors
       ..seed = widget.seed;
 
     return SnapshotWidget(
@@ -121,6 +127,9 @@ class _GradeExtrasPainter extends SnapshotPainter {
   double sharpen = 0;
   double denoise = 0;
   double grain = 0;
+  double filmGrain = 0;
+  HslGrade hsl = HslGrade();
+  (double, double, double) colorCast = (1, 1, 1);
   double seed = 0;
 
   ui.FragmentShader? _shader;
@@ -138,8 +147,12 @@ class _GradeExtrasPainter extends SnapshotPainter {
   }
 
   @override
-  void paint(PaintingContext context, Offset offset, Size size,
-      PaintingContextCallback painter) {
+  void paint(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    PaintingContextCallback painter,
+  ) {
     // No snapshot this frame: draw the child as it is.
     painter(context, offset);
   }
@@ -174,8 +187,21 @@ class _GradeExtrasPainter extends SnapshotPainter {
       ..setFloat(7, sharpen)
       ..setFloat(8, denoise)
       ..setFloat(9, grain)
-      ..setFloat(10, seed)
-      ..setImageSampler(0, image);
+      ..setFloat(10, filmGrain)
+      ..setFloat(11, seed)
+      ..setFloat(12, colorCast.$1)
+      ..setFloat(13, colorCast.$2)
+      ..setFloat(14, colorCast.$3)
+      ..setFloat(15, hsl.isNeutral ? 0 : 1);
+    // The three eight-long arrays follow the scalars, in declaration order:
+    // a shader array is just that many consecutive uniform slots.
+    var slot = 16;
+    for (final band in [hsl.hue, hsl.saturation, hsl.luminance]) {
+      for (final v in band) {
+        shader.setFloat(slot++, v);
+      }
+    }
+    shader.setImageSampler(0, image);
 
     context.canvas
       ..save()
@@ -200,7 +226,21 @@ class _GradeExtrasPainter extends SnapshotPainter {
       old.sharpen != sharpen ||
       old.denoise != denoise ||
       old.grain != grain ||
-      old.seed != seed;
+      old.filmGrain != filmGrain ||
+      old.seed != seed ||
+      old.colorCast != colorCast ||
+      !_sameHsl(old.hsl, hsl);
+
+  static bool _sameHsl(HslGrade a, HslGrade b) {
+    for (var i = 0; i < HslGrade.bandCount; i++) {
+      if (a.hue[i] != b.hue[i] ||
+          a.saturation[i] != b.saturation[i] ||
+          a.luminance[i] != b.luminance[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   @override
   void dispose() {

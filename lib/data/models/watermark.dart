@@ -136,6 +136,20 @@ class Watermark {
     transform.y = a.y;
   }
 
+  /// Pulls the mark back inside the frame.
+  ///
+  /// A timeline layer is allowed to hang off the edge — half a word sliding
+  /// in is a legitimate look. The watermark is not: it is positioned by its
+  /// centre and has no lane of its own, so a centre outside the canvas is a
+  /// mark the creator can neither see nor grab back, and every edit they make
+  /// afterwards — the caption, the colour, the size — lands on something
+  /// invisible. Dragging clamps to this, and so does loading, which heals the
+  /// projects that were saved before it did.
+  void keepOnCanvas() {
+    transform.x = transform.x.clamp(0.0, 1.0);
+    transform.y = transform.y.clamp(0.0, 1.0);
+  }
+
   /// The preset whose position matches the current transform, or null once
   /// the user has dragged the mark somewhere of their own.
   WatermarkAnchor? get anchor {
@@ -198,6 +212,6 @@ class Watermark {
       transform: j['tf'] == null
           ? null
           : LayerTransform.fromJson(j['tf'] as Map<String, dynamic>),
-    );
+    )..keepOnCanvas();
   }
 }

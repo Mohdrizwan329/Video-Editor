@@ -14,7 +14,6 @@ import 'package:video_editor/ui/editor/panels/effect_panels.dart';
 import 'package:video_editor/ui/editor/preview/clip_view.dart';
 import 'package:video_editor/ui/editor/toolbar/editor_toolbar.dart';
 
-import 'helpers/editor_tools.dart';
 
 VideoClip _clip() => VideoClip(
       path: '/nonexistent/c.jpg',
@@ -36,13 +35,6 @@ EditorController _editorOf(WidgetTester t) => Provider.of<EditorController>(
 /// the button's centre still outside the strip, which turns `tap` into a
 /// silent no-op — `ensureVisible` finishes the job.
 Future<void> _tapTool(WidgetTester t, String label) async {
-  // The clip tools that are not one of the six on the strip hang off the '⋯'
-  // on the context row.
-  if (moreMenuTools.contains(label)) {
-    await tapEditorTool(t, label);
-    await t.pump(const Duration(milliseconds: 400));
-    return;
-  }
   final button = find.descendant(
       of: find.byType(EditorToolbar), matching: find.text(label));
   // A set of six or fewer is spread across the strip rather than scrolled,

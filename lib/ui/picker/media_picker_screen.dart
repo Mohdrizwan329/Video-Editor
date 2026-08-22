@@ -44,11 +44,24 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
   int _page = 0;
   int _tab = 0;
 
-  static const List<(String, RequestType)> _tabs = [
+  static const List<(String, RequestType)> _allTabs = [
     ('All', RequestType.common),
     ('Video', RequestType.video),
     ('Photo', RequestType.image),
   ];
+
+  /// The tabs this picker is allowed to show.
+  ///
+  /// A caller that asks for one kind of media — the watermark wants a logo,
+  /// the photo editor wants a photo — gets that kind and nothing else.
+  /// Leaving the other tabs up hands those flows an asset they cannot use:
+  /// a video chosen as a watermark logo is stored as the mark's image and
+  /// then fails to decode, which reads as a watermark that will not take.
+  List<(String, RequestType)> get _tabs => switch (widget.filter) {
+    RequestType.image => const [('Photo', RequestType.image)],
+    RequestType.video => const [('Video', RequestType.video)],
+    _ => _allTabs,
+  };
 
   @override
   void initState() {
@@ -120,18 +133,39 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
   }
 
   void _toggle(GalleryItem item) {
+    final i = _selected.indexWhere((e) => e.id == item.id);
+    if (i < 0) {
+      final max = widget.maxSelection;
+      // A tap that is refused has to say so. Silently doing nothing is what
+      // makes a picker read as frozen — the user taps the same thumbnail
+      // again and again with no idea the limit is what is stopping them.
+      if (max != null && _selected.length >= max) {
+        _say(
+          max == 1
+              ? 'Only one can be picked here — tap the one you chose to swap it'
+              : 'You can pick up to $max',
+        );
+        return;
+      }
+    }
     setState(() {
-      final i = _selected.indexWhere((e) => e.id == item.id);
       if (i >= 0) {
         _selected.removeAt(i);
       } else {
-        if (widget.maxSelection != null &&
-            _selected.length >= widget.maxSelection!) {
-          return;
-        }
         _selected.add(item);
       }
     });
+  }
+
+  void _say(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message, style: const TextStyle(fontSize: 12.5)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   Future<void> _browseFiles() async {
@@ -185,11 +219,13 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           leading: IconButton(
+            tooltip: 'Cancel',
             icon: Icon(Icons.close, size: context.r.ic(22)),
             onPressed: () => Navigator.pop(context),
           ),
           title: _albumSelector(),
           actions: [
+            if (_selected.isNotEmpty) _counter(),
             IconButton(
               tooltip: 'Browse files',
               icon: Icon(Icons.folder_open, size: context.r.ic(20)),
@@ -203,6 +239,31 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
             Expanded(child: _grid()),
             if (strip) _selectionStrip(),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// How many are picked, and out of how many when there is a ceiling. It
+  /// lives in the bar because the selection strip is at the other end of the
+  /// screen from the thumbnails being tapped.
+  Widget _counter() {
+    final r = context.r;
+    final max = widget.maxSelection;
+    return Center(
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: r.dp(9), vertical: r.dp(3)),
+        decoration: BoxDecoration(
+          color: AppColors.onAppBar.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          max == null ? '${_selected.length}' : '${_selected.length}/$max',
+          style: TextStyle(
+            fontSize: r.sp(11),
+            fontWeight: FontWeight.w700,
+            color: AppColors.onAppBar,
+          ),
         ),
       ),
     );
@@ -262,6 +323,8 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
 
   Widget _tabBar() {
     final r = context.r;
+    // One tab is not a choice, so it is chrome rather than a control.
+    if (_tabs.length < 2) return const SizedBox.shrink();
     return SizedBox(
       height: r.vp(40),
       child: ListView(
@@ -365,65 +428,68 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
         child: ContentBox(
           maxWidth: 420,
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: r.dp(72),
-              height: r.dp(72),
-              decoration: BoxDecoration(
-                gradient: AppColors.tint(AppColors.appBar),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.appBar.withValues(alpha: 0.18),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: r.dp(72),
+                height: r.dp(72),
+                decoration: BoxDecoration(
+                  gradient: AppColors.tint(AppColors.appBar),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.appBar.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: Icon(
+                  Icons.photo_library_outlined,
+                  size: r.ic(30),
+                  color: AppColors.appBarMuted,
                 ),
               ),
-              child: Icon(
-                Icons.photo_library_outlined,
-                size: r.ic(30),
-                color: AppColors.appBarMuted,
+              SizedBox(height: r.vp(14)),
+              Text(
+                'Gallery access is off',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: r.sp(14),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            SizedBox(height: r.vp(14)),
-            Text(
-              'Gallery access is off',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: r.sp(14), fontWeight: FontWeight.w600),
-            ),
-            SizedBox(height: r.vp(6)),
-            Text(
-              'Grant photo access, or pick files directly from storage.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: r.sp(12), color: AppColors.textDim),
-            ),
-            SizedBox(height: r.vp(18)),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                OutlinedButton(
-                  // The bare button inherits the accent, which only clears
-                  // 2.7:1 on the light page.
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.appBarMuted,
-                    side: BorderSide(
-                        color: AppColors.appBar.withValues(alpha: 0.35)),
+              SizedBox(height: r.vp(6)),
+              Text(
+                'Grant photo access, or pick files directly from storage.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: r.sp(12), color: AppColors.textDim),
+              ),
+              SizedBox(height: r.vp(18)),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  OutlinedButton(
+                    // The bare button inherits the accent, which only clears
+                    // 2.7:1 on the light page.
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.appBarMuted,
+                      side: BorderSide(
+                        color: AppColors.appBar.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    onPressed: () => PhotoManager.openSetting(),
+                    child: const Text('Open settings'),
                   ),
-                  onPressed: () => PhotoManager.openSetting(),
-                  child: const Text('Open settings'),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: AppColors.onAccent,
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      foregroundColor: AppColors.onAccent,
+                    ),
+                    onPressed: _browseFiles,
+                    child: const Text('Browse files'),
                   ),
-                  onPressed: _browseFiles,
-                  child: const Text('Browse files'),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -438,10 +504,7 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
     final r = context.r;
     final thumb = r.dp(52);
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: r.dp(10),
-        vertical: r.vp(8),
-      ),
+      padding: EdgeInsets.symmetric(horizontal: r.dp(10), vertical: r.vp(8)),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.divider)),
@@ -450,119 +513,121 @@ class _MediaPickerScreenState extends State<MediaPickerScreen> {
         top: false,
         child: ContentBox(
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: thumb + 4,
-              child: ReorderableListView.builder(
-                scrollDirection: Axis.horizontal,
-                buildDefaultDragHandles: false,
-                itemCount: _selected.length,
-                onReorder: (from, to) {
-                  setState(() {
-                    if (to > from) to--;
-                    _selected.insert(to, _selected.removeAt(from));
-                  });
-                },
-                itemBuilder: (context, i) {
-                  final item = _selected[i];
-                  return ReorderableDragStartListener(
-                    key: ValueKey('sel_${item.id}_$i'),
-                    index: i,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: SizedBox(
-                              width: thumb,
-                              height: thumb,
-                              child: AssetThumb(
-                                item: item,
-                                orderIndex: -1,
-                                compact: true,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: thumb + 4,
+                child: ReorderableListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  buildDefaultDragHandles: false,
+                  itemCount: _selected.length,
+                  onReorder: (from, to) {
+                    setState(() {
+                      if (to > from) to--;
+                      _selected.insert(to, _selected.removeAt(from));
+                    });
+                  },
+                  itemBuilder: (context, i) {
+                    final item = _selected[i];
+                    return ReorderableDragStartListener(
+                      key: ValueKey('sel_${item.id}_$i'),
+                      index: i,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: SizedBox(
+                                width: thumb,
+                                height: thumb,
+                                child: AssetThumb(
+                                  item: item,
+                                  orderIndex: -1,
+                                  compact: true,
+                                ),
                               ),
+                            ),
+                            Positioned(
+                              right: 2,
+                              top: 2,
+                              child: GestureDetector(
+                                onTap: () => _toggle(item),
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black87,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 11,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              SizedBox(height: r.vp(8)),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_selected.length} selected · ${totalDuration.pretty}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: r.sp(11.5),
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: r.dp(10)),
+                  InkWell(
+                    onTap: _confirm,
+                    borderRadius: BorderRadius.circular(13),
+                    child: Container(
+                      width: r.dp(104),
+                      height: r.tap(40),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.appBarGradient,
+                        borderRadius: BorderRadius.circular(13),
+                        boxShadow: AppColors.glow(
+                          AppColors.appBar,
+                          opacity: 0.34,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Next',
+                            style: TextStyle(
+                              fontSize: r.sp(14),
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.onAppBar,
                             ),
                           ),
-                          Positioned(
-                            right: 2,
-                            top: 2,
-                            child: GestureDetector(
-                              onTap: () => _toggle(item),
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.black87,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 11,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
+                          SizedBox(width: r.dp(4)),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: r.ic(16),
+                            color: AppColors.onAppBar,
                           ),
                         ],
                       ),
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ),
-            SizedBox(height: r.vp(8)),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${_selected.length} selected · ${totalDuration.pretty}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: r.sp(11.5),
-                      color: AppColors.textDim,
-                    ),
-                  ),
-                ),
-                SizedBox(width: r.dp(10)),
-                InkWell(
-                  onTap: _confirm,
-                  borderRadius: BorderRadius.circular(13),
-                  child: Container(
-                    width: r.dp(104),
-                    height: r.tap(40),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.appBarGradient,
-                      borderRadius: BorderRadius.circular(13),
-                      boxShadow:
-                          AppColors.glow(AppColors.appBar, opacity: 0.34),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Next',
-                          style: TextStyle(
-                            fontSize: r.sp(14),
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.onAppBar,
-                          ),
-                        ),
-                        SizedBox(width: r.dp(4)),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: r.ic(16),
-                          color: AppColors.onAppBar,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
           ),
         ),
       ),

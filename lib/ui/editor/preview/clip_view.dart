@@ -21,6 +21,7 @@ class ClipView extends StatelessWidget {
     required this.controller,
     this.showGrade = true,
     this.localTime = Duration.zero,
+    this.unopenable = false,
   });
 
   final VideoClip clip;
@@ -31,6 +32,11 @@ class ClipView extends StatelessWidget {
   /// Null for image clips, or while the decoder is still opening.
   final VideoPlayerController? controller;
   final bool showGrade;
+
+  /// The clip's file could not be opened at all. Without this the stage has
+  /// no way to tell "still decoding" from "this file is gone", and both look
+  /// like a video that happens to be black.
+  final bool unopenable;
 
   @override
   Widget build(BuildContext context) {
@@ -151,14 +157,69 @@ class ClipView extends StatelessWidget {
         File(clip.path),
         fit: BoxFit.fill,
         gaplessPlayback: true,
-        errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black),
+        errorBuilder: (_, _, _) => const MissingMedia(),
       );
     }
     final c = controller;
-    if (c == null || !c.value.isInitialized) {
-      return const ColoredBox(color: Colors.black);
-    }
-    return VideoPlayer(c);
+    if (c != null && c.value.isInitialized) return VideoPlayer(c);
+    // A file that will not open never becomes a picture, so saying so beats
+    // a black rectangle the user has no way to read.
+    return unopenable ? const MissingMedia() : const ColoredBox(color: Colors.black);
+  }
+}
+
+/// What the stage shows in place of a clip whose file has gone.
+///
+/// It is drawn against the clip's own 1000-unit box and scaled down with it,
+/// so the wording stays the same size relative to the picture whether the
+/// stage is a phone preview or a tablet's.
+class MissingMedia extends StatelessWidget {
+  const MissingMedia({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFF141414),
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: EdgeInsets.all(40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.videocam_off_outlined,
+                  size: 130,
+                  color: Color(0xFF8C8C99),
+                ),
+                SizedBox(height: 28),
+                Text(
+                  'This clip could not be opened',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 46,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE8E6F2),
+                  ),
+                ),
+                SizedBox(height: 14),
+                Text(
+                  'Its file may have been moved or deleted.\n'
+                  'Use Replace to point it at the video again.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 34,
+                    height: 1.35,
+                    color: Color(0xFF9C98AE),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

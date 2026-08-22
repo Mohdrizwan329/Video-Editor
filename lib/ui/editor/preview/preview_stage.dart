@@ -21,6 +21,8 @@ class PreviewStage extends StatelessWidget {
     super.key,
     this.interactive = true,
     this.watermarkFocus = false,
+    this.markKey,
+    this.onEditWatermark,
   });
 
   final bool interactive;
@@ -28,6 +30,17 @@ class PreviewStage extends StatelessWidget {
   /// True while the watermark panel is open: the mark is framed and can be
   /// dragged, pinched and twisted straight on the canvas.
   final bool watermarkFocus;
+
+  /// Carried by the drawn mark so a tap can be tested against it. It is a
+  /// [GlobalKey] owned by the screen, not made here: the stage rebuilds on
+  /// every frame of playback and a key made in build would be a new key each
+  /// time. Null wherever the mark is not editable — the fullscreen player.
+  final GlobalKey? markKey;
+
+  /// Tapping the mark on the canvas opens its panel, which is how a creator
+  /// who can see their watermark gets to the controls for it without going
+  /// back to the toolbar.
+  final VoidCallback? onEditWatermark;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +68,7 @@ class PreviewStage extends StatelessWidget {
                         clip: clip,
                         controller: engine.controllerFor(clip.id),
                         localTime: localTime,
+                        unopenable: engine.cannotOpen(clip.id, clip.path),
                       );
                 // Inside a transition the exporter has both clips on screen
                 // at once. So does this: without it the whole Transition tool
@@ -79,6 +93,7 @@ class PreviewStage extends StatelessWidget {
                               clip: clip,
                               controller: engine.controllerFor(clip.id),
                               showGrade: false,
+                              unopenable: engine.cannotOpen(clip.id, clip.path),
                             )
                           : clipView,
                     ),
@@ -94,6 +109,7 @@ class PreviewStage extends StatelessWidget {
                           time: time,
                           canvasSize: canvasSize,
                           controller: engine.controllerFor(pip.id),
+                          unopenable: engine.cannotOpen(pip.id, pip.path),
                           selected: editor.selection
                               .matches(LaneKind.overlay, pip.id),
                         ),
@@ -121,6 +137,7 @@ class PreviewStage extends StatelessWidget {
                       FxView(
                         preset: project.fx,
                         intensity: project.fxIntensity,
+                        time: time,
                       ),
                     if (project.hasFrame) FrameView(preset: project.frame),
                     // Above every lane: the creator's own mark covers the
@@ -130,10 +147,20 @@ class PreviewStage extends StatelessWidget {
                         mark: project.watermark,
                         canvasSize: canvasSize,
                         focused: watermarkFocus,
+                        contentKey: markKey,
                       ),
                     if (project.clips.isEmpty) const _EmptyCanvas(),
+                    if (interactive &&
+                        !watermarkFocus &&
+                        project.clips.isNotEmpty)
+                      const _TransportBadge(),
                     if (interactive && !watermarkFocus)
-                      _LayerGestureLayer(canvasSize: canvasSize, time: time),
+                      _LayerGestureLayer(
+                        canvasSize: canvasSize,
+                        time: time,
+                        markKey: markKey,
+                        onEditWatermark: onEditWatermark,
+                      ),
                     if (interactive && watermarkFocus)
                       _WatermarkGestureLayer(canvasSize: canvasSize),
                   ],
@@ -143,6 +170,49 @@ class PreviewStage extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+/// The play mark in the middle of the canvas.
+///
+/// It says two things at once: that the preview is stopped, and that the
+/// canvas itself is what starts it. It fades out of the way the moment
+/// playback begins, and stands down while a layer is selected so it never
+/// covers the handles the user is dragging.
+class _TransportBadge extends StatelessWidget {
+  const _TransportBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final editor = context.watch<EditorController>();
+    final busy = !editor.selection.isEmpty;
+    return ValueListenableBuilder<bool>(
+      valueListenable: editor.isPlaying,
+      builder: (context, playing, _) {
+        final show = !playing && !busy;
+        return IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: show ? 1 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: Center(
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.34),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 34,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -192,6 +262,7 @@ Widget? _withTransition({
       clip: next,
       controller: engine.controllerFor(next.id),
       localTime: time - joinStart,
+      unopenable: engine.cannotOpen(next.id, next.path),
     ),
   );
 }
@@ -235,10 +306,19 @@ class _EmptyCanvas extends StatelessWidget {
 /// Direct manipulation of the selected overlay: drag to move, pinch to scale,
 /// twist to rotate. Tapping empty canvas clears the selection.
 class _LayerGestureLayer extends StatefulWidget {
-  const _LayerGestureLayer({required this.canvasSize, required this.time});
+  const _LayerGestureLayer({
+    required this.canvasSize,
+    required this.time,
+    this.markKey,
+    this.onEditWatermark,
+  });
 
   final Size canvasSize;
   final Duration time;
+
+  /// The drawn watermark's box, so a tap can be tested against it.
+  final GlobalKey? markKey;
+  final VoidCallback? onEditWatermark;
 
   @override
   State<_LayerGestureLayer> createState() => _LayerGestureLayerState();
@@ -264,18 +344,45 @@ class _LayerGestureLayerState extends State<_LayerGestureLayer> {
   TimelineLayer? _selectedLayer(EditorController editor) =>
       editor.selectedText ?? editor.selectedSticker ?? editor.selectedOverlay;
 
+  /// Whether [global] landed on the watermark as it is drawn right now.
+  ///
+  /// The box is asked for its own transform rather than the position being
+  /// worked out from the mark's numbers, so a rotated or scaled mark answers
+  /// for the pixels it actually covers. The margin makes a one-line caption a
+  /// target a finger can hit.
+  bool _hitsWatermark(EditorController editor, Offset global) {
+    if (widget.onEditWatermark == null) return false;
+    if (!editor.project.watermark.isReady) return false;
+    final box = widget.markKey?.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    return (Offset.zero & box.size)
+        .inflate(12)
+        .contains(box.globalToLocal(global));
+  }
+
   @override
   Widget build(BuildContext context) {
     final editor = context.read<EditorController>();
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: () {
+      onTapUp: (details) {
+        // The mark comes first: it is drawn over every lane, so a tap that
+        // lands on it is meant for it.
+        if (_hitsWatermark(editor, details.globalPosition)) {
+          widget.onEditWatermark!();
+          return;
+        }
         final kind = editor.selection.kind;
         if (kind == LaneKind.text ||
             kind == LaneKind.sticker ||
             kind == LaneKind.overlay) {
           editor.clearSelection();
+          return;
         }
+        // Nothing to let go of, so the canvas is the transport — the tap
+        // every video player answers, and the one people reach for to stop
+        // playback rather than hunting for the button under the frame.
+        context.read<PreviewEngine>().toggle();
       },
       onScaleStart: (_) {
         final t = _transformOf(editor);
@@ -347,10 +454,12 @@ class _WatermarkGestureLayerState extends State<_WatermarkGestureLayer> {
         // single reposition is one undo step rather than hundreds.
         editor.setWatermark(record: !_recorded, (mark) {
           final t = mark.transform;
+          // Clamped to the frame, not past it like a timeline layer: see
+          // [Watermark.keepOnCanvas].
           t.x = (_startPosition.dx + _dragged.dx / widget.canvasSize.width)
-              .clamp(-0.25, 1.25);
+              .clamp(0.0, 1.0);
           t.y = (_startPosition.dy + _dragged.dy / widget.canvasSize.height)
-              .clamp(-0.25, 1.25);
+              .clamp(0.0, 1.0);
           if (details.pointerCount > 1) {
             t.scale = (_startScale * details.scale).clamp(0.1, 4.0);
             t.rotation = _startRotation + details.rotation;

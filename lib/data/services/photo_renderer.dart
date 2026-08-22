@@ -165,6 +165,9 @@ class PhotoRenderer {
   /// The grain, over a picture already painted. It is the video editor's own
   /// FX grain at slider strength, so a photo and a clip given the same amount
   /// come out with the same texture.
+  ///
+  /// The video preset reshuffles its scatter over a loop; a photo has no
+  /// timeline to run one on, so it takes the loop's first frame and holds it.
   static void paintDecorations(Canvas canvas, Size size, PhotoEdit e) {
     if (size.isEmpty || e.adjustments.grain <= 0) return;
     EffectPainter.paintFx(

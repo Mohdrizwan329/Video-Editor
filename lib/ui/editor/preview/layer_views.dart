@@ -204,12 +204,16 @@ class TextLayerView extends StatelessWidget {
     required this.time,
     required this.canvasSize,
     this.selected = false,
+    this.contentKey,
   });
 
   final TextLayer layer;
   final Duration time;
   final Size canvasSize;
   final bool selected;
+
+  /// See [_Positioned.contentKey].
+  final Key? contentKey;
 
   @override
   Widget build(BuildContext context) {
@@ -273,6 +277,7 @@ class TextLayerView extends StatelessWidget {
       canvasSize: canvasSize,
       anim: anim,
       selected: selected,
+      contentKey: contentKey,
       child: content,
     );
   }
@@ -319,6 +324,7 @@ class WatermarkView extends StatelessWidget {
     required this.mark,
     required this.canvasSize,
     this.focused = false,
+    this.contentKey,
   });
 
   final Watermark mark;
@@ -327,6 +333,10 @@ class WatermarkView extends StatelessWidget {
   /// True while the watermark panel is open, which frames the mark so the
   /// creator can see what they are dragging.
   final bool focused;
+
+  /// Lands on the box the mark occupies, so a tap on the canvas can tell
+  /// whether it landed on the mark and open the panel for it.
+  final Key? contentKey;
 
   @override
   Widget build(BuildContext context) {
@@ -338,6 +348,7 @@ class WatermarkView extends StatelessWidget {
         time: Duration.zero,
         canvasSize: canvasSize,
         selected: focused,
+        contentKey: contentKey,
       );
     }
 
@@ -348,6 +359,7 @@ class WatermarkView extends StatelessWidget {
       canvasSize: canvasSize,
       anim: const _AnimState(),
       selected: focused,
+      contentKey: contentKey,
       child: Image.file(
         File(mark.imagePath!),
         width: mark.imageSize * scale,
@@ -437,6 +449,7 @@ class OverlayLayerView extends StatelessWidget {
     required this.canvasSize,
     required this.controller,
     this.selected = false,
+    this.unopenable = false,
   });
 
   final OverlayLayer layer;
@@ -444,6 +457,10 @@ class OverlayLayerView extends StatelessWidget {
   final Size canvasSize;
   final VideoPlayerController? controller;
   final bool selected;
+
+  /// The layer's file could not be opened. A floating clip that has lost its
+  /// media should say so too, rather than sitting there as a grey rectangle.
+  final bool unopenable;
 
   @override
   Widget build(BuildContext context) {
@@ -465,10 +482,12 @@ class OverlayLayerView extends StatelessWidget {
     Widget media = layer.isImage
         ? Image.file(File(layer.path),
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black26))
+            errorBuilder: (_, _, _) => const MissingMedia())
         : (controller != null && controller!.value.isInitialized
             ? VideoPlayer(controller!)
-            : const ColoredBox(color: Colors.black45));
+            : unopenable
+                ? const MissingMedia()
+                : const ColoredBox(color: Colors.black45));
 
     if (layer.chromaKeyColor != null) {
       media = ChromaBox(
@@ -538,6 +557,7 @@ class _Positioned extends StatelessWidget {
     required this.anim,
     required this.child,
     required this.selected,
+    this.contentKey,
   });
 
   final LayerTransform transform;
@@ -546,11 +566,16 @@ class _Positioned extends StatelessWidget {
   final Widget child;
   final bool selected;
 
+  /// Goes on the drawn content rather than on the full-canvas [Positioned],
+  /// so a caller can hit-test a tap against the box the layer really covers.
+  final Key? contentKey;
+
   @override
   Widget build(BuildContext context) {
     final dx = (transform.x + anim.offset.dx) * canvasSize.width;
     final dy = (transform.y + anim.offset.dy) * canvasSize.height;
-    Widget content = child;
+    Widget content =
+        contentKey == null ? child : KeyedSubtree(key: contentKey, child: child);
     if (anim.blur > 0) {
       content = ImageFiltered(
         imageFilter: ui.ImageFilter.blur(sigmaX: anim.blur, sigmaY: anim.blur),

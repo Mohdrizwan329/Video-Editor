@@ -20,6 +20,12 @@ vec2 chromaOf(vec3 rgb) {
 
 void main() {
     vec2 uv = FlutterFragCoord().xy / uSize;
+    // Impeller hands the snapshot to the sampler with its origin at the
+    // bottom, so a texture read straight from FlutterFragCoord comes back
+    // mirrored top to bottom. Everything this shader does is per-pixel, so
+    // nothing but the lookup itself noticed — the picture simply arrived
+    // upside down. Flipping here fixes the read for every sample below it.
+    uv.y = 1.0 - uv.y;
     vec4 src = texture(uTexture, uv);
 
     // Undo premultiplication so the key sees the true colour.

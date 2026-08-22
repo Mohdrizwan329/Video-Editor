@@ -46,3 +46,6 @@ app.*.map.json
 
 # Local secrets (Gemini API key) - keep out of git
 .env
+
+# Gradle build output for the Android module
+/android/build/
