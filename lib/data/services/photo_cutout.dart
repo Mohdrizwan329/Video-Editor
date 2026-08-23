@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_selfie_segmentation/google_mlkit_selfie_segmentation.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Finds the subject in a still and hands back a matte of it.
 ///
@@ -59,8 +61,12 @@ class PhotoCutout {
     }
   }
 
-  /// The photo as the bytes the model wants: NV21-free, plain RGBA at a size
-  /// it can chew through.
+  /// The photo as a file the model will take.
+  ///
+  /// Raw bytes are not an option on Android: the converter there accepts
+  /// NV21, YV12 and YUV_420_888 and nothing else, and a Flutter image is
+  /// RGBA. Writing a small PNG and handing over its path is the same route
+  /// the video editor's cutout takes with its extracted frames.
   static Future<InputImage?> _inputFrom(ui.Image image) async {
     final scale = _side / image.width.clamp(1, 1 << 24);
     final k = scale < 1 ? scale : 1.0;
@@ -78,17 +84,12 @@ class PhotoCutout {
     final small = await picture.toImage(w, h);
     picture.dispose();
     try {
-      final data = await small.toByteData(format: ui.ImageByteFormat.rawRgba);
-      if (data == null) return null;
-      return InputImage.fromBytes(
-        bytes: data.buffer.asUint8List(),
-        metadata: InputImageMetadata(
-          size: ui.Size(w.toDouble(), h.toDouble()),
-          rotation: InputImageRotation.rotation0deg,
-          format: InputImageFormat.bgra8888,
-          bytesPerRow: w * 4,
-        ),
-      );
+      final png = await small.toByteData(format: ui.ImageByteFormat.png);
+      if (png == null) return null;
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/cutout_source.png');
+      await file.writeAsBytes(png.buffer.asUint8List(), flush: true);
+      return InputImage.fromFilePath(file.path);
     } finally {
       small.dispose();
     }
