@@ -62,7 +62,9 @@ void main() {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
-        const MethodChannel('plugins.flutter.io/path_provider'), null);
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      null,
+    );
     messenger.setMockMethodCallHandler(const MethodChannel('gal'), null);
     if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
   });
@@ -78,8 +80,11 @@ void main() {
       await tester.pump();
     });
     expect(find.textContaining('could not be opened'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsNothing,
-        reason: 'the photo should have finished decoding');
+    expect(
+      find.byType(CircularProgressIndicator),
+      findsNothing,
+      reason: 'the photo should have finished decoding',
+    );
   }
 
   Future<void> tapTool(WidgetTester tester, String label) async {
@@ -107,10 +112,9 @@ void main() {
     // The button says so itself when the file is on disk.
     expect(find.text('Saved'), findsOneWidget);
 
-    final written = Directory('${sandbox.path}/sve_exports')
-        .listSync()
-        .where((e) => !had.contains(e.path))
-        .toList();
+    final written = Directory(
+      '${sandbox.path}/sve_exports',
+    ).listSync().where((e) => !had.contains(e.path)).toList();
     expect(written, hasLength(1), reason: 'saving should write one file');
 
     final pixels = await tester.runAsync(() async {
@@ -133,8 +137,8 @@ void main() {
   /// The picture's own rectangle on screen, in the coordinates the brushes
   /// and the overlays are stored against.
   Rect stage(WidgetTester tester, {bool overlay = false}) => tester.getRect(
-        find.byKey(ValueKey(overlay ? 'photo-overlay' : 'photo-brush')),
-      );
+    find.byKey(ValueKey(overlay ? 'photo-overlay' : 'photo-brush')),
+  );
 
   group('the photo editor, end to end', () {
     testWidgets('saves an untouched photo as the photo', (tester) async {
@@ -201,24 +205,36 @@ void main() {
       expect(out.at(0.1, 0.75).b, greaterThan(40), reason: 'nor short of it');
     });
 
-    testWidgets('Pixelate blurs the edge it is painted over, and only it',
-        (tester) async {
+    testWidgets('Pixelate blurs the edge it is painted over, and only it', (
+      tester,
+    ) async {
       await open(tester);
       await tapTool(tester, 'Pixelate');
       final rect = stage(tester);
 
-      // A fat dab on the seam between the two halves, on the right.
+      // A fat dab on the seam between the two halves, on the right. The
+      // length is a fraction of the stage rather than a number of pixels:
+      // the brush is measured against the picture, so a fixed 20 covers
+      // less of it on a screen that gives the photo more room.
       await tester.dragFrom(
         Offset(rect.left + rect.width * 0.65, rect.top + rect.height * 0.5),
-        const Offset(20, 0),
+        Offset(rect.width * 0.1, 0),
       );
       await tester.pump();
       final out = await save(tester);
 
-      // Under the dab the seam is a block of the average of both halves…
-      final mixed = out.at(0.7, 0.49);
-      expect(mixed.r, greaterThan(60));
-      expect(mixed.r, lessThan(200));
+      // Under the dab the seam is a block of the average of both halves.
+      // Where exactly depends on how much room the panel leaves the photo,
+      // so the row is scanned rather than one point sampled: what matters is
+      // that a run of it is mixed and the rest of the row is not.
+      final row = [
+        for (var i = 0; i < 40; i++) out.at(0.55 + i * 0.008, 0.49).r,
+      ];
+      expect(
+        row.where((v) => v > 60 && v < 200),
+        isNotEmpty,
+        reason: 'nothing under the dab was blurred',
+      );
       // …and away from it the edge is still exactly where it was.
       expect(out.at(0.1, 0.49).r, greaterThan(200));
       expect(out.at(0.1, 0.51).r, lessThan(60));
@@ -243,8 +259,9 @@ void main() {
       expect(dabbed, greaterThan(untouched + 10));
     });
 
-    testWidgets('Portrait lifts the skin and leaves the rest alone',
-        (tester) async {
+    testWidgets('Portrait lifts the skin and leaves the rest alone', (
+      tester,
+    ) async {
       await open(tester);
       await tapTool(tester, 'Portrait');
       // The photo is half complexion, so the pass has something to work on.
@@ -254,10 +271,16 @@ void main() {
       await tester.pump();
       final out = await save(tester);
 
-      expect(out.at(0.5, 0.25).r, greaterThan(225),
-          reason: 'the complexion should have been lifted');
-      expect(out.at(0.5, 0.75).b, lessThan(80),
-          reason: 'the dark half is not skin');
+      expect(
+        out.at(0.5, 0.25).r,
+        greaterThan(225),
+        reason: 'the complexion should have been lifted',
+      );
+      expect(
+        out.at(0.5, 0.75).b,
+        lessThan(80),
+        reason: 'the dark half is not skin',
+      );
     });
 
     testWidgets('Text is typed, placed, and burned in', (tester) async {
@@ -271,17 +294,20 @@ void main() {
 
       // Drag it down onto the dark half, where white letters show.
       final rect = stage(tester, overlay: true);
-      await tester.dragFrom(
-        rect.center,
-        Offset(0, rect.height * 0.25),
-      );
+      await tester.dragFrom(rect.center, Offset(0, rect.height * 0.25));
       await tester.pump();
       final out = await save(tester);
 
-      expect(out.countWhite(0.2, 0.6, 0.8, 0.9), greaterThan(30),
-          reason: 'white letters should be on the dark half');
-      expect(out.countWhite(0.2, 0.05, 0.8, 0.3), 0,
-          reason: 'and nowhere near the top');
+      expect(
+        out.countWhite(0.2, 0.6, 0.8, 0.9),
+        greaterThan(30),
+        reason: 'white letters should be on the dark half',
+      );
+      expect(
+        out.countWhite(0.2, 0.05, 0.8, 0.3),
+        0,
+        reason: 'and nowhere near the top',
+      );
     });
 
     testWidgets('a sticker shape is placed at the middle', (tester) async {
@@ -300,8 +326,9 @@ void main() {
       expect(middle.g, lessThan(120));
     });
 
-    testWidgets('the watermark is burned into the corner it belongs in',
-        (tester) async {
+    testWidgets('the watermark is burned into the corner it belongs in', (
+      tester,
+    ) async {
       await open(tester);
       await tapTool(tester, 'Watermark');
       await tester.tap(find.text('Off'));
@@ -310,14 +337,19 @@ void main() {
 
       // A fresh mark sits bottom right at three quarters opacity, so it
       // lands pale rather than white.
-      expect(out.countWhite(0.6, 0.8, 0.99, 0.99, floor: 150),
-          greaterThan(20), reason: 'the mark should be in the bottom right');
-      expect(out.countWhite(0.02, 0.55, 0.4, 0.99, floor: 150), 0,
-          reason: 'and nowhere else on the dark half');
+      expect(
+        out.countWhite(0.6, 0.8, 0.99, 0.99, floor: 150),
+        greaterThan(20),
+        reason: 'the mark should be in the bottom right',
+      );
+      expect(
+        out.countWhite(0.02, 0.55, 0.4, 0.99, floor: 150),
+        0,
+        reason: 'and nowhere else on the dark half',
+      );
     });
 
-    testWidgets('two tools at once both land in the same file',
-        (tester) async {
+    testWidgets('two tools at once both land in the same file', (tester) async {
       await open(tester);
 
       await tapTool(tester, 'Doodle');
@@ -399,9 +431,7 @@ class _Pixels {
     for (var y = y0; y < y1; y++) {
       for (var x = x0; x < x1; x++) {
         final i = (y * width + x) * 4;
-        if (bytes[i] > floor &&
-            bytes[i + 1] > floor &&
-            bytes[i + 2] > floor) {
+        if (bytes[i] > floor && bytes[i + 1] > floor && bytes[i + 2] > floor) {
           found++;
         }
       }

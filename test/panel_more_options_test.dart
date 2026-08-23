@@ -157,7 +157,16 @@ void main() {
 
     await tester.tap(find.text('More options'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Done'));
+    // The way out is the cross top right, where every sheet in the app has
+    // one now.
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byIcon(Icons.close),
+          )
+          .last,
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(PanelShell), findsOneWidget);

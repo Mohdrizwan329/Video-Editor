@@ -26,7 +26,7 @@ import '../editor/panels/effects_panel.dart' show PresetTile, SwatchSource;
 import '../editor/panels/sticker_panel.dart' show StickerCatalog;
 import '../editor/preview/grade_extras_box.dart';
 import '../widgets/app_slider.dart';
-import '../widgets/panel_shell.dart' show ChipStrip;
+import '../widgets/panel_shell.dart' show ChipStrip, PanelShell, TextTabStrip;
 import '../widgets/panel_strip.dart';
 import 'widgets/crop_overlay.dart';
 
@@ -786,9 +786,11 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       if (overlay is PhotoImageLayer) {
         final image = _pipImages[overlay.path];
         if (image == null) continue;
-        if (PhotoRenderer.pipRect(size, overlay, image).inflate(12).contains(
-          point,
-        )) {
+        if (PhotoRenderer.pipRect(
+          size,
+          overlay,
+          image,
+        ).inflate(12).contains(point)) {
           if (overlay.id != _selected) setState(() => _selected = overlay.id);
           return true;
         }
@@ -865,6 +867,10 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   /// on a tall one.
   bool _panelOverflows = false;
 
+  /// Whether the panel is showing. Closing it hands the whole window back to
+  /// the picture; tapping any tool on the bar opens it again.
+  bool _panelOpen = true;
+
   /// The open tool's controls, built once and used in both places — the
   /// panel and the sheet the button opens.
   Widget _toolControls() => switch (_tool) {
@@ -904,6 +910,109 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         setState(() => _panelOverflows = overflows);
       }
     });
+  }
+
+  /// The same row for the sheet the button opens, so the two read as one
+  /// tool rather than two screens.
+  Widget _sheetHeader(BuildContext sheetContext) {
+    final r = context.r;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: PanelShell.kHandleHeight,
+          child: Center(
+            child: Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: math.max(r.vp(44), 44),
+          child: Row(
+            children: [
+              SizedBox(width: r.dp(12)),
+              Expanded(
+                child: Text(
+                  _tool.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: r.sp(13.5),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close',
+                icon: Icon(Icons.close, size: r.ic(20)),
+                color: AppColors.textDim,
+                onPressed: () => Navigator.pop(sheetContext),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+      ],
+    );
+  }
+
+  /// The title row every sheet in the app carries: the tool's name, and the
+  /// way out top right.
+  ///
+  /// Closing here puts the panel away and leaves the picture as it is —
+  /// every control has already written what it does, so there is nothing to
+  /// throw away and nothing to confirm.
+  Widget _panelHeader(Responsive r) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: PanelShell.kHandleHeight,
+          child: Center(
+            child: Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: math.max(r.vp(44), 44),
+          child: Row(
+            children: [
+              SizedBox(width: r.dp(12)),
+              Expanded(
+                child: Text(
+                  _tool.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: r.sp(13.5),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close',
+                icon: Icon(Icons.close, size: r.ic(20)),
+                color: AppColors.textDim,
+                onPressed: () => setState(() => _panelOpen = false),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+      ],
+    );
   }
 
   /// The way to everything the panel had to leave out.
@@ -956,11 +1065,12 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         return StatefulBuilder(
           builder: (sheetContext, _) => SafeArea(
             top: false,
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.only(top: context.r.vp(10)),
-                child: _toolControls(),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _sheetHeader(sheetContext),
+                Flexible(child: SingleChildScrollView(child: _toolControls())),
+              ],
             ),
           ),
         );
@@ -985,35 +1095,30 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // A ceiling, not a height: the panel is as tall as the controls
-            // in it and no taller, so a tool with one slider does not open
-            // the same box a preset grid needs and leave the bottom of it
-            // empty.
+            // The same height the video editor's sheets open at, worked
+            // out by the same code: the two editors are one app, and a
+            // panel that is one size in one of them and another size in the
+            // other is a thing the user has to relearn on every screen.
             //
-            // The ceiling is what the window can actually spare rather than a
-            // number picked per tool — the fixed 178 was shorter than what
-            // Core, Markup, Retouch and Pixelate draw, so each of them hid a
-            // row behind a scroll while the photo above floated in white.
-            //
-            // Past the ceiling nothing scrolls: the panel clips, and what it
-            // clipped is behind the button under it, the same way the video
-            // editor's sheets work. A panel that slides hides how much of a
-            // tool is left behind a gesture the user has to guess at.
-            ConstrainedBox(
-              key: const ValueKey('photo-panel'),
-              constraints: BoxConstraints(
-                maxHeight: math.max(
-                  math.min(available - _kMinStageHeight, available * 0.46),
-                  r.vp(178),
+            // Past that height nothing scrolls: the panel clips, and what it
+            // clipped is behind the button under it.
+            if (_panelOpen) _panelHeader(r),
+            if (_panelOpen)
+              ConstrainedBox(
+                key: const ValueKey('photo-panel'),
+                constraints: BoxConstraints(
+                  maxHeight: math.min(
+                    PanelShell.bodyHeight(context),
+                    math.max(available - _kMinStageHeight, r.vp(120)),
+                  ),
+                ),
+                child: SingleChildScrollView(
+                  controller: _panelScroll,
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: _toolControls(),
                 ),
               ),
-              child: SingleChildScrollView(
-                controller: _panelScroll,
-                physics: const NeverScrollableScrollPhysics(),
-                child: _toolControls(),
-              ),
-            ),
-            if (_panelOverflows) _moreToolsButton(r),
+            if (_panelOpen && _panelOverflows) _moreToolsButton(r),
             const Divider(height: 1),
             _toolBar(),
           ],
@@ -1046,6 +1151,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
               borderRadius: BorderRadius.circular(12),
               onTap: () => setState(() {
                 _tool = tool;
+                _panelOpen = true;
                 _live = null;
                 // The frame follows the tool: the Stickers tool should not
                 // leave a box drawn round a caption it cannot move.
@@ -1930,33 +2036,39 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(height: r.vp(8)),
-        ChipStrip(
+        SizedBox(height: r.vp(6)),
+        // Text tabs, not pills: there are a dozen categories and a pill is
+        // twice the height of a word. Wrapped, the pills filled the panel on
+        // their own and left no room for a single look — which is the one
+        // thing the tool is for.
+        TextTabStrip(
           labels: categories,
           selectedIndex: selectedCategory,
           onSelected: onCategory,
         ),
-        SizedBox(height: r.vp(10)),
-        SizedBox(
-          // The swatch, the gap and the name at the system font scale.
-          height: math.max(
-            r.vp(76),
-            54 + MediaQuery.textScalerOf(context).scale(r.sp(9.5)) * 1.7,
-          ),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: r.dp(14)),
-            itemCount: count,
-            separatorBuilder: (_, _) => SizedBox(width: r.dp(9)),
-            itemBuilder: (context, i) => PresetTile(
-              label: nameOf(i),
-              active: idOf(i) == activeId,
-              onTap: () => onPick(i),
-              child: preview(i),
-            ),
-          ),
-        ),
+        // The strength of the chosen look goes above the looks, not under
+        // them: the library runs past the fold, and a slider below it is a
+        // slider the user has to open another sheet to reach — for the very
+        // thing they have just picked.
         ?slider,
+        SizedBox(height: r.vp(8)),
+        // Wrapped rather than scrolled sideways, the way every strip in the
+        // app is: what is on the panel is all of what the panel has, and the
+        // lines past the fold are behind 'More options'.
+        PanelStrip(
+          gap: r.dp(9),
+          runGap: r.vp(8),
+          padding: EdgeInsets.symmetric(horizontal: r.dp(14)),
+          children: [
+            for (var i = 0; i < count; i++)
+              PresetTile(
+                label: nameOf(i),
+                active: idOf(i) == activeId,
+                onTap: () => onPick(i),
+                child: preview(i),
+              ),
+          ],
+        ),
         SizedBox(height: r.vp(8)),
       ],
     );

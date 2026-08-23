@@ -349,12 +349,7 @@ class _PanelShellState extends State<PanelShell> {
   Widget _titleRow(BuildContext context, Responsive r, bool rail) {
     final row = Row(
       children: [
-        IconButton(
-          tooltip: 'Close without keeping the change',
-          icon: Icon(Icons.close, size: r.ic(20)),
-          color: AppColors.textDim,
-          onPressed: widget.onClose ?? () => Navigator.maybePop(context),
-        ),
+        SizedBox(width: r.dp(8)),
         Expanded(
           child: Text(
             widget.title,
@@ -395,6 +390,13 @@ class _PanelShellState extends State<PanelShell> {
           icon: Icon(Icons.check, size: r.ic(21)),
           color: AppColors.accent,
           onPressed: widget.onConfirm ?? () => Navigator.maybePop(context),
+        ),
+        // The way out sits top right, where every sheet in the app has one.
+        IconButton(
+          tooltip: 'Close without keeping the change',
+          icon: Icon(Icons.close, size: r.ic(20)),
+          color: AppColors.textDim,
+          onPressed: widget.onClose ?? () => Navigator.maybePop(context),
         ),
       ],
     );
@@ -459,16 +461,16 @@ class _MoreSheet extends StatelessWidget {
                   // Closing this sheet is going back to the panel, not
                   // throwing the changes away: every control in here has
                   // already written to the project on the way past.
-                  TextButton(
+                  //
+                  // Top right, and an icon, because that is where every
+                  // other sheet in the app puts the way out — a word in one
+                  // and a cross in the next is a thing the user has to read
+                  // rather than recognise.
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: Icon(Icons.close, size: r.ic(20)),
+                    color: AppColors.textDim,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Done',
-                      style: TextStyle(
-                        fontSize: r.sp(12.5),
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
-                    ),
                   ),
                   SizedBox(width: r.dp(4)),
                 ],

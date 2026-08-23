@@ -11,29 +11,11 @@ import 'package:video_editor/ui/image_editor/image_editor_screen.dart';
 void main() {
   const panelKey = ValueKey('photo-panel');
 
-  /// Tools whose controls are short enough to fit on a phone.
-  ///
-  /// Adjust is not among them on purpose: it is a long column of sliders,
-  /// and the 'More options' sheet is the right answer for it. Watermark left
-  /// the list when the preset rows stopped scrolling sideways — five fonts
-  /// on two lines is taller than the ceiling, and two lines the user can see
-  /// beats one line with the rest off the edge.
-  const fitsOnAPhone = [
-    'Crop',
-    'Filter',
-    'Doodle',
-    'Text',
-    'Pixelate',
-    'Remove',
-  ];
-
   Future<void> open(WidgetTester tester, Size size) async {
     tester.view.physicalSize = size * tester.view.devicePixelRatio;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      const MaterialApp(
-        home: ImageEditorScreen(path: '/nonexistent.jpg'),
-      ),
+      const MaterialApp(home: ImageEditorScreen(path: '/nonexistent.jpg')),
     );
     await tester.pump(const Duration(milliseconds: 300));
   }
@@ -52,18 +34,41 @@ void main() {
       of: find.byKey(panelKey),
       matching: find.byType(Scrollable),
     );
-    return tester.state<ScrollableState>(scrollable.first).position
+    return tester
+        .state<ScrollableState>(scrollable.first)
+        .position
         .maxScrollExtent;
   }
 
-  testWidgets('a tool that fits shows all of itself', (tester) async {
+  testWidgets('a tool either fits or says where the rest is', (tester) async {
     await open(tester, const Size(390, 844));
 
-    for (final tool in fitsOnAPhone) {
+    // The panel is the height the video editor's sheets open at, which is
+    // smaller than the one this screen used to pick for itself. Most tools
+    // fit in it; the ones that do not are not allowed to hide the difference
+    // behind a scroll — there is a button, by name.
+    for (final tool in const [
+      'Crop',
+      'Filter',
+      'Adjust',
+      'Doodle',
+      'Text',
+      'Watermark',
+      'Pixelate',
+      'Remove',
+      'Enhance',
+      'Mask',
+      'Detail',
+    ]) {
       await tapTool(tester, tool);
-      expect(hidden(tester), 0,
-          reason: '$tool hides ${hidden(tester)}pt of controls behind a '
-              'scroll on a 390x844 phone');
+      await tester.pump();
+      if (hidden(tester) > 0) {
+        expect(
+          find.text('More options'),
+          findsOneWidget,
+          reason: '$tool hides ${hidden(tester)}pt with no way to reach it',
+        );
+      }
     }
   });
 
@@ -73,20 +78,31 @@ void main() {
     for (final tool in const ['Crop', 'Adjust', 'Watermark']) {
       await tapTool(tester, tool);
       final panel = tester.getRect(find.byKey(panelKey));
-      expect(panel.height / 844, lessThan(0.5),
-          reason: '$tool took ${panel.height}pt of an 844pt window');
+      expect(
+        panel.height / 844,
+        lessThan(0.5),
+        reason: '$tool took ${panel.height}pt of an 844pt window',
+      );
     }
   });
 
-  testWidgets('a short window still lays out without overflowing',
-      (tester) async {
+  testWidgets('a short window still lays out without overflowing', (
+    tester,
+  ) async {
     // A small phone, where the panel has to give way rather than push the
     // photo off the screen.
     await open(tester, const Size(360, 640));
 
     for (final tool in const [
-      'Crop', 'Adjust', 'Filter', 'Portrait', 'Doodle',
-      'Text', 'Watermark', 'Pixelate', 'Remove',
+      'Crop',
+      'Adjust',
+      'Filter',
+      'Portrait',
+      'Doodle',
+      'Text',
+      'Watermark',
+      'Pixelate',
+      'Remove',
     ]) {
       await tapTool(tester, tool);
       expect(tester.takeException(), isNull, reason: '$tool overflowed');

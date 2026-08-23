@@ -218,17 +218,32 @@ class _ExportScreenState extends State<ExportScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 38,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: AppColors.divider,
-                            borderRadius: BorderRadius.circular(2),
+                      Row(
+                        children: [
+                          SizedBox(width: r.ic(20) + r.dp(16)),
+                          Expanded(
+                            child: Center(
+                              child: Container(
+                                width: 38,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: AppColors.divider,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          // Top right, where every sheet in the app puts the
+                          // way out.
+                          IconButton(
+                            tooltip: 'Close',
+                            icon: Icon(Icons.close, size: r.ic(20)),
+                            color: AppColors.textFaint,
+                            onPressed: () => Navigator.pop(sheetContext),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: r.vp(14)),
+                      SizedBox(height: r.vp(6)),
                       // Format and Resolution are on the screen as well.
                       // They are here too because on a short window the
                       // screen clips them, and a dial the user cannot reach
@@ -266,11 +281,7 @@ class _ExportScreenState extends State<ExportScreen> {
                           () => _settings.quality = ExportQuality.values[i],
                         ),
                       ),
-                      SizedBox(height: r.vp(18)),
-                      TextButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        child: const Text('Done'),
-                      ),
+                      SizedBox(height: r.vp(10)),
                     ],
                   ),
                 ),

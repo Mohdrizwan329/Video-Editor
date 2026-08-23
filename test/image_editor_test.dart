@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:video_editor/ui/editor/panels/effects_panel.dart' show PresetTile;
 import 'package:video_editor/core/theme/app_theme.dart';
 import 'package:video_editor/data/models/layers.dart';
 import 'package:video_editor/data/models/photo_edit.dart';
@@ -650,9 +651,9 @@ void main() {
       double panel() =>
           tester.getSize(find.byKey(const ValueKey('photo-panel'))).height;
 
-      // Filter is a chip row over a strip of swatches and fits with room to
-      // spare; Adjust is seventeen sliders and runs well past the ceiling.
-      await _tapTool(tester, 'Filter');
+      // Enhance is one switch and fits with room to spare; Adjust is
+      // seventeen sliders and runs well past the ceiling.
+      await _tapTool(tester, 'Enhance');
       final short = panel();
       await _tapTool(tester, 'Adjust');
       final full = panel();
@@ -789,7 +790,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       await _tapTool(tester, 'Filter');
-      await tester.tap(find.text('Kodak'));
+      // The first look after 'Original'. Named tiles past the fold are
+      // behind 'More options' now, so the test taps what is on the panel
+      // rather than a look it hopes is showing.
+      await tester.tap(find.byType(PresetTile).at(1));
       await tester.pump();
       // The intensity slider only exists once a look is on the photo.
       expect(find.text('Intensity'), findsOneWidget);

@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,10 +15,12 @@ import 'package:video_editor/ui/image_editor/image_editor_screen.dart';
 /// Presses every tool on the photo editor's bar, one at a time, in the real
 /// app on the real device — and then *uses* it.
 ///
-/// A tool that opens a panel has not been checked; a tool whose control has
-/// been moved and which then has something to undo has. Undo is the signal
-/// because it is the app's own: it goes live exactly when an edit is
-/// committed, so a panel that writes nothing leaves it dead.
+/// Two things are checked, because either alone lets a broken tool past.
+/// Undo says the app recorded an edit — it goes live exactly when one is
+/// committed, so a panel that writes nothing leaves it dead. The picture
+/// says the edit reached the screen: the stage is photographed before and
+/// after, and a tool that leaves it byte-identical has not worked whatever
+/// it wrote.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -93,6 +97,30 @@ void main() {
     await tester.tap(button.last, warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
+  }
+
+  /// The stage as pixels, which is the only honest answer to 'did the
+  /// picture change'.
+  Future<ByteData?> stageShot(WidgetTester tester) async {
+    final stage = find.byType(RepaintBoundary);
+    if (stage.evaluate().isEmpty) return null;
+    ByteData? out;
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(stage.first);
+      final image = await boundary.toImage();
+      out = await image.toByteData();
+      image.dispose();
+    });
+    return out;
+  }
+
+  bool differs(ByteData? a, ByteData? b) {
+    if (a == null || b == null) return false;
+    if (a.lengthInBytes != b.lengthInBytes) return true;
+    for (var i = 0; i < a.lengthInBytes; i++) {
+      if (a.getUint8(i) != b.getUint8(i)) return true;
+    }
+    return false;
   }
 
   /// A stroke across the middle of the picture, for the brush tools.
@@ -182,8 +210,11 @@ void main() {
       );
 
       await tapTool(tester, entry.key);
+      final before = await stageShot(tester);
       await entry.value(tester);
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      final after = await stageShot(tester);
 
       expect(
         canUndo(tester),
@@ -191,6 +222,13 @@ void main() {
         reason:
             '${entry.key} was opened and used and left nothing to undo, '
             'so whatever its panel writes never reached the edit',
+      );
+      expect(
+        differs(before, after),
+        isTrue,
+        reason:
+            '${entry.key} recorded an edit but the picture on screen did not '
+            'change, so what it wrote never reached the render',
       );
       expect(tester.takeException(), isNull, reason: '${entry.key} threw');
     });
