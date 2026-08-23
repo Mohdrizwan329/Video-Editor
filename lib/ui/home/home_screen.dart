@@ -753,40 +753,7 @@ class _HeroCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
-      child: Stack(
-        children: [
-          _card(context, r),
-          // Top right of the card, out of the title's way: beside the title
-          // it took room off a name that needs all of it, and 'Generate Text
-          // to Video' came out as 'Generate Text to…'.
-          if (badge != null)
-            Positioned(
-              top: r.vp(10),
-              right: r.dp(12),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: r.dp(9),
-                  vertical: r.vp(3),
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.onAppBar.withValues(alpha: 0.20),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.onAppBar.withValues(alpha: 0.34),
-                  ),
-                ),
-                child: Text(
-                  badge!,
-                  style: TextStyle(
-                    fontSize: r.sp(9.5),
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onAppBar,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+      child: _card(context, r),
     );
   }
 
@@ -824,6 +791,37 @@ class _HeroCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // A line of its own, at the right-hand end. Beside the title
+                // there was not room for both and the name came out as
+                // 'Generate Text t…'; over the card it covered the name
+                // outright.
+                if (badge != null) ...[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: r.dp(9),
+                        vertical: r.vp(2),
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.onAppBar.withValues(alpha: 0.20),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.onAppBar.withValues(alpha: 0.34),
+                        ),
+                      ),
+                      child: Text(
+                        badge!,
+                        style: TextStyle(
+                          fontSize: r.sp(9.5),
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.onAppBar,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: r.vp(5)),
+                ],
                 Text(
                   title,
                   maxLines: 1,

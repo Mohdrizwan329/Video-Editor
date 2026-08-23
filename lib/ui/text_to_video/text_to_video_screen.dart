@@ -76,38 +76,7 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
     final res = context.r;
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: const Text('Text to Video'),
-        actions: [
-          Padding(
-            padding: EdgeInsets.only(right: res.dp(12)),
-            child: Center(
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: res.dp(9),
-                  vertical: res.vp(3),
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.onAppBar.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.onAppBar.withValues(alpha: 0.34),
-                  ),
-                ),
-                child: Text(
-                  'Coming soon',
-                  style: TextStyle(
-                    fontSize: res.sp(10),
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onAppBar,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(titleSpacing: 0, title: const Text('Text to Video')),
       body: SafeArea(
         child: Stack(
           children: [
@@ -157,35 +126,30 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
   /// screen's card uses, so arriving here reads as the card that was tapped.
   Widget _headerCard() {
     final res = context.r;
-    return Stack(
-      children: [
-        _headerBody(res),
-        // Top right of the card, out of the title's way — the same corner
-        // the home screen's card puts it in, so the two read as one thing.
-        Positioned(
-          top: res.vp(10),
-          right: res.dp(12),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: res.dp(9),
-              vertical: res.vp(3),
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.20),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
-            ),
-            child: Text(
-              'Coming soon',
-              style: TextStyle(
-                fontSize: res.sp(9.5),
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
+    return _headerBody(res);
+  }
+
+  /// The words that say this way in is not finished.
+  ///
+  /// It sits in the row rather than over it: floated on top it covered the
+  /// end of 'Generate Text to AI Video', which is worse than a title that
+  /// wraps.
+  Widget _comingSoonPill(Responsive res) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: res.dp(9), vertical: res.vp(3)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.20),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
+      ),
+      child: Text(
+        'Coming soon',
+        style: TextStyle(
+          fontSize: res.sp(9.5),
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
         ),
-      ],
+      ),
     );
   }
 
@@ -198,6 +162,7 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
         boxShadow: AppColors.glow(AppColors.violet, opacity: 0.3),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(width: res.dp(18)),
           Container(
@@ -220,6 +185,14 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // A line of its own, at the right-hand end: beside the title
+                // there is not room for both, and over the card it covered
+                // the end of the name.
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _comingSoonPill(res),
+                ),
+                SizedBox(height: res.vp(4)),
                 Text(
                   'Generate Text to AI Video',
                   maxLines: 2,
