@@ -141,24 +141,32 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
   }
 
   /// The words that say this way in is not finished.
-  ///
-  /// It sits in the row rather than over it: floated on top it covered the
-  /// end of 'Generate Text to AI Video', which is worse than a title that
-  /// wraps.
   Widget _comingSoonPill(Responsive res) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: res.dp(9), vertical: res.vp(3)),
+      padding: EdgeInsets.symmetric(
+        horizontal: res.dp(10),
+        vertical: res.vp(4),
+      ),
+      // Solid, not a tint: a translucent pill on a gradient reads as part
+      // of the gradient. The home screen's card wears the same white pill.
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.20),
+        color: AppColors.onAppBar,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Text(
         'Coming soon',
         style: TextStyle(
-          fontSize: res.sp(9.5),
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
+          fontSize: res.sp(10),
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.2,
+          color: AppColors.appBar,
         ),
       ),
     );
