@@ -8,6 +8,7 @@ import '../../../data/models/layers.dart';
 import '../../../data/models/video_clip.dart';
 import '../../../data/services/thumbnail_service.dart';
 import '../../../state/editor_controller.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/panel_shell.dart';
 import 'color_tool_tabs.dart';
 import 'effects_panel.dart' show PresetTile, SwatchSource, hasTonalRange;
@@ -60,10 +61,6 @@ class _FilterPanelState extends State<FilterPanel> {
 
   int _category = 0;
 
-  /// The strip's own scroll, so the look a clip already carries can be put
-  /// on screen rather than left somewhere down a row of a hundred tiles.
-  final ScrollController _strip = ScrollController();
-
   /// The frame under the playhead, graded live behind every tile. Null until
   /// it lands, and left null for footage too flat to grade — there the tiles
   /// fall back to the reference gradient rather than showing one colour
@@ -87,8 +84,7 @@ class _FilterPanelState extends State<FilterPanel> {
     ];
   }
 
-  /// Edge of a tile, and the gap after it. The strip scrolls by these, so
-  /// they are shared with the builder rather than written out twice.
+  /// Edge of a tile, and the gap after it.
   static const double _tile = 58;
   static const double _gap = 10;
   static const double _stripPad = 14;
@@ -97,38 +93,6 @@ class _FilterPanelState extends State<FilterPanel> {
   void initState() {
     super.initState();
     _loadFrame();
-    // After the first layout, so the strip has a viewport to centre against.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
-  }
-
-  @override
-  void dispose() {
-    _strip.dispose();
-    super.dispose();
-  }
-
-  /// Brings the live look into view. Opening the tool on a clip that is
-  /// already graded and showing the head of the library instead reads as
-  /// 'nothing is applied' — in a library this size the applied tile is
-  /// usually well off the right edge.
-  void _revealActive({int tries = 8}) {
-    if (!mounted) return;
-    // The sheet animates in, so the first frame after initState can land
-    // before the strip has a viewport to measure. Wait for the frame that
-    // gives it one rather than giving up on the first miss.
-    if (!_strip.hasClients || !_strip.position.hasContentDimensions) {
-      if (tries <= 0) return;
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _revealActive(tries: tries - 1),
-      );
-      return;
-    }
-    final i = _items.indexWhere((f) => f.id == _filterId);
-    if (i < 0) return;
-    final viewport = _strip.position.viewportDimension;
-    final width = PresetTile.widthFor(_tile);
-    final centre = _stripPad + i * (width + _gap) + width / 2 - viewport / 2;
-    _strip.jumpTo(centre.clamp(0.0, _strip.position.maxScrollExtent));
   }
 
   @override
@@ -138,7 +102,6 @@ class _FilterPanelState extends State<FilterPanel> {
         old.overlay?.id != widget.overlay?.id) {
       _frame = null;
       _loadFrame();
-      WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
     }
   }
 
@@ -225,8 +188,6 @@ class _FilterPanelState extends State<FilterPanel> {
     // the system font — measured through the text scaler rather than assumed,
     // the way the toolbar measures its own row. Assumed, a large system font
     // overflows the strip by a hair and stripes it.
-    final stripHeight =
-        _tile + 4 + MediaQuery.textScalerOf(context).scale(9.5) * 1.6;
 
     return PanelShell(
       title: 'Filter',
@@ -269,18 +230,26 @@ class _FilterPanelState extends State<FilterPanel> {
                     onChangeEnd: _setIntensity,
                   ),
           ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: stripHeight,
-            child: ListView.separated(
-              controller: _strip,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: _stripPad),
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: _gap),
-              itemBuilder: (context, i) {
-                final preset = items[i];
-                return PresetTile(
+          const SizedBox(height: 6),
+          // The groups go above the looks, not under them. The strip wraps
+          // rather than scrolls, so a library this long runs off the bottom
+          // of the sheet — and the tabs are what makes it navigable without
+          // opening anything. Under the strip they were the first thing off
+          // the sheet, which left the user with one group and no way to the
+          // others.
+          TextTabStrip(
+            labels: _categories,
+            selectedIndex: _category,
+            onSelected: (i) => setState(() => _category = i),
+          ),
+          const SizedBox(height: 6),
+          PanelStrip(
+            gap: _gap,
+            runGap: _gap,
+            padding: const EdgeInsets.symmetric(horizontal: _stripPad),
+            children: [
+              for (final preset in items)
+                PresetTile(
                   size: _tile,
                   label: preset.id == 'none' ? 'Original' : preset.name,
                   active: preset.id == active,
@@ -289,20 +258,8 @@ class _FilterPanelState extends State<FilterPanel> {
                     colorFilter: ColorFilter.matrix(preset.toColorMatrix()),
                     child: SwatchSource(path: _frame),
                   ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 6),
-          TextTabStrip(
-            labels: _categories,
-            selectedIndex: _category,
-            onSelected: (i) {
-              setState(() => _category = i);
-              WidgetsBinding.instance.addPostFrameCallback(
-                (_) => _revealActive(),
-              );
-            },
+                ),
+            ],
           ),
           const SizedBox(height: 4),
         ],

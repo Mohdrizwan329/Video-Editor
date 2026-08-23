@@ -21,18 +21,18 @@ import 'package:video_editor/ui/widgets/panel_shell.dart';
 import 'helpers/editor_tools.dart';
 
 VideoClip _clip() => VideoClip(
-      path: '/nonexistent/clip.jpg',
-      isImage: true,
-      sourceDuration: const Duration(seconds: 4),
-    );
+  path: '/nonexistent/clip.jpg',
+  isImage: true,
+  sourceDuration: const Duration(seconds: 4),
+);
 
 OverlayLayer _overlay() => OverlayLayer(
-      start: Duration.zero,
-      duration: const Duration(seconds: 2),
-      path: '/nonexistent/pip.jpg',
-      isImage: true,
-      sourceDuration: const Duration(seconds: 4),
-    );
+  start: Duration.zero,
+  duration: const Duration(seconds: 2),
+  path: '/nonexistent/pip.jpg',
+  isImage: true,
+  sourceDuration: const Duration(seconds: 4),
+);
 
 /// The test window is 800x600 by default — shorter than any phone, and short
 /// enough that a sheet has to leave a row of its controls behind the panel's
@@ -45,9 +45,9 @@ void _phone(WidgetTester tester) {
 }
 
 Widget _host(Widget child) => ChangeNotifierProvider(
-      create: (_) => ProjectsController(),
-      child: MaterialApp(theme: AppTheme.light, home: child),
-    );
+  create: (_) => ProjectsController(),
+  child: MaterialApp(theme: AppTheme.light, home: child),
+);
 
 void main() {
   group('the filter library', () {
@@ -67,30 +67,42 @@ void main() {
       // The strip's tiles are 58pt wide and the label sits under one on a
       // single line; past eight characters it ellipsises into a guess.
       for (final f in FilterLibrary.all) {
-        expect(f.name.length, lessThanOrEqualTo(8),
-            reason: '${f.id} is labelled "${f.name}", too long for a tile');
+        expect(
+          f.name.length,
+          lessThanOrEqualTo(8),
+          reason: '${f.id} is labelled "${f.name}", too long for a tile',
+        );
       }
     });
 
     test('fills every pack it offers', () {
       // An empty tab is a tab that opens onto the original and nothing else.
       for (final c in FilterLibrary.categories.where((c) => c != 'None')) {
-        expect(FilterLibrary.byCategory(c), isNotEmpty,
-            reason: 'the $c pack has no looks in it');
+        expect(
+          FilterLibrary.byCategory(c),
+          isNotEmpty,
+          reason: 'the $c pack has no looks in it',
+        );
       }
     });
 
     test('groups every preset under an offered category', () {
       for (final f in FilterLibrary.all) {
-        expect(FilterLibrary.categories, contains(f.category),
-            reason: '${f.id} is filed under an unlisted category');
+        expect(
+          FilterLibrary.categories,
+          contains(f.category),
+          reason: '${f.id} is filed under an unlisted category',
+        );
       }
     });
 
     test('leaves the frame untouched at zero intensity', () {
       for (final f in FilterLibrary.all) {
-        expect(f.lerpFromIdentity(0).isIdentity, isTrue,
-            reason: '${f.id} still grades at 0% intensity');
+        expect(
+          f.lerpFromIdentity(0).isIdentity,
+          isTrue,
+          reason: '${f.id} still grades at 0% intensity',
+        );
       }
     });
 
@@ -100,15 +112,19 @@ void main() {
         final chain = f.toFFmpegFilter();
         expect(chain, isNotEmpty, reason: '${f.id} exports as a no-op');
         // A stray empty link would make FFmpeg reject the whole graph.
-        expect(chain.split(',').any((p) => p.trim().isEmpty), isFalse,
-            reason: '${f.id} builds a malformed chain: $chain');
+        expect(
+          chain.split(',').any((p) => p.trim().isEmpty),
+          isFalse,
+          reason: '${f.id} builds a malformed chain: $chain',
+        );
       }
     });
   });
 
   group('reaching the filters', () {
-    testWidgets('the project toolbar opens them with nothing selected',
-        (tester) async {
+    testWidgets('the project toolbar opens them with nothing selected', (
+      tester,
+    ) async {
       final project = Project(name: 'Filters', clips: [_clip()]);
       await tester.pumpWidget(_host(EditorScreen(project: project)));
       await tester.pump(const Duration(milliseconds: 300));
@@ -122,8 +138,9 @@ void main() {
       expect(find.text('Nothing selected'), findsNothing);
     });
 
-    testWidgets('applying a look grades the clip under the playhead',
-        (tester) async {
+    testWidgets('applying a look grades the clip under the playhead', (
+      tester,
+    ) async {
       _phone(tester);
       final project = Project(name: 'Filters', clips: [_clip()]);
       await tester.pumpWidget(_host(EditorScreen(project: project)));
@@ -131,16 +148,19 @@ void main() {
 
       await tapEditorTool(tester, 'Effect');
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
+      await tapLook(tester, 'Kodak');
       await tester.pump(const Duration(seconds: 1));
 
       expect(project.clips.first.filterId, 'kodak');
       expect(project.clips.first.filterIntensity, 1);
     });
 
-    testWidgets('an empty project says so instead of opening an empty panel',
-        (tester) async {
-      await tester.pumpWidget(_host(EditorScreen(project: Project(name: 'Empty'))));
+    testWidgets('an empty project says so instead of opening an empty panel', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(EditorScreen(project: Project(name: 'Empty'))),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       await tapEditorTool(tester, 'Effect');
@@ -164,8 +184,9 @@ void main() {
       return project;
     }
 
-    testWidgets('one tap on the toolbar lands straight on the looks',
-        (tester) async {
+    testWidgets('one tap on the toolbar lands straight on the looks', (
+      tester,
+    ) async {
       await open(tester);
 
       expect(find.byType(FilterPanel), findsOneWidget);
@@ -177,23 +198,22 @@ void main() {
     testWidgets('tapping a look applies it at full strength', (tester) async {
       final project = await open(tester);
 
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 300));
+      await tapLook(tester, 'Kodak');
 
       expect(project.clips.first.filterId, 'kodak');
       expect(project.clips.first.filterIntensity, 1);
     });
 
-    testWidgets('the strength slider is out the moment a look is on',
-        (tester) async {
+    testWidgets('the strength slider is out the moment a look is on', (
+      tester,
+    ) async {
       await open(tester);
 
       // Nothing to fade yet, so the row carries the prompt instead.
       expect(find.text('Strength'), findsNothing);
       expect(find.text('Tap a look to apply it'), findsOneWidget);
 
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 300));
+      await tapLook(tester, 'Kodak');
 
       // One tap, and both the look and the way to dial it back are there —
       // no second tap on the tile to uncover the slider.
@@ -201,13 +221,13 @@ void main() {
       expect(find.text('100%'), findsOneWidget);
 
       // Tapping the live tile again is a no-op rather than a toggle.
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 300));
+      await tapLook(tester, 'Kodak');
       expect(find.text('Strength'), findsOneWidget);
     });
 
-    testWidgets('opens on the look the clip is already wearing',
-        (tester) async {
+    testWidgets('opens on the look the clip is already wearing', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
@@ -228,10 +248,16 @@ void main() {
       expect(find.text('Pearl'), findsOneWidget);
       final panel = tester.getRect(find.byType(FilterPanel));
       final tile = tester.getRect(find.text('Pearl'));
-      expect(tile.left, greaterThanOrEqualTo(panel.left),
-          reason: 'the applied look is off the left of the strip');
-      expect(tile.right, lessThanOrEqualTo(panel.right),
-          reason: 'the applied look is off the right of the strip');
+      expect(
+        tile.left,
+        greaterThanOrEqualTo(panel.left),
+        reason: 'the applied look is off the left of the strip',
+      );
+      expect(
+        tile.right,
+        lessThanOrEqualTo(panel.right),
+        reason: 'the applied look is off the right of the strip',
+      );
     });
 
     testWidgets('the pill swaps the looks for the sliders', (tester) async {
@@ -257,81 +283,76 @@ void main() {
 
       // 'Original' is already the active look on a fresh clip, so this is the
       // second-tap gesture — and there is nothing to fade an ungraded clip to.
-      await tester.tap(find.text('Original'), warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 300));
+      await tapLook(tester, 'Original');
 
       expect(find.text('Strength'), findsNothing);
       expect(project.clips.first.filterId, 'none');
     });
 
-    testWidgets('a category still keeps the original within reach',
-        (tester) async {
+    testWidgets('a category still keeps the original within reach', (
+      tester,
+    ) async {
       await open(tester);
 
-      await tester.tap(find.text('Mood'), warnIfMissed: false);
+      await tester.tap(find.text('Mood').hitTestable().first);
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Original'), findsOneWidget);
       expect(find.text('Noir'), findsOneWidget);
-      // Film is a different group, so its looks are out of the row now.
-      expect(find.text('Kodak'), findsNothing);
+      // Film is a different group, so its looks are off the sheet — but the
+      // strip wraps rather than scrolls, so 'off the sheet' means clipped
+      // rather than gone from the tree.
+      expect(find.text('Kodak').hitTestable(), findsNothing);
     });
 
-    // The sheet scrolls whatever it cannot show, so an overflow check passes
-    // on a panel whose last row is below the fold. This is the row the user
-    // came for; it has to be on screen without a drag.
-    testWidgets('every row is on screen without scrolling the sheet',
-        (tester) async {
+    testWidgets('the sheet shows what it can and names the way to the rest', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
 
       await open(tester);
 
-      // Whatever hangs below the fold is exactly the sheet's scroll extent,
-      // and a rect check misses a row clipped by a few points.
-      void expectNothingBelowTheFold(String state) {
-        final position = tester
-            .state<ScrollableState>(find.descendant(
-              of: find.byType(PanelShell),
-              matching: find.byType(Scrollable),
-            ).first)
-            .position;
-        expect(
-          position.maxScrollExtent,
-          0,
-          reason: 'with $state the panel is '
-              '${position.maxScrollExtent}pt taller than the sheet opens, so '
-              'that much of it is off the bottom until the user drags',
-        );
-      }
-
+      // The library is far longer than any sheet, so the looks past the fold
+      // are the button's — not a gesture the user has to find by accident.
       expect(find.text('Tap a look to apply it'), findsOneWidget);
-      expectNothingBelowTheFold('no look applied');
+      expect(find.text('More options'), findsOneWidget);
 
-      // And again with a look on, where the strength slider takes the row
-      // the prompt was holding open for it.
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 300));
+      final position = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(PanelShell),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      await tester.drag(find.byType(PanelShell), const Offset(0, -120));
+      await tester.pump();
+      expect(position.pixels, 0, reason: 'the sheet scrolled under a finger');
 
-      expect(find.text('Strength'), findsOneWidget);
-      expectNothingBelowTheFold('a look applied');
+      // And the first line of looks is on screen, which is what the tool is
+      // for: something to tap without opening anything.
+      expect(find.text('Original').hitTestable(), findsOneWidget);
     });
 
-    testWidgets('apply to all spreads the look over every clip',
-        (tester) async {
+    testWidgets('apply to all spreads the look over every clip', (
+      tester,
+    ) async {
       final project = await open(tester, clips: 3);
 
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 300));
+      await tapLook(tester, 'Kodak');
       await tester.tap(find.text('All clips'), warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(project.clips.map((c) => c.filterId), everyElement('kodak'));
     });
 
-    testWidgets('the strip writes to a selected overlay, not a clip',
-        (tester) async {
+    testWidgets('the strip writes to a selected overlay, not a clip', (
+      tester,
+    ) async {
       final overlay = _overlay();
       final clip = _clip();
       final editor = EditorController(
@@ -340,12 +361,16 @@ void main() {
       addTearDown(editor.dispose);
       editor.select(LaneKind.overlay, overlay.id);
 
-      await tester.pumpWidget(_host(Scaffold(
-        body: FilterPanel(editor: editor, overlay: overlay, onClose: () {}),
-      )));
+      await tester.pumpWidget(
+        _host(
+          Scaffold(
+            body: FilterPanel(editor: editor, overlay: overlay, onClose: () {}),
+          ),
+        ),
+      );
       await tester.pump();
 
-      await tester.tap(find.text('Portra'), warnIfMissed: false);
+      await tapLook(tester, 'Portra');
       // Past the controller's save debounce, so no timer outlives the test.
       await tester.pump(const Duration(seconds: 1));
 
@@ -361,10 +386,10 @@ void main() {
     // screen. Both halves of that are checked here: opening the tool, and
     // switching clips while it is already open.
     VideoClip short(String path) => VideoClip(
-          path: path,
-          isImage: true,
-          sourceDuration: const Duration(seconds: 1),
-        );
+      path: path,
+      isImage: true,
+      sourceDuration: const Duration(seconds: 1),
+    );
 
     /// The x of a point inside the clip at [fraction] along the whole track.
     Offset pointOnTrack(WidgetTester tester, double fraction) {
@@ -381,16 +406,20 @@ void main() {
     VideoClip previewed(WidgetTester tester) =>
         (find.byType(ClipView).evaluate().first.widget as ClipView).clip;
 
-    testWidgets('opening the tool brings the playhead to the selected clip',
-        (tester) async {
+    testWidgets('opening the tool brings the playhead to the selected clip', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
       final project = Project(
         name: 'Three',
-        clips: [short('/nonexistent/a.jpg'), short('/nonexistent/b.jpg'),
-            short('/nonexistent/c.jpg')],
+        clips: [
+          short('/nonexistent/a.jpg'),
+          short('/nonexistent/b.jpg'),
+          short('/nonexistent/c.jpg'),
+        ],
       );
       await tester.pumpWidget(_host(EditorScreen(project: project)));
       await tester.pump(const Duration(milliseconds: 300));
@@ -400,26 +429,34 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       await openEffects(tester);
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
+      await tapLook(tester, 'Kodak');
       await tester.pump(const Duration(seconds: 1));
 
       expect(project.clips[1].filterId, 'kodak');
-      expect(previewed(tester).path, '/nonexistent/b.jpg',
-          reason: 'the canvas is showing a clip other than the graded one, so '
-              'the filter looks like it did nothing');
+      expect(
+        previewed(tester).path,
+        '/nonexistent/b.jpg',
+        reason:
+            'the canvas is showing a clip other than the graded one, so '
+            'the filter looks like it did nothing',
+      );
       expect(find.byType(GradedBox), findsWidgets);
     });
 
-    testWidgets('switching clips with the tool open follows along',
-        (tester) async {
+    testWidgets('switching clips with the tool open follows along', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
       final project = Project(
         name: 'Three',
-        clips: [short('/nonexistent/a.jpg'), short('/nonexistent/b.jpg'),
-            short('/nonexistent/c.jpg')],
+        clips: [
+          short('/nonexistent/a.jpg'),
+          short('/nonexistent/b.jpg'),
+          short('/nonexistent/c.jpg'),
+        ],
       );
       await tester.pumpWidget(_host(EditorScreen(project: project)));
       await tester.pump(const Duration(milliseconds: 300));
@@ -431,7 +468,7 @@ void main() {
       // Now pick the first clip without closing the panel.
       await tester.tapAt(pointOnTrack(tester, 0.08));
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('Portra'), warnIfMissed: false);
+      await tapLook(tester, 'Portra');
       await tester.pump(const Duration(seconds: 1));
 
       expect(project.clips[0].filterId, 'portra');
@@ -440,8 +477,9 @@ void main() {
   });
 
   group('grading an overlay', () {
-    testWidgets('the filter panel writes to the overlay, not a clip',
-        (tester) async {
+    testWidgets('the filter panel writes to the overlay, not a clip', (
+      tester,
+    ) async {
       final overlay = _overlay();
       final clip = _clip();
       final editor = EditorController(
@@ -450,12 +488,20 @@ void main() {
       addTearDown(editor.dispose);
       editor.select(LaneKind.overlay, overlay.id);
 
-      await tester.pumpWidget(_host(Scaffold(
-        body: EffectsPanel(editor: editor, overlay: overlay, onClose: () {}),
-      )));
+      await tester.pumpWidget(
+        _host(
+          Scaffold(
+            body: EffectsPanel(
+              editor: editor,
+              overlay: overlay,
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
       await tester.pump();
 
-      await tester.tap(find.text('Portra'), warnIfMissed: false);
+      await tapLook(tester, 'Portra');
       // Past the controller's save debounce, so no timer outlives the test.
       await tester.pump(const Duration(seconds: 1));
 
@@ -463,8 +509,9 @@ void main() {
       expect(clip.filterId, 'none');
     });
 
-    testWidgets('the adjust panel writes to the overlay, not a clip',
-        (tester) async {
+    testWidgets('the adjust panel writes to the overlay, not a clip', (
+      tester,
+    ) async {
       final overlay = _overlay();
       final clip = _clip();
       final editor = EditorController(
@@ -472,9 +519,13 @@ void main() {
       );
       addTearDown(editor.dispose);
 
-      await tester.pumpWidget(_host(Scaffold(
-        body: AdjustPanel(editor: editor, overlay: overlay, onClose: () {}),
-      )));
+      await tester.pumpWidget(
+        _host(
+          Scaffold(
+            body: AdjustPanel(editor: editor, overlay: overlay, onClose: () {}),
+          ),
+        ),
+      );
       await tester.pump();
 
       // Drive the slider the panel built rather than the model directly.
@@ -490,16 +541,20 @@ void main() {
     // The panels edit the selected clip, the canvas draws the clip under the
     // playhead. Let those drift apart and every slider looks broken: the
     // grade lands on footage that is nowhere on screen.
-    testWidgets('pulls the playhead onto the clip the sliders are grading',
-        (tester) async {
-      final project =
-          Project(name: 'Grade', clips: [_clip(), _clip(), _clip()]);
+    testWidgets('pulls the playhead onto the clip the sliders are grading', (
+      tester,
+    ) async {
+      final project = Project(
+        name: 'Grade',
+        clips: [_clip(), _clip(), _clip()],
+      );
       await tester.pumpWidget(_host(EditorScreen(project: project)));
       await tester.pump(const Duration(milliseconds: 300));
 
       final editor = Provider.of<EditorController>(
-          tester.element(find.byType(ClipView).first),
-          listen: false);
+        tester.element(find.byType(ClipView).first),
+        listen: false,
+      );
       editor.selectClip(0);
       editor.seek(const Duration(seconds: 9)); // parked on the third clip
       await tester.pump(const Duration(milliseconds: 300));
@@ -511,29 +566,38 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(project.clips.first.adjustments.brightness, isNot(0));
-      expect(project.clipIndexAt(editor.position.value), 0,
-          reason: 'the playhead should follow the graded clip');
-      expect(find.byType(GradedBox), findsWidgets,
-          reason: 'the grade should be visible in the preview');
+      expect(
+        project.clipIndexAt(editor.position.value),
+        0,
+        reason: 'the playhead should follow the graded clip',
+      );
+      expect(
+        find.byType(GradedBox),
+        findsWidgets,
+        reason: 'the grade should be visible in the preview',
+      );
     });
 
     testWidgets('does the same before a look is picked', (tester) async {
       _phone(tester);
-      final project =
-          Project(name: 'Filters', clips: [_clip(), _clip(), _clip()]);
+      final project = Project(
+        name: 'Filters',
+        clips: [_clip(), _clip(), _clip()],
+      );
       await tester.pumpWidget(_host(EditorScreen(project: project)));
       await tester.pump(const Duration(milliseconds: 300));
 
       final editor = Provider.of<EditorController>(
-          tester.element(find.byType(ClipView).first),
-          listen: false);
+        tester.element(find.byType(ClipView).first),
+        listen: false,
+      );
       editor.selectClip(0);
       editor.seek(const Duration(seconds: 9));
       await tester.pump(const Duration(milliseconds: 300));
 
       await tapEditorTool(tester, 'Effect');
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('Kodak'), warnIfMissed: false);
+      await tapLook(tester, 'Kodak');
       await tester.pump(const Duration(seconds: 1));
 
       expect(project.clips.first.filterId, 'kodak');
@@ -541,8 +605,9 @@ void main() {
       expect(find.byType(GradedBox), findsWidgets);
     });
 
-    testWidgets('pulls the playhead into a selected overlay\'s span',
-        (tester) async {
+    testWidgets('pulls the playhead into a selected overlay\'s span', (
+      tester,
+    ) async {
       final overlay = _overlay()..start = const Duration(seconds: 6);
       final project = Project(
         name: 'PiP',
@@ -553,8 +618,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final editor = Provider.of<EditorController>(
-          tester.element(find.byType(ClipView).first),
-          listen: false);
+        tester.element(find.byType(ClipView).first),
+        listen: false,
+      );
       editor.select(LaneKind.overlay, overlay.id);
       editor.seek(Duration.zero);
       await tester.pump(const Duration(milliseconds: 300));
@@ -563,13 +629,56 @@ void main() {
       // The overlay's colour tool is labelled 'Color' — plain 'Adjust' is
       // taken by its transform tool.
       final colour = find.text('Color');
-      await tester.scrollUntilVisible(colour, 120,
-          scrollable: find.byType(Scrollable).last);
+      await tester.scrollUntilVisible(
+        colour,
+        120,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.tap(colour, warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(overlay.isVisibleAt(editor.position.value), isTrue,
-          reason: 'the overlay being graded should be on screen');
+      expect(
+        overlay.isVisibleAt(editor.position.value),
+        isTrue,
+        reason: 'the overlay being graded should be on screen',
+      );
     });
   });
+}
+
+/// Taps a look by name, going through 'More options' when the sheet has no
+/// room for it.
+///
+/// The strip wraps instead of scrolling, so on a phone the library's first
+/// two lines are on the sheet and the rest are in the sheet the button
+/// opens. Which side a given look falls on is a matter of the window, so a
+/// test that only ever tapped the strip would pass or fail on screen size.
+Future<void> tapLook(WidgetTester tester, String name) async {
+  if (find.text(name).hitTestable().evaluate().isNotEmpty) {
+    await tester.tap(find.text(name).hitTestable().first);
+    await tester.pump(const Duration(milliseconds: 300));
+    return;
+  }
+  await tester.tap(find.text('More options'));
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(
+    find
+        .descendant(of: find.byType(BottomSheet), matching: find.text(name))
+        .first,
+    -120,
+    scrollable: find
+        .descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.tap(
+    find
+        .descendant(of: find.byType(BottomSheet), matching: find.text(name))
+        .first,
+  );
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(find.text('Done').last);
+  await tester.pumpAndSettle();
 }

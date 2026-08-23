@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/enums.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/panel_shell.dart';
 import '../../widgets/app_slider.dart';
 
@@ -44,28 +45,27 @@ class _AnimationPickerState extends State<AnimationPicker> {
           onSelected: (i) => setState(() => _side = i),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 62,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            itemCount: LayerAnimation.values.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 9),
-            itemBuilder: (context, i) {
-              final a = LayerAnimation.values[i];
-              final active = current == a;
-              return GestureDetector(
+        PanelStrip(
+          gap: 9,
+          runGap: 9,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          children: [
+            for (final a in LayerAnimation.values)
+              GestureDetector(
                 onTap: () => _side == 0 ? widget.onIn(a) : widget.onOut(a),
                 child: Container(
                   width: 66,
+                  height: 62,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: active
+                    color: current == a
                         ? AppColors.accent.withValues(alpha: 0.18)
                         : AppColors.surfaceHigh,
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(
-                      color: active ? AppColors.accent : Colors.transparent,
+                      color: current == a
+                          ? AppColors.accent
+                          : Colors.transparent,
                     ),
                   ),
                   child: Text(
@@ -74,14 +74,16 @@ class _AnimationPickerState extends State<AnimationPicker> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: active ? AppColors.accent : AppColors.textDim,
+                      color: current == a
+                          ? AppColors.accent
+                          : AppColors.textDim,
                     ),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
+        const SizedBox(height: 4),
         AppSlider(
           label: 'Animation length',
           value: widget.duration.inMilliseconds / 1000,

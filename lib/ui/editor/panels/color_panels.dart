@@ -9,6 +9,7 @@ import '../../../data/repositories/adjust_layout_store.dart';
 import '../../../data/services/auto_adjust.dart';
 import '../../../data/services/thumbnail_service.dart';
 import '../../../state/editor_controller.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/app_slider.dart';
 import '../../widgets/panel_shell.dart';
 import 'color_tool_tabs.dart';
@@ -505,37 +506,40 @@ class _AdjustPanelState extends State<AdjustPanel> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: r.dp(40),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
-            itemCount: swatches,
-            separatorBuilder: (_, _) => SizedBox(width: r.dp(8)),
-            itemBuilder: (context, i) {
-              final hue = i / swatches;
-              final on = (adj.colorCastHue - hue).abs() < 0.001;
-              return GestureDetector(
+        PanelStrip(
+          gap: r.dp(8),
+          runGap: r.dp(8),
+          padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
+          children: [
+            for (var i = 0; i < swatches; i++)
+              GestureDetector(
                 onTap: () => _apply((a) {
-                  a.colorCastHue = hue;
+                  a.colorCastHue = i / swatches;
                   // Picking a colour with the strength at zero would look
                   // like a dead swatch, so the first pick brings it up.
                   if (a.colorCastAmount == 0) a.colorCastAmount = 0.35;
                 }),
                 child: Container(
                   width: r.dp(34),
+                  height: r.dp(40),
                   decoration: BoxDecoration(
-                    color: HSVColor.fromAHSV(1, hue * 360, 0.8, 0.95).toColor(),
+                    color: HSVColor.fromAHSV(
+                      1,
+                      i / swatches * 360,
+                      0.8,
+                      0.95,
+                    ).toColor(),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: on ? AppColors.text : Colors.transparent,
+                      color: (adj.colorCastHue - i / swatches).abs() < 0.001
+                          ? AppColors.text
+                          : Colors.transparent,
                       width: 2.5,
                     ),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
         SizedBox(height: r.vp(4)),
         AppSlider(
@@ -564,23 +568,18 @@ class _AdjustPanelState extends State<AdjustPanel> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: r.dp(40),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
-            itemCount: HslGrade.bandCount,
-            separatorBuilder: (_, _) => SizedBox(width: r.dp(8)),
-            itemBuilder: (context, i) {
-              final on = i == _band;
-              final touched =
-                  grade.hue[i] != 0 ||
-                  grade.saturation[i] != 0 ||
-                  grade.luminance[i] != 0;
-              return GestureDetector(
+        PanelStrip(
+          gap: r.dp(8),
+          runGap: r.dp(8),
+          padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
+          children: [
+            for (var i = 0; i < HslGrade.bandCount; i++)
+              GestureDetector(
                 onTap: () => setState(() => _band = i),
                 child: Container(
                   width: r.dp(34),
+                  height: r.dp(40),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: HSLColor.fromAHSL(
                       1,
@@ -590,11 +589,14 @@ class _AdjustPanelState extends State<AdjustPanel> {
                     ).toColor(),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: on ? AppColors.text : Colors.transparent,
+                      color: i == _band ? AppColors.text : Colors.transparent,
                       width: 2.5,
                     ),
                   ),
-                  child: touched
+                  child:
+                      grade.hue[i] != 0 ||
+                          grade.saturation[i] != 0 ||
+                          grade.luminance[i] != 0
                       ? Icon(
                           Icons.circle,
                           size: r.ic(7),
@@ -602,9 +604,8 @@ class _AdjustPanelState extends State<AdjustPanel> {
                         )
                       : null,
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
         SizedBox(height: r.vp(4)),
         _hslSlider(r, 'Hue', Icons.palette_outlined, grade.hue),
@@ -710,27 +711,22 @@ class _AdjustPanelState extends State<AdjustPanel> {
     // two lines, and at a large system font a fixed 74 is a pixel short —
     // which is exactly the kind of miss that paints the overflow stripe.
     final line = MediaQuery.textScalerOf(context).scale(r.sp(9.5)) * 1.15;
-    return SizedBox(
-      height: r.ic(22) + r.vp(6) + line * 2 + r.vp(10),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: r.dp(10)),
-        itemCount: shown.length + 2,
-        itemBuilder: (context, i) {
-          // Auto leads the row and is a button, not a knob: it has no slider
-          // of its own, it reads the frame and moves the others.
-          if (i == 0) return _autoButton(r);
-          // Manage closes it, for the same reason: it changes the row rather
-          // than the picture.
-          if (i == shown.length + 1) return _manageButton(r);
-          final k = shown[i - 1];
-          final on = i - 1 == _selected;
-          final touched = k.read(adj) != 0;
-          return GestureDetector(
+    final tall = r.ic(22) + r.vp(6) + line * 2 + r.vp(10);
+    return PanelStrip(
+      gap: 0,
+      runGap: r.vp(6),
+      padding: EdgeInsets.symmetric(horizontal: r.dp(10)),
+      children: [
+        // Auto leads the row and is a button, not a knob: it has no slider
+        // of its own, it reads the frame and moves the others.
+        SizedBox(height: tall, child: _autoButton(r)),
+        for (var i = 0; i < shown.length; i++)
+          GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _selected = i - 1),
+            onTap: () => setState(() => _selected = i),
             child: SizedBox(
               width: r.dp(64),
+              height: tall,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -739,15 +735,15 @@ class _AdjustPanelState extends State<AdjustPanel> {
                     alignment: Alignment.center,
                     children: [
                       Icon(
-                        k.icon,
+                        shown[i].icon,
                         size: r.ic(22),
-                        color: on
+                        color: i == _selected
                             ? AppColors.text
-                            : (touched
+                            : (shown[i].read(adj) != 0
                                   ? AppColors.accent
                                   : AppColors.appBarMuted),
                       ),
-                      if (touched)
+                      if (shown[i].read(adj) != 0)
                         Positioned(
                           top: -r.vp(6),
                           right: -r.dp(8),
@@ -764,23 +760,29 @@ class _AdjustPanelState extends State<AdjustPanel> {
                   ),
                   SizedBox(height: r.vp(6)),
                   Text(
-                    k.label,
+                    shown[i].label,
                     maxLines: 2,
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: r.sp(9.5),
                       height: 1.15,
-                      fontWeight: on ? FontWeight.w700 : FontWeight.w500,
-                      color: on ? AppColors.text : AppColors.textDim,
+                      fontWeight: i == _selected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: i == _selected
+                          ? AppColors.text
+                          : AppColors.textDim,
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
-      ),
+          ),
+        // Manage closes the row, for the same reason Auto opens it: it
+        // changes what is in the row rather than the picture.
+        SizedBox(height: tall, child: _manageButton(r)),
+      ],
     );
   }
 }

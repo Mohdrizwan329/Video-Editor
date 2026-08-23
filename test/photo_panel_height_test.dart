@@ -11,15 +11,18 @@ import 'package:video_editor/ui/image_editor/image_editor_screen.dart';
 void main() {
   const panelKey = ValueKey('photo-panel');
 
-  /// Tools whose controls are short enough to fit on a phone. Adjust is not
-  /// among them on purpose: it is a long column of sliders and scrolling is
-  /// the right answer for it.
+  /// Tools whose controls are short enough to fit on a phone.
+  ///
+  /// Adjust is not among them on purpose: it is a long column of sliders and
+  /// scrolling is the right answer for it. Watermark left the list when the
+  /// preset rows stopped scrolling sideways — five fonts on two lines is
+  /// taller than the ceiling, and two lines the user can see beats one line
+  /// with the rest off the edge.
   const fitsOnAPhone = [
     'Core',
     'Filter',
     'Markup',
     'Text',
-    'Watermark',
     'Pixelate',
     'Retouch',
   ];

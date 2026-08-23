@@ -68,9 +68,10 @@ class _AudioPanelState extends State<AudioPanel> {
               max: maxFade,
               defaultValue: 0,
               format: (v) => '${v.toStringAsFixed(1)}s',
-              onChanged: (v) =>
-                  _update((a) => a.fadeIn = durationFromSeconds(v),
-                      record: false),
+              onChanged: (v) => _update(
+                (a) => a.fadeIn = durationFromSeconds(v),
+                record: false,
+              ),
               onChangeEnd: (v) =>
                   _update((a) => a.fadeIn = durationFromSeconds(v)),
             ),
@@ -82,9 +83,10 @@ class _AudioPanelState extends State<AudioPanel> {
               max: maxFade,
               defaultValue: 0,
               format: (v) => '${v.toStringAsFixed(1)}s',
-              onChanged: (v) =>
-                  _update((a) => a.fadeOut = durationFromSeconds(v),
-                      record: false),
+              onChanged: (v) => _update(
+                (a) => a.fadeOut = durationFromSeconds(v),
+                record: false,
+              ),
               onChangeEnd: (v) =>
                   _update((a) => a.fadeOut = durationFromSeconds(v)),
             ),
@@ -116,47 +118,23 @@ class _AudioPanelState extends State<AudioPanel> {
               padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Voice changer',
-                    style: TextStyle(fontSize: 11, color: AppColors.textDim)),
+                child: Text(
+                  'Voice changer',
+                  style: TextStyle(fontSize: 11, color: AppColors.textDim),
+                ),
               ),
             ),
-            SizedBox(
+            ChipStrip(
               height: 32,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                itemCount: VoiceEffect.values.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, i) {
-                  final fx = VoiceEffect.values[i];
-                  final active = l.voiceEffect == fx;
-                  return GestureDetector(
-                    onTap: () => _update((a) => a.voiceEffect = fx),
-                    child: Container(
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color:
-                            active ? AppColors.accent : AppColors.surfaceHigh,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(fx.label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: active
-                                ? AppColors.onAccent
-                                : AppColors.textDim,
-                          )),
-                    ),
-                  );
-                },
-              ),
+              labels: [for (final fx in VoiceEffect.values) fx.label],
+              selectedIndex: VoiceEffect.values.indexOf(l.voiceEffect),
+              onSelected: (i) =>
+                  _update((a) => a.voiceEffect = VoiceEffect.values[i]),
             ),
             const SizedBox(height: 10),
           ],
         ),
-),
+      ),
     );
   }
 }
@@ -222,8 +200,11 @@ class OverlayPanel extends StatefulWidget {
 
 class _OverlayPanelState extends State<OverlayPanel> {
   void _update(void Function(OverlayLayer) mutate, {bool record = true}) {
-    widget.editor
-        .updateLayer<OverlayLayer>(widget.layer, mutate, record: record);
+    widget.editor.updateLayer<OverlayLayer>(
+      widget.layer,
+      mutate,
+      record: record,
+    );
     setState(() {});
   }
 
@@ -300,7 +281,7 @@ class _OverlayPanelState extends State<OverlayPanel> {
               ),
           ],
         ),
-),
+      ),
     );
   }
 }

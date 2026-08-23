@@ -61,8 +61,8 @@ class _ExportScreenState extends State<ExportScreen> {
             child: _result != null
                 ? _resultView()
                 : _running
-                    ? _progressView()
-                    : _settingsView(),
+                ? _progressView()
+                : _settingsView(),
           ),
         ),
       ),
@@ -75,74 +75,242 @@ class _ExportScreenState extends State<ExportScreen> {
     final duration = widget.project.totalDuration;
     final (w, h) = _settings.outputSize;
     final r = context.r;
-    return ListView(
-      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, r.vp(24)),
-      children: [
-        _summaryCard(w, h, duration),
-        SizedBox(height: r.vp(18)),
-        _sectionLabel('Format'),
-        _optionRow(
-          const ['MP4 video', 'Animated GIF'],
-          _gifMode ? 1 : 0,
-          (i) => setState(() => _gifMode = i == 1),
-        ),
-        SizedBox(height: r.vp(16)),
-        _sectionLabel('Resolution'),
-        _optionRow(
-          ExportResolution.values.map((r) => r.label).toList(),
-          ExportResolution.values.indexOf(_settings.resolution),
-          (i) => setState(
-              () => _settings.resolution = ExportResolution.values[i]),
-        ),
-        SizedBox(height: r.vp(16)),
-        _sectionLabel('Frame rate'),
-        _optionRow(
-          ExportFps.values.map((f) => f.label).toList(),
-          ExportFps.values.indexOf(_settings.fps),
-          (i) => setState(() => _settings.fps = ExportFps.values[i]),
-        ),
-        SizedBox(height: r.vp(16)),
-        _sectionLabel('Quality'),
-        _optionRow(
-          ExportQuality.values.map((q) => q.label).toList(),
-          ExportQuality.values.indexOf(_settings.quality),
-          (i) => setState(() => _settings.quality = ExportQuality.values[i]),
-        ),
-        SizedBox(height: r.vp(26)),
-        InkWell(
-          onTap: _start,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            height: r.tap(52),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: AppColors.appBarGradient,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: AppColors.glow(AppColors.appBar, opacity: 0.34),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.rocket_launch_rounded,
-                    size: r.ic(19), color: AppColors.onAppBar),
-                SizedBox(width: r.dp(9)),
-                Text(_gifMode ? 'Export GIF' : 'Start export',
-                    style: TextStyle(
-                        fontSize: r.sp(15.5),
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.onAppBar)),
-              ],
+    // Nothing here scrolls. What the screen is for is picking a format and
+    // pressing the button, and a settings page that slides takes the button
+    // off the bottom of it — the user then hunts for the thing they opened
+    // the screen to do.
+    //
+    // So the button, and the way to the rest of the dials, are pinned; the
+    // part above them shows what the window has room for and clips the rest.
+    // Nothing is lost by that: the sheet behind 'More settings' carries
+    // every dial, the two up here included.
+    return Padding(
+      padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, r.vp(12)),
+      child: Column(
+        children: [
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  _summaryCard(w, h, duration),
+                  SizedBox(height: r.vp(16)),
+                  _sectionLabel('Format'),
+                  _formatRow(),
+                  SizedBox(height: r.vp(14)),
+                  _sectionLabel('Resolution'),
+                  _resolutionRow(),
+                  SizedBox(height: r.vp(12)),
+                ],
+              ),
             ),
           ),
+          _moreSettingsButton(r),
+          SizedBox(height: r.vp(12)),
+          _startButton(r),
+          SizedBox(height: r.vp(10)),
+          Text(
+            'Rendering runs on device with FFmpeg. Keep the app open — higher '
+            'resolutions and slower presets take longer.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: r.sp(11), color: AppColors.textFaint),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _formatRow() => _optionRow(
+    const ['MP4 video', 'Animated GIF'],
+    _gifMode ? 1 : 0,
+    (i) => setState(() => _gifMode = i == 1),
+  );
+
+  Widget _resolutionRow() => _optionRow(
+    ExportResolution.values.map((r) => r.label).toList(),
+    ExportResolution.values.indexOf(_settings.resolution),
+    (i) => setState(() => _settings.resolution = ExportResolution.values[i]),
+  );
+
+  /// The way to the dials the screen does not show: frame rate and quality,
+  /// which most exports never touch and which are the first thing to push
+  /// the button off a small screen.
+  Widget _moreSettingsButton(Responsive r) {
+    return InkWell(
+      onTap: _openMoreSettings,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: r.tap(46),
+        padding: EdgeInsets.symmetric(horizontal: r.dp(14)),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.divider),
         ),
-        SizedBox(height: r.vp(12)),
-        Text(
-          'Rendering runs on device with FFmpeg. Keep the app open — higher '
-          'resolutions and slower presets take longer.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: r.sp(11), color: AppColors.textFaint),
+        child: Row(
+          children: [
+            Icon(Icons.tune, size: r.ic(17), color: AppColors.appBarMuted),
+            SizedBox(width: r.dp(10)),
+            Expanded(
+              child: Text(
+                'More settings',
+                style: TextStyle(
+                  fontSize: r.sp(12.5),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            // The current values, so the button says what is behind it
+            // rather than only that something is.
+            Text(
+              '${_settings.fps.label} fps · ${_settings.quality.label}',
+              style: TextStyle(fontSize: r.sp(11), color: AppColors.textFaint),
+            ),
+            SizedBox(width: r.dp(6)),
+            Icon(
+              Icons.chevron_right,
+              size: r.ic(18),
+              color: AppColors.textFaint,
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  Future<void> _openMoreSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      clipBehavior: Clip.antiAlias,
+      constraints: BoxConstraints(maxHeight: context.r.height * 0.85),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        // Its own state, so a tap on a chip repaints the sheet as well as
+        // the screen behind it.
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            void choose(VoidCallback change) {
+              setSheetState(change);
+              setState(() {});
+            }
+
+            final r = sheetContext.r;
+            return SafeArea(
+              top: false,
+              child: ContentBox(
+                maxWidth: 640,
+                hugHeight: true,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    r.gutter,
+                    r.vp(14),
+                    r.gutter,
+                    r.vp(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 38,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.divider,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: r.vp(14)),
+                      // Format and Resolution are on the screen as well.
+                      // They are here too because on a short window the
+                      // screen clips them, and a dial the user cannot reach
+                      // is worse than one shown twice.
+                      _sectionLabel('Format'),
+                      _optionRow(
+                        const ['MP4 video', 'Animated GIF'],
+                        _gifMode ? 1 : 0,
+                        (i) => choose(() => _gifMode = i == 1),
+                      ),
+                      SizedBox(height: r.vp(16)),
+                      _sectionLabel('Resolution'),
+                      _optionRow(
+                        ExportResolution.values.map((r) => r.label).toList(),
+                        ExportResolution.values.indexOf(_settings.resolution),
+                        (i) => choose(
+                          () =>
+                              _settings.resolution = ExportResolution.values[i],
+                        ),
+                      ),
+                      SizedBox(height: r.vp(16)),
+                      _sectionLabel('Frame rate'),
+                      _optionRow(
+                        ExportFps.values.map((f) => f.label).toList(),
+                        ExportFps.values.indexOf(_settings.fps),
+                        (i) =>
+                            choose(() => _settings.fps = ExportFps.values[i]),
+                      ),
+                      SizedBox(height: r.vp(16)),
+                      _sectionLabel('Quality'),
+                      _optionRow(
+                        ExportQuality.values.map((q) => q.label).toList(),
+                        ExportQuality.values.indexOf(_settings.quality),
+                        (i) => choose(
+                          () => _settings.quality = ExportQuality.values[i],
+                        ),
+                      ),
+                      SizedBox(height: r.vp(18)),
+                      TextButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _startButton(Responsive r) {
+    return InkWell(
+      onTap: _start,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: r.tap(52),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: AppColors.appBarGradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppColors.glow(AppColors.appBar, opacity: 0.34),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.rocket_launch_rounded,
+              size: r.ic(19),
+              color: AppColors.onAppBar,
+            ),
+            SizedBox(width: r.dp(9)),
+            Text(
+              _gifMode ? 'Export GIF' : 'Start export',
+              style: TextStyle(
+                fontSize: r.sp(15.5),
+                fontWeight: FontWeight.w800,
+                color: AppColors.onAppBar,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -154,9 +322,7 @@ class _ExportScreenState extends State<ExportScreen> {
       decoration: BoxDecoration(
         gradient: AppColors.tint(AppColors.appBar),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.appBar.withValues(alpha: 0.16),
-        ),
+        border: Border.all(color: AppColors.appBar.withValues(alpha: 0.16)),
       ),
       child: Column(
         children: [
@@ -171,15 +337,20 @@ class _ExportScreenState extends State<ExportScreen> {
           Divider(height: r.vp(22)),
           Row(
             children: [
-              Icon(Icons.info_outline,
-                  size: r.ic(14), color: AppColors.textFaint),
+              Icon(
+                Icons.info_outline,
+                size: r.ic(14),
+                color: AppColors.textFaint,
+              ),
               SizedBox(width: r.dp(8)),
               Expanded(
                 child: Text(
                   'H.264 · AAC · ${_settings.videoBitrateKbps} kbps · '
                   '${_settings.preset} preset',
                   style: TextStyle(
-                      fontSize: r.sp(11), color: AppColors.textFaint),
+                    fontSize: r.sp(11),
+                    color: AppColors.textFaint,
+                  ),
                 ),
               ),
             ],
@@ -200,24 +371,31 @@ class _ExportScreenState extends State<ExportScreen> {
               width: 6,
               height: 6,
               decoration: const BoxDecoration(
-                  color: AppColors.appBarMuted, shape: BoxShape.circle),
+                color: AppColors.appBarMuted,
+                shape: BoxShape.circle,
+              ),
             ),
             SizedBox(width: r.dp(5)),
             Flexible(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: r.sp(10), color: AppColors.textFaint)),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: r.sp(10),
+                  color: AppColors.textFaint,
+                ),
+              ),
             ),
           ],
         ),
         SizedBox(height: r.vp(4)),
-        Text(value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: r.sp(13.5), fontWeight: FontWeight.w700)),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: r.sp(13.5), fontWeight: FontWeight.w700),
+        ),
       ],
     );
   }
@@ -237,11 +415,14 @@ class _ExportScreenState extends State<ExportScreen> {
             ),
           ),
           SizedBox(width: r.dp(7)),
-          Text(text,
-              style: TextStyle(
-                  fontSize: r.sp(12),
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDim)),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: r.sp(12),
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDim,
+            ),
+          ),
         ],
       ),
     );
@@ -251,16 +432,17 @@ class _ExportScreenState extends State<ExportScreen> {
   /// label; below that they wrap onto a second line rather than squeezing
   /// "Balanced" into 50 points on a small phone.
   Widget _optionRow(
-      List<String> labels, int selected, ValueChanged<int> onSelected) {
+    List<String> labels,
+    int selected,
+    ValueChanged<int> onSelected,
+  ) {
     final r = context.r;
     const gap = 6.0;
     const minTile = 78.0;
     return LayoutBuilder(
       builder: (context, constraints) {
         final available = constraints.maxWidth;
-        final perRow = (available / minTile)
-            .floor()
-            .clamp(2, labels.length);
+        final perRow = (available / minTile).floor().clamp(2, labels.length);
         final tile = (available - gap * (perRow - 1)) / perRow;
         return Wrap(
           spacing: gap,
@@ -343,16 +525,19 @@ class _ExportScreenState extends State<ExportScreen> {
                   Text(
                     value < 0 ? '…' : '${(value * 100).round()}%',
                     style: TextStyle(
-                        fontSize: r.sp(21), fontWeight: FontWeight.w700),
+                      fontSize: r.sp(21),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
             ),
             SizedBox(height: r.vp(22)),
-            Text(p?.stage ?? 'Preparing',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: r.sp(14), fontWeight: FontWeight.w600)),
+            Text(
+              p?.stage ?? 'Preparing',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: r.sp(14), fontWeight: FontWeight.w600),
+            ),
             SizedBox(height: r.vp(6)),
             Text(
               p?.eta != null
@@ -392,18 +577,26 @@ class _ExportScreenState extends State<ExportScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline,
-                  size: r.ic(46), color: AppColors.danger),
+              Icon(
+                Icons.error_outline,
+                size: r.ic(46),
+                color: AppColors.danger,
+              ),
               SizedBox(height: r.vp(14)),
-              Text(result.error ?? 'Export failed',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: r.sp(14.5), fontWeight: FontWeight.w600)),
+              Text(
+                result.error ?? 'Export failed',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: r.sp(14.5),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               SizedBox(height: r.vp(10)),
               if (result.log != null)
                 Container(
                   constraints: BoxConstraints(
-                      maxHeight: math.min(r.vp(190), r.height * 0.34)),
+                    maxHeight: math.min(r.vp(190), r.height * 0.34),
+                  ),
                   padding: EdgeInsets.all(r.dp(10)),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
@@ -411,19 +604,23 @@ class _ExportScreenState extends State<ExportScreen> {
                   ),
                   child: SingleChildScrollView(
                     reverse: true,
-                    child: Text(result.log!,
-                        style: TextStyle(
-                            fontSize: r.sp(9.5),
-                            color: AppColors.textFaint,
-                            fontFamily: 'monospace')),
+                    child: Text(
+                      result.log!,
+                      style: TextStyle(
+                        fontSize: r.sp(9.5),
+                        color: AppColors.textFaint,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   ),
                 ),
               SizedBox(height: r.vp(18)),
               FilledButton(
                 style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: AppColors.onAccent,
-                    minimumSize: Size(r.dp(160), r.tap(44))),
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent,
+                  minimumSize: Size(r.dp(160), r.tap(44)),
+                ),
                 onPressed: () => setState(() {
                   _result = null;
                   _progress = null;
@@ -451,47 +648,65 @@ class _ExportScreenState extends State<ExportScreen> {
               width: r.dp(66),
               height: r.dp(66),
               decoration: const BoxDecoration(
-                  color: AppColors.accent, shape: BoxShape.circle),
-              child: Icon(Icons.check,
-                  size: r.ic(34), color: AppColors.onAccent),
+                color: AppColors.accent,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check,
+                size: r.ic(34),
+                color: AppColors.onAccent,
+              ),
             ),
             SizedBox(height: r.vp(18)),
-            Text('Export complete',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: r.sp(16), fontWeight: FontWeight.w700)),
+            Text(
+              'Export complete',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: r.sp(16), fontWeight: FontWeight.w700),
+            ),
             SizedBox(height: r.vp(6)),
-            Text('${_bytes(size)} · ${_settings.resolution.label} · '
-                '${_settings.fps.label} fps',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: r.sp(12), color: AppColors.textDim)),
+            Text(
+              '${_bytes(size)} · ${_settings.resolution.label} · '
+              '${_settings.fps.label} fps',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: r.sp(12), color: AppColors.textDim),
+            ),
             SizedBox(height: r.vp(8)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
-              child: Text(result.path!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: r.sp(10), color: AppColors.textFaint)),
+              child: Text(
+                result.path!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: r.sp(10),
+                  color: AppColors.textFaint,
+                ),
+              ),
             ),
             SizedBox(height: r.vp(24)),
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor:
-                    _savedToGallery ? AppColors.surfaceHigh : AppColors.accent,
-                foregroundColor:
-                    _savedToGallery ? AppColors.textDim : AppColors.onAccent,
+                backgroundColor: _savedToGallery
+                    ? AppColors.surfaceHigh
+                    : AppColors.accent,
+                foregroundColor: _savedToGallery
+                    ? AppColors.textDim
+                    : AppColors.onAccent,
                 minimumSize: Size(r.dp(200), r.tap(46)),
               ),
-              icon: Icon(_savedToGallery ? Icons.check : Icons.save_alt,
-                  size: r.ic(18)),
-              label: Text(_savedToGallery
-                  ? 'Saved to gallery'
-                  : _gifMode
-                      ? 'Save GIF to gallery'
-                      : 'Save to gallery'),
-              onPressed:
-                  _savedToGallery ? null : () => _saveToGallery(result.path!),
+              icon: Icon(
+                _savedToGallery ? Icons.check : Icons.save_alt,
+                size: r.ic(18),
+              ),
+              label: Text(
+                _savedToGallery
+                    ? 'Saved to gallery'
+                    : _gifMode
+                    ? 'Save GIF to gallery'
+                    : 'Save to gallery',
+              ),
+              onPressed: _savedToGallery
+                  ? null
+                  : () => _saveToGallery(result.path!),
             ),
             SizedBox(height: r.vp(10)),
             TextButton(
@@ -528,8 +743,12 @@ class _ExportScreenState extends State<ExportScreen> {
 
     if (_gifMode && result.success && result.path != null) {
       if (mounted) {
-        setState(() => _progress =
-            const ExportProgress(stage: 'Building GIF palette', value: -1));
+        setState(
+          () => _progress = const ExportProgress(
+            stage: 'Building GIF palette',
+            value: -1,
+          ),
+        );
       }
       final gif = await ClipOperations.exportGif(
         result.path!,
@@ -561,13 +780,15 @@ class _ExportScreenState extends State<ExportScreen> {
         title: const Text('Cancel export?'),
         actions: [
           TextButton(
-              style: AppTheme.outlinedAction(),
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Keep going')),
+            style: AppTheme.outlinedAction(),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep going'),
+          ),
           TextButton(
-              style: AppTheme.outlinedAction(tone: AppColors.dangerSoft),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Cancel')),
+            style: AppTheme.outlinedAction(tone: AppColors.dangerSoft),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel'),
+          ),
         ],
       ),
     );
@@ -589,9 +810,9 @@ class _ExportScreenState extends State<ExportScreen> {
       if (mounted) setState(() => _savedToGallery = true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
     }
   }
 

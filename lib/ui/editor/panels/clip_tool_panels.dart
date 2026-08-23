@@ -5,6 +5,7 @@ import '../../../core/utils/duration_ext.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../data/models/enums.dart';
 import '../../../state/editor_controller.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/app_slider.dart';
 import '../../widgets/panel_shell.dart';
 
@@ -173,24 +174,23 @@ class VoiceEffectPanel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: r.dp(62),
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: r.dp(4)),
-              itemCount: VoiceEffect.values.length,
-              separatorBuilder: (_, _) => SizedBox(width: r.dp(8)),
-              itemBuilder: (context, i) {
-                final fx = VoiceEffect.values[i];
-                final on = clip.voiceEffect == fx;
-                return GestureDetector(
+          PanelStrip(
+            gap: r.dp(8),
+            runGap: r.dp(8),
+            padding: EdgeInsets.symmetric(horizontal: r.dp(4)),
+            children: [
+              for (final fx in VoiceEffect.values)
+                GestureDetector(
                   onTap: () =>
                       editor.updateClip(index, (c) => c.voiceEffect = fx),
                   child: Container(
                     width: r.dp(66),
+                    height: r.dp(62),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: on ? AppColors.accent : AppColors.surfaceHigh,
+                      color: clip.voiceEffect == fx
+                          ? AppColors.accent
+                          : AppColors.surfaceHigh,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -199,13 +199,14 @@ class VoiceEffectPanel extends StatelessWidget {
                       style: TextStyle(
                         fontSize: r.sp(11),
                         fontWeight: FontWeight.w600,
-                        color: on ? AppColors.onAccent : AppColors.text,
+                        color: clip.voiceEffect == fx
+                            ? AppColors.onAccent
+                            : AppColors.text,
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+            ],
           ),
           SizedBox(height: r.vp(8)),
           SwitchListTile.adaptive(

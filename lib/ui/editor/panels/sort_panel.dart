@@ -12,11 +12,7 @@ import '../timeline/filmstrip.dart';
 /// place, but only while it is on screen — this lays the whole project out as
 /// one row of cards so a clip can be moved from one end to the other.
 class SortPanel extends StatelessWidget {
-  const SortPanel({
-    super.key,
-    required this.editor,
-    required this.onClose,
-  });
+  const SortPanel({super.key, required this.editor, required this.onClose});
 
   final EditorController editor;
   final VoidCallback onClose;
@@ -35,8 +31,7 @@ class SortPanel extends StatelessWidget {
               child: Text(
                 'Add a second clip to re-order the track',
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: r.sp(12), color: AppColors.textDim),
+                style: TextStyle(fontSize: r.sp(12), color: AppColors.textDim),
               ),
             )
           : Column(
@@ -45,8 +40,10 @@ class SortPanel extends StatelessWidget {
                 SizedBox(height: r.vp(6)),
                 Text(
                   'Drag a clip to move it',
-                  style:
-                      TextStyle(fontSize: r.sp(10.5), color: AppColors.textDim),
+                  style: TextStyle(
+                    fontSize: r.sp(10.5),
+                    color: AppColors.textDim,
+                  ),
                 ),
                 SizedBox(height: r.vp(8)),
                 SizedBox(
@@ -111,7 +108,9 @@ class SortPanel extends StatelessWidget {
                       top: 3,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 1),
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.appBar.withValues(alpha: 0.72),
                           borderRadius: BorderRadius.circular(5),

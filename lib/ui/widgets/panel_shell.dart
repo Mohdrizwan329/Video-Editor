@@ -23,8 +23,11 @@ import '../../core/utils/responsive.dart';
 /// panel whose size is a promise: what you see is what this tool puts on the
 /// first screen, and there is a labelled way to the rest.
 ///
-/// The handle and the title row still drag the sheet taller for a user who
-/// would rather have the room than the second sheet.
+/// Nothing here resizes. A sheet that can be dragged taller is a sheet whose
+/// height is a guess the user has to make, and it puts the same controls in
+/// two places — some behind a drag, the rest behind the button. The height a
+/// tool opens at is the height it keeps, and there is exactly one way to the
+/// rest of it.
 class PanelShell extends StatefulWidget {
   const PanelShell({
     super.key,
@@ -64,13 +67,8 @@ class PanelShell extends StatefulWidget {
   /// The handle strip above the title row: what the user grabs to resize.
   static const double kHandleHeight = 14;
 
-  /// Dragged all the way down, a sheet still shows its title row and a
-  /// control or two — collapsing it to nothing is what the close button is
-  /// for.
-  static const double kMinSheetHeight = 132;
-
-  /// A sheet is never more than half the window, or 42% of a short one —
-  /// dragged or otherwise. Past that there is no preview left to edit against.
+  /// A sheet is never more than half the window, or 42% of a short one. Past
+  /// that there is no preview left to edit against.
   static double _cap(Responsive r) => r.height * (r.isShort ? 0.42 : 0.5);
 
   static double _defaultHeight(Responsive r) => math.min(kSheetHeight, _cap(r));
@@ -101,17 +99,9 @@ class PanelShell extends StatefulWidget {
 }
 
 class _PanelShellState extends State<PanelShell> {
-  /// Null until the user drags: the sheet is as tall as its controls, and
-  /// only a deliberate drag pins it to a number.
-  double? _dragged;
-
-  /// The column being sized, so a drag can start from whatever height the
-  /// content settled at rather than jumping to a default first.
-  final GlobalKey _sheetKey = GlobalKey();
-
-  /// The body's viewport, which is how the sheet knows whether there is
-  /// anything left to reveal by growing. It never scrolls under a finger —
-  /// see the class doc — it is only ever measured.
+  /// The body's viewport, which is how the sheet knows whether its controls
+  /// outrun it. It never scrolls under a finger — see the class doc — it is
+  /// only ever measured.
   final ScrollController _scroll = ScrollController();
 
   /// True once a laid-out frame has found more controls than the body can
@@ -175,44 +165,6 @@ class _PanelShellState extends State<PanelShell> {
     });
   }
 
-  /// How much of the body is currently out of sight. Growing the sheet past
-  /// this only opens blank space under the last control, so a drag stops
-  /// here even though the cap is further up.
-  double get _hidden {
-    if (!_scroll.hasClients || !_scroll.position.hasContentDimensions) {
-      return double.infinity;
-    }
-    return math.max(0, _scroll.position.maxScrollExtent);
-  }
-
-  double _height(Responsive r) {
-    final dragged = _dragged;
-    if (dragged != null) return dragged;
-    final box = _sheetKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box != null && box.hasSize) return box.size.height;
-    return PanelShell._defaultHeight(r);
-  }
-
-  void _resize(double dy, Responsive r) {
-    final from = _height(r);
-    // Up is negative in a drag delta and taller on screen.
-    var next = from - dy;
-    // Taller is only worth it while something is still hidden: a sheet whose
-    // controls already fit has nothing to show for the room it would take
-    // off the preview.
-    if (dy < 0) next = math.min(next, from + _hidden);
-    setState(() {
-      _dragged = next.clamp(
-        math.min(PanelShell.kMinSheetHeight, PanelShell._cap(r)),
-        PanelShell._cap(r),
-      );
-    });
-  }
-
-  /// A tap on the handle hands the sheet back to its own controls, so a user
-  /// who has dragged one taller does not have to eyeball their way back.
-  void _reset() => setState(() => _dragged = null);
-
   @override
   Widget build(BuildContext context) {
     final r = context.r;
@@ -257,78 +209,61 @@ class _PanelShellState extends State<PanelShell> {
           // which pinned every sheet to the cap below and left the space
           // under its controls empty.
           hugHeight: true,
-          // Undragged, the column takes the height of what is in it and the
-          // Flexible below trims it to the cap. Dragged, it is pinned to the
-          // number the finger left it at and the body fills that instead.
-          child: SizedBox(
-            height: rail ? null : _dragged,
-            child: Column(
-              key: _sheetKey,
-              mainAxisSize: (rail || _dragged == null)
-                  ? MainAxisSize.min
-                  : MainAxisSize.max,
-              children: [
-                // The chrome is the drag target. It is a single gesture
-                // detector over the handle and the title row together, so the
-                // grab area is a comfortable 58pt rather than a 4pt pill.
-                if (!rail)
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onVerticalDragUpdate: (d) => _resize(d.delta.dy, r),
-                    onTap: _dragged == null ? null : _reset,
-                    child: _handle(),
-                  ),
-                SizedBox(
-                  height: math.max(r.vp(44), 44),
-                  child: _titleRow(context, r, rail),
-                ),
-                const Divider(height: 1),
-                // A panel hands its controls over as a plain column and this
-                // shows as many of them as the sheet's height has room for.
-                // The scroll view is here to measure and to clip, never to
-                // scroll: its physics refuse the gesture, and what it cuts
-                // off is what the button below then offers by name.
-                Flexible(
-                  child: Stack(
-                    children: [
-                      SingleChildScrollView(
-                        controller: _scroll,
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: widget.child,
-                      ),
-                      // A control cut off mid-way by the fold looks like a
-                      // drawing bug; the same control fading out reads as
-                      // "there is more this way", which is what the button
-                      // under it says in words.
-                      if (_overflows)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: IgnorePointer(
-                            child: Container(
-                              height: 16,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    AppColors.surfaceSheet
-                                        .withValues(alpha: 0),
-                                    AppColors.surfaceSheet,
-                                  ],
-                                ),
+          // The column takes the height of what is in it and the Flexible
+          // below trims it to the cap.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!rail) _handle(),
+              SizedBox(
+                height: math.max(r.vp(44), 44),
+                child: _titleRow(context, r, rail),
+              ),
+              const Divider(height: 1),
+              // A panel hands its controls over as a plain column and this
+              // shows as many of them as the sheet's height has room for.
+              // The scroll view is here to measure and to clip, never to
+              // scroll: its physics refuse the gesture, and what it cuts
+              // off is what the button below then offers by name.
+              Flexible(
+                child: Stack(
+                  children: [
+                    SingleChildScrollView(
+                      controller: _scroll,
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: widget.child,
+                    ),
+                    // A control cut off mid-way by the fold looks like a
+                    // drawing bug; the same control fading out reads as
+                    // "there is more this way", which is what the button
+                    // under it says in words.
+                    if (_overflows)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: Container(
+                            height: 16,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  AppColors.surfaceSheet.withValues(alpha: 0),
+                                  AppColors.surfaceSheet,
+                                ],
                               ),
                             ),
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-                if (_overflows) _moreButton(context, r),
-                ?widget.footer,
-              ],
-            ),
+              ),
+              if (_overflows) _moreButton(context, r),
+              ?widget.footer,
+            ],
           ),
         ),
       ),
@@ -393,21 +328,18 @@ class _PanelShellState extends State<PanelShell> {
     _moreRoute = null;
   }
 
+  /// The pill above the title row. It is decoration now rather than a
+  /// control: it says "sheet" at a glance, and there is nothing to grab.
   Widget _handle() {
-    return Tooltip(
-      message: _dragged == null
-          ? 'Drag to make this panel taller'
-          : 'Drag to resize, tap to fit the controls',
-      child: SizedBox(
-        height: PanelShell.kHandleHeight,
-        child: Center(
-          child: Container(
-            width: 38,
-            height: 4,
-            decoration: BoxDecoration(
-              color: _dragged == null ? AppColors.divider : AppColors.textFaint,
-              borderRadius: BorderRadius.circular(2),
-            ),
+    return SizedBox(
+      height: PanelShell.kHandleHeight,
+      child: Center(
+        child: Container(
+          width: 38,
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.divider,
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
       ),
@@ -466,15 +398,7 @@ class _PanelShellState extends State<PanelShell> {
         ),
       ],
     );
-    if (rail) return row;
-    // The title row drags too. Its buttons still win the arena — a tap on
-    // close is a tap, not a drag — so this only picks up the space between
-    // them, which is most of the row.
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragUpdate: (d) => _resize(d.delta.dy, r),
-      child: row,
-    );
+    return row;
   }
 }
 
@@ -575,7 +499,7 @@ class _MoreSheet extends StatelessWidget {
 /// user drags through, where fifteen words is a row they read. The active
 /// one is the only one that takes a colour, so the row stays quiet until it
 /// is being used.
-class TextTabStrip extends StatefulWidget {
+class TextTabStrip extends StatelessWidget {
   const TextTabStrip({
     super.key,
     required this.labels,
@@ -590,57 +514,61 @@ class TextTabStrip extends StatefulWidget {
   final ValueChanged<int> onSelected;
 
   @override
-  State<TextTabStrip> createState() => _TextTabStripState();
-}
-
-class _TextTabStripState extends State<TextTabStrip> {
-  final ScrollController _scroll = ScrollController();
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final r = context.r;
-    return SizedBox(
-      // The pack name's line box grows with the system font, so the row is
-      // measured rather than assumed — at 1.3x an assumed row clips it.
-      height: math.max(
-        math.max(r.vp(TextTabStrip.kHeight), 24),
-        MediaQuery.textScalerOf(context).scale(r.sp(11.5)) * 1.5,
-      ),
-      child: ListView.separated(
-        controller: _scroll,
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: r.dp(14)),
-        itemCount: widget.labels.length,
-        separatorBuilder: (_, _) => SizedBox(width: r.dp(16)),
-        itemBuilder: (context, i) {
-          final active = i == widget.selectedIndex;
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => widget.onSelected(i),
-            child: Center(
-              child: Text(
-                widget.labels[i],
-                style: TextStyle(
-                  fontSize: r.sp(11.5),
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  color: active ? AppColors.accent : AppColors.textDim,
+    // Wrapped rather than scrolled: a tab the user cannot see is a tab they
+    // do not know the tool has, and a row that slides sideways gives no sign
+    // of how much is off the edge. Past the sheet's fold the extra lines are
+    // reached by name, through 'More options'.
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: r.dp(14)),
+      child: Wrap(
+        spacing: r.dp(16),
+        runSpacing: r.dp(6),
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onSelected(i),
+              child: SizedBox(
+                // The label's line box grows with the system font, so the
+                // row is measured rather than assumed — at 1.3x an assumed
+                // row clips it.
+                height: math.max(
+                  math.max(r.vp(kHeight), 24),
+                  MediaQuery.textScalerOf(context).scale(r.sp(11.5)) * 1.5,
+                ),
+                // widthFactor, or the tab takes the whole line: a Wrap hands
+                // its children the full width to lay out in, and a Center
+                // told to fill it does.
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(
+                    labels[i],
+                    style: TextStyle(
+                      fontSize: r.sp(11.5),
+                      fontWeight: i == selectedIndex
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: i == selectedIndex
+                          ? AppColors.accent
+                          : AppColors.textDim,
+                    ),
+                  ),
                 ),
               ),
             ),
-          );
-        },
+        ],
       ),
     );
   }
 }
 
-/// Horizontal chip row used for presets (filters, fonts, transitions…).
+/// Chip row used for presets (filters, fonts, transitions…).
+///
+/// It wraps rather than scrolls, for the same reason [TextTabStrip] does:
+/// what is on the sheet is all of what the sheet has, and the rest is behind
+/// a button that says so.
 class ChipStrip extends StatelessWidget {
   const ChipStrip({
     super.key,
@@ -650,7 +578,7 @@ class ChipStrip extends StatelessWidget {
     this.height = kHeight,
   });
 
-  /// What the row takes when nothing asks for otherwise. Named so a control
+  /// What a chip takes when nothing asks for otherwise. Named so a control
   /// that stands in for the pills can match them rather than guess.
   static const double kHeight = 34;
 
@@ -662,43 +590,50 @@ class ChipStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = context.r;
-    return SizedBox(
-      height: math.max(r.vp(height), 32),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
-        itemCount: labels.length,
-        separatorBuilder: (_, _) => SizedBox(width: r.dp(8)),
-        itemBuilder: (context, i) {
-          final active = i == selectedIndex;
-          return GestureDetector(
-            onTap: () => onSelected(i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOut,
-              alignment: Alignment.center,
-              padding: EdgeInsets.symmetric(horizontal: r.dp(14)),
-              decoration: BoxDecoration(
-                gradient: active ? AppColors.appBarGradient : null,
-                color: active ? null : AppColors.surfaceHigh,
-                borderRadius: BorderRadius.circular(17),
-                border: Border.all(
-                  color: active
-                      ? Colors.transparent
-                      : AppColors.appBar.withValues(alpha: 0.16),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: r.dp(12)),
+      child: Wrap(
+        spacing: r.dp(8),
+        runSpacing: r.dp(8),
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            GestureDetector(
+              onTap: () => onSelected(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOut,
+                height: math.max(r.vp(height), 32),
+                padding: EdgeInsets.symmetric(horizontal: r.dp(14)),
+                decoration: BoxDecoration(
+                  gradient: i == selectedIndex
+                      ? AppColors.appBarGradient
+                      : null,
+                  color: i == selectedIndex ? null : AppColors.surfaceHigh,
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(
+                    color: i == selectedIndex
+                        ? Colors.transparent
+                        : AppColors.appBar.withValues(alpha: 0.16),
+                  ),
                 ),
-              ),
-              child: Text(
-                labels[i],
-                style: TextStyle(
-                  fontSize: r.sp(11.5),
-                  fontWeight: FontWeight.w700,
-                  color: active ? AppColors.onAppBar : AppColors.textDim,
+                // Centred with a widthFactor so the chip is as wide as its
+                // label rather than as wide as the line.
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(
+                    labels[i],
+                    style: TextStyle(
+                      fontSize: r.sp(11.5),
+                      fontWeight: FontWeight.w700,
+                      color: i == selectedIndex
+                          ? AppColors.onAppBar
+                          : AppColors.textDim,
+                    ),
+                  ),
                 ),
               ),
             ),
-          );
-        },
+        ],
       ),
     );
   }

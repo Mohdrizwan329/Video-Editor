@@ -5,6 +5,7 @@ import '../../../core/utils/duration_ext.dart';
 import '../../../data/models/enums.dart';
 import '../../../data/models/video_clip.dart';
 import '../../../state/editor_controller.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/panel_shell.dart';
 import '../../widgets/app_slider.dart';
 
@@ -70,128 +71,145 @@ class _SpeedPanelState extends State<SpeedPanel> {
           ),
           const SizedBox(height: 10),
           if (_tab == 1) ...[
-            SizedBox(
-              height: 74,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                itemCount: SpeedCurve.values.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 9),
-                itemBuilder: (context, i) {
-                  final c = SpeedCurve.values[i];
-                  final active = clip.speedCurve == c;
-                  return GestureDetector(
+            PanelStrip(
+              gap: 9,
+              runGap: 9,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              children: [
+                for (final c in SpeedCurve.values)
+                  GestureDetector(
                     onTap: () =>
                         editor.updateClip(index, (v) => v.speedCurve = c),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
                           width: 62,
                           height: 50,
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
-                            color: active
+                            color: clip.speedCurve == c
                                 ? AppColors.accent.withValues(alpha: 0.16)
                                 : AppColors.surfaceHigh,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: active
-                                    ? AppColors.accent
-                                    : Colors.transparent),
+                              color: clip.speedCurve == c
+                                  ? AppColors.accent
+                                  : Colors.transparent,
+                            ),
                           ),
                           child: CustomPaint(
                             painter: _CurvePainter(
                               c,
-                              active ? AppColors.accent : AppColors.textDim,
+                              clip.speedCurve == c
+                                  ? AppColors.accent
+                                  : AppColors.textDim,
                             ),
                           ),
                         ),
                         const SizedBox(height: 3),
-                        Text(c.label,
-                            style: TextStyle(
-                                fontSize: 9,
-                                color: active
-                                    ? AppColors.accent
-                                    : AppColors.textDim)),
+                        Text(
+                          c.label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: clip.speedCurve == c
+                                ? AppColors.accent
+                                : AppColors.textDim,
+                          ),
+                        ),
                       ],
                     ),
-                  );
-                },
-              ),
+                  ),
+              ],
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
               child: Row(
                 children: [
-                  const Icon(Icons.timer_outlined,
-                      size: 13, color: AppColors.textFaint),
+                  const Icon(
+                    Icons.timer_outlined,
+                    size: 13,
+                    color: AppColors.textFaint,
+                  ),
                   const SizedBox(width: 6),
-                  Text('New length ${clip.timelineDuration.timecode}',
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textFaint)),
+                  Text(
+                    'New length ${clip.timelineDuration.timecode}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textFaint,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
           ] else ...[
-          SizedBox(
-            height: 34,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
+            PanelStrip(
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              itemCount: _presets.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, i) {
-                final v = _presets[i];
-                final active = (clip.speed - v).abs() < 0.001;
-                return GestureDetector(
-                  onTap: () => editor.updateClip(index, (c) => c.speed = v),
-                  child: Container(
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: active ? AppColors.accent : AppColors.surfaceHigh,
-                      borderRadius: BorderRadius.circular(17),
-                    ),
-                    child: Text(
-                      v % 1 == 0 ? '${v.toInt()}x' : '${v}x',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color:
-                            active ? AppColors.onAccent : AppColors.textDim,
+              children: [
+                for (final v in _presets)
+                  GestureDetector(
+                    onTap: () => editor.updateClip(index, (c) => c.speed = v),
+                    child: Container(
+                      height: 34,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: (clip.speed - v).abs() < 0.001
+                            ? AppColors.accent
+                            : AppColors.surfaceHigh,
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                      // widthFactor, or the chip takes the whole line: a
+                      // Wrap hands each child the full width to lay out in.
+                      child: Center(
+                        widthFactor: 1,
+                        child: Text(
+                          v % 1 == 0 ? '${v.toInt()}x' : '${v}x',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: (clip.speed - v).abs() < 0.001
+                                ? AppColors.onAccent
+                                : AppColors.textDim,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-          AppSlider(
-            label: 'Rate',
-            value: clip.speed,
-            min: 0.1,
-            max: 8,
-            defaultValue: 1,
-            format: (v) => '${v.toStringAsFixed(2)}x',
-            onChanged: (v) =>
-                editor.updateClip(index, (c) => c.speed = v, record: false),
-            onChangeEnd: (v) => editor.updateClip(index, (c) => c.speed = v),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-            child: Row(
-              children: [
-                const Icon(Icons.timer_outlined,
-                    size: 13, color: AppColors.textFaint),
-                const SizedBox(width: 6),
-                Text('New length ${clip.timelineDuration.timecode}',
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textFaint)),
               ],
             ),
-          ),
-          const SizedBox(height: 8),
+            AppSlider(
+              label: 'Rate',
+              value: clip.speed,
+              min: 0.1,
+              max: 8,
+              defaultValue: 1,
+              format: (v) => '${v.toStringAsFixed(2)}x',
+              onChanged: (v) =>
+                  editor.updateClip(index, (c) => c.speed = v, record: false),
+              onChangeEnd: (v) => editor.updateClip(index, (c) => c.speed = v),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.timer_outlined,
+                    size: 13,
+                    color: AppColors.textFaint,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'New length ${clip.timelineDuration.timecode}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textFaint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
           ],
         ],
       ),
@@ -214,8 +232,11 @@ class _CurvePainter extends CustomPainter {
       ..strokeWidth = 1.6
       ..strokeJoin = StrokeJoin.round;
     if (curve.points.isEmpty) {
-      canvas.drawLine(Offset(0, size.height / 2),
-          Offset(size.width, size.height / 2), paint);
+      canvas.drawLine(
+        Offset(0, size.height / 2),
+        Offset(size.width, size.height / 2),
+        paint,
+      );
       return;
     }
     const maxSpeed = 3.2;
@@ -285,10 +306,14 @@ class VolumePanel extends StatelessWidget {
             defaultValue: 0,
             format: (v) => '${v.toStringAsFixed(1)}s',
             onChanged: (v) => editor.updateClip(
-                index, (c) => c.fadeIn = durationFromSeconds(v),
-                record: false),
+              index,
+              (c) => c.fadeIn = durationFromSeconds(v),
+              record: false,
+            ),
             onChangeEnd: (v) => editor.updateClip(
-                index, (c) => c.fadeIn = durationFromSeconds(v)),
+              index,
+              (c) => c.fadeIn = durationFromSeconds(v),
+            ),
           ),
           AppSlider(
             label: 'Fade out',
@@ -299,10 +324,14 @@ class VolumePanel extends StatelessWidget {
             defaultValue: 0,
             format: (v) => '${v.toStringAsFixed(1)}s',
             onChanged: (v) => editor.updateClip(
-                index, (c) => c.fadeOut = durationFromSeconds(v),
-                record: false),
+              index,
+              (c) => c.fadeOut = durationFromSeconds(v),
+              record: false,
+            ),
             onChangeEnd: (v) => editor.updateClip(
-                index, (c) => c.fadeOut = durationFromSeconds(v)),
+              index,
+              (c) => c.fadeOut = durationFromSeconds(v),
+            ),
           ),
           const SizedBox(height: 8),
         ],
@@ -378,14 +407,26 @@ class CropPanel extends StatelessWidget {
             onChangeEnd: (v) => editor.updateClip(index, (c) => c.offsetY = v),
           ),
           const Divider(height: 18),
-          _cropSlider('Left', clip.cropLeft,
-              (v) => editor.updateClip(index, (c) => c.cropLeft = v)),
-          _cropSlider('Right', clip.cropRight,
-              (v) => editor.updateClip(index, (c) => c.cropRight = v)),
-          _cropSlider('Top', clip.cropTop,
-              (v) => editor.updateClip(index, (c) => c.cropTop = v)),
-          _cropSlider('Bottom', clip.cropBottom,
-              (v) => editor.updateClip(index, (c) => c.cropBottom = v)),
+          _cropSlider(
+            'Left',
+            clip.cropLeft,
+            (v) => editor.updateClip(index, (c) => c.cropLeft = v),
+          ),
+          _cropSlider(
+            'Right',
+            clip.cropRight,
+            (v) => editor.updateClip(index, (c) => c.cropRight = v),
+          ),
+          _cropSlider(
+            'Top',
+            clip.cropTop,
+            (v) => editor.updateClip(index, (c) => c.cropTop = v),
+          ),
+          _cropSlider(
+            'Bottom',
+            clip.cropBottom,
+            (v) => editor.updateClip(index, (c) => c.cropBottom = v),
+          ),
           const SizedBox(height: 8),
         ],
       ),
@@ -428,20 +469,25 @@ class CropPanel extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(icon,
-                            size: 15,
+                        Icon(
+                          icon,
+                          size: 15,
+                          color: clip.fit == mode
+                              ? AppColors.accent
+                              : AppColors.textDim,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 9.5,
                             color: clip.fit == mode
                                 ? AppColors.accent
-                                : AppColors.textDim),
-                        const SizedBox(height: 2),
-                        Text(label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 9.5,
-                                color: clip.fit == mode
-                                    ? AppColors.accent
-                                    : AppColors.textDim)),
+                                : AppColors.textDim,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -453,7 +499,11 @@ class CropPanel extends StatelessWidget {
     );
   }
 
-  Widget _cropSlider(String label, double value, ValueChanged<double> onChanged) {
+  Widget _cropSlider(
+    String label,
+    double value,
+    ValueChanged<double> onChanged,
+  ) {
     return AppSlider(
       label: 'Crop $label',
       value: value,
@@ -491,11 +541,11 @@ class DurationPanel extends StatelessWidget {
       onConfirm: onClose,
       applyToAll: clip.isImage
           ? () => editor.applyToAllClips((c) {
-                if (!c.isImage) return;
-                c.sourceDuration = clip.sourceDuration;
-                c.trimStart = Duration.zero;
-                c.trimEnd = clip.sourceDuration;
-              })
+              if (!c.isImage) return;
+              c.sourceDuration = clip.sourceDuration;
+              c.trimStart = Duration.zero;
+              c.trimEnd = clip.sourceDuration;
+            })
           : null,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -503,7 +553,9 @@ class DurationPanel extends StatelessWidget {
           const SizedBox(height: 10),
           AppSlider(
             label: 'Length',
-            value: clip.trimmedDuration.seconds.clamp(0.2, maxSeconds).toDouble(),
+            value: clip.trimmedDuration.seconds
+                .clamp(0.2, maxSeconds)
+                .toDouble(),
             min: 0.2,
             max: maxSeconds,
             format: (v) => '${v.toStringAsFixed(1)}s',

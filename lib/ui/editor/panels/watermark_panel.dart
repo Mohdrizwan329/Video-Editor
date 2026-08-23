@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/models/watermark.dart';
 import '../../../state/editor_controller.dart';
 import '../../picker/media_picker_screen.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/app_slider.dart';
 import '../../widgets/panel_shell.dart';
 
@@ -57,9 +58,18 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
   ];
 
   static const List<int> _palette = [
-    0xFFFFFFFF, 0xFF000000, 0xFFFF5A5A, 0xFFFFB020,
-    0xFFFFE55C, 0xFF31E1B4, 0xFF2BB8E1, 0xFF6B5BD2,
-    0xFFE85C9E, 0xFF9BE15C, 0xFFB0B0BC, 0xFF7A4A2B,
+    0xFFFFFFFF,
+    0xFF000000,
+    0xFFFF5A5A,
+    0xFFFFB020,
+    0xFFFFE55C,
+    0xFF31E1B4,
+    0xFF2BB8E1,
+    0xFF6B5BD2,
+    0xFFE85C9E,
+    0xFF9BE15C,
+    0xFFB0B0BC,
+    0xFF7A4A2B,
   ];
 
   Watermark get mark => widget.editor.project.watermark;
@@ -159,132 +169,132 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
   // ------------------------------------------------------------ text mark
 
   List<Widget> _textControls() => [
-        TextField(
-          controller: _text,
-          maxLines: 1,
-          textCapitalization: TextCapitalization.words,
-          style: const TextStyle(fontSize: 13.5),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: 'Your name, handle or brand',
-            hintStyle:
-                const TextStyle(fontSize: 12.5, color: AppColors.textFaint),
-            filled: true,
-            fillColor: AppColors.surfaceHigh,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          onChanged: (v) => _update(record: false, (w) {
-            w.text = v;
-            // With no switch above, the caption is the switch: the first
-            // character puts the mark on the canvas and clearing the box
-            // takes it off again.
-            w.enabled = v.trim().isNotEmpty;
-          }),
+    TextField(
+      controller: _text,
+      maxLines: 1,
+      textCapitalization: TextCapitalization.words,
+      style: const TextStyle(fontSize: 13.5),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Your name, handle or brand',
+        hintStyle: const TextStyle(fontSize: 12.5, color: AppColors.textFaint),
+        filled: true,
+        fillColor: AppColors.surfaceHigh,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 11,
         ),
-        const SizedBox(height: 12),
-        const _SectionLabel('Font'),
-        SizedBox(
-          height: 34,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _fonts.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, i) {
-              final f = _fonts[i];
-              final active = mark.fontFamily == f;
-              return GestureDetector(
-                onTap: () => _update((w) => w.fontFamily = f),
-                child: Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? AppColors.accent.withValues(alpha: 0.18)
-                        : AppColors.surfaceHigh,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: active ? AppColors.accent : Colors.transparent,
-                      width: 1.4,
-                    ),
-                  ),
-                  child: Text(
-                    f,
-                    style: TextStyle(
-                      fontFamily: f,
-                      fontSize: 12,
-                      color: active ? AppColors.accent : AppColors.textDim,
-                    ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      onChanged: (v) => _update(record: false, (w) {
+        w.text = v;
+        // With no switch above, the caption is the switch: the first
+        // character puts the mark on the canvas and clearing the box
+        // takes it off again.
+        w.enabled = v.trim().isNotEmpty;
+      }),
+    ),
+    const SizedBox(height: 12),
+    const _SectionLabel('Font'),
+    PanelStrip(
+      padding: EdgeInsets.zero,
+      children: [
+        for (final f in _fonts)
+          GestureDetector(
+            onTap: () => _update((w) => w.fontFamily = f),
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: mark.fontFamily == f
+                    ? AppColors.accent.withValues(alpha: 0.18)
+                    : AppColors.surfaceHigh,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: mark.fontFamily == f
+                      ? AppColors.accent
+                      : Colors.transparent,
+                  width: 1.4,
+                ),
+              ),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  f,
+                  style: TextStyle(
+                    fontFamily: f,
+                    fontSize: 12,
+                    color: mark.fontFamily == f
+                        ? AppColors.accent
+                        : AppColors.text,
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        const _SectionLabel('Colour'),
-        // One scrolling row, not a wrap: a second row of swatches pushed the
-        // controls below it out of the sheet and left the sheet taller than
-        // what it was showing.
-        SizedBox(
-          height: 30,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _palette.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, i) {
-              final c = _palette[i];
-              final active = mark.color == c;
-              return GestureDetector(
-                onTap: () => _update((w) => w.color = c),
-                child: Container(
-                  width: 30,
-                  decoration: BoxDecoration(
-                    color: Color(c),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: active ? AppColors.accent : AppColors.divider,
-                      width: active ? 2.4 : 1,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 10),
-        // Wrap, not Row: in the editor's side rail, or at a large system
-        // font, the three chips no longer fit on one line.
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            _toggle('Bold', mark.bold, () => _update((w) => w.bold = !w.bold)),
-            _toggle('Italic', mark.italic,
-                () => _update((w) => w.italic = !w.italic)),
-            _toggle(
-              'Backdrop',
-              (mark.backgroundColor >> 24) != 0,
-              () => _update((w) => w.backgroundColor =
-                  (w.backgroundColor >> 24) != 0 ? 0x00000000 : 0x80000000),
+              ),
             ),
-          ],
+          ),
+      ],
+    ),
+    const SizedBox(height: 12),
+    const _SectionLabel('Colour'),
+    PanelStrip(
+      padding: EdgeInsets.zero,
+      children: [
+        for (final c in _palette)
+          GestureDetector(
+            onTap: () => _update((w) => w.color = c),
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: Color(c),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: mark.color == c ? AppColors.accent : AppColors.divider,
+                  width: mark.color == c ? 2.4 : 1,
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+    const SizedBox(height: 10),
+    // Wrap, not Row: in the editor's side rail, or at a large system
+    // font, the three chips no longer fit on one line.
+    Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        _toggle('Bold', mark.bold, () => _update((w) => w.bold = !w.bold)),
+        _toggle(
+          'Italic',
+          mark.italic,
+          () => _update((w) => w.italic = !w.italic),
         ),
-        AppSlider(
-          label: 'Size',
-          icon: Icons.format_size,
-          value: mark.fontSize,
-          min: 14,
-          max: 140,
-          defaultValue: 46,
-          format: (v) => v.round().toString(),
-          onChanged: (v) => _update(record: false, (w) => w.fontSize = v),
+        _toggle(
+          'Backdrop',
+          (mark.backgroundColor >> 24) != 0,
+          () => _update(
+            (w) => w.backgroundColor = (w.backgroundColor >> 24) != 0
+                ? 0x00000000
+                : 0x80000000,
+          ),
         ),
-      ];
+      ],
+    ),
+    AppSlider(
+      label: 'Size',
+      icon: Icons.format_size,
+      value: mark.fontSize,
+      min: 14,
+      max: 140,
+      defaultValue: 46,
+      format: (v) => v.round().toString(),
+      onChanged: (v) => _update(record: false, (w) => w.fontSize = v),
+    ),
+  ];
 
   // ------------------------------------------------------------ logo mark
 
@@ -308,12 +318,16 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
                     File(path),
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image_outlined,
-                        size: 20,
-                        color: AppColors.textFaint),
+                      Icons.broken_image_outlined,
+                      size: 20,
+                      color: AppColors.textFaint,
+                    ),
                   )
-                : const Icon(Icons.image_outlined,
-                    size: 22, color: AppColors.textFaint),
+                : const Icon(
+                    Icons.image_outlined,
+                    size: 22,
+                    color: AppColors.textFaint,
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -326,17 +340,23 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 11.5, color: AppColors.textDim),
+                    fontSize: 11.5,
+                    color: AppColors.textDim,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     FilledButton.icon(
                       onPressed: _pickLogo,
-                      icon: const Icon(Icons.add_photo_alternate_outlined,
-                          size: 16),
-                      label: Text(hasLogo ? 'Replace' : 'Choose logo',
-                          style: const TextStyle(fontSize: 12)),
+                      icon: const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 16,
+                      ),
+                      label: Text(
+                        hasLogo ? 'Replace' : 'Choose logo',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.accent,
                         minimumSize: const Size(0, 32),
@@ -350,12 +370,16 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
                           w.enabled = false;
                         }),
                         style: TextButton.styleFrom(
-                            minimumSize: const Size(0, 32),
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 10)),
-                        child: const Text('Remove',
-                            style: TextStyle(
-                                fontSize: 11.5, color: AppColors.danger)),
+                          minimumSize: const Size(0, 32),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                        child: const Text(
+                          'Remove',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.danger,
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -394,11 +418,14 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
             width: 1.4,
           ),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: active ? AppColors.accent : AppColors.textDim)),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: active ? AppColors.accent : AppColors.textDim,
+          ),
+        ),
       ),
     );
   }
@@ -418,7 +445,9 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
                   Padding(
                     padding: const EdgeInsets.only(right: 6, bottom: 6),
                     child: _anchorCell(
-                        WatermarkAnchor.values[row * 3 + col], current),
+                      WatermarkAnchor.values[row * 3 + col],
+                      current,
+                    ),
                   ),
               ],
             ),
@@ -447,10 +476,7 @@ class _WatermarkPanelState extends State<WatermarkPanel> {
             ),
           ),
           child: Align(
-            alignment: Alignment(
-              (a.x - 0.5) * 2.4,
-              (a.y - 0.5) * 2.4,
-            ),
+            alignment: Alignment((a.x - 0.5) * 2.4, (a.y - 0.5) * 2.4),
             child: Container(
               width: 8,
               height: 5,
@@ -474,12 +500,15 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 7),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.4,
-                color: AppColors.textFaint)),
-      );
+    padding: const EdgeInsets.only(bottom: 7),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+        color: AppColors.textFaint,
+      ),
+    ),
+  );
 }

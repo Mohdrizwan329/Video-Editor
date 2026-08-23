@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/enums.dart';
 import '../../../state/editor_controller.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/panel_shell.dart';
 import '../../widgets/app_slider.dart';
 
@@ -20,18 +21,13 @@ class RatioPanel extends StatelessWidget {
       title: 'Canvas',
       onClose: onClose,
       onConfirm: onClose,
-      child: SizedBox(
-        height: 96,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          itemCount: CanvasRatio.values.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 10),
-          itemBuilder: (context, i) {
-            final r = CanvasRatio.values[i];
-            final active = r == current;
-            final aspect = r.value ?? 9 / 16;
-            return GestureDetector(
+      child: PanelStrip(
+        gap: 10,
+        runGap: 10,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        children: [
+          for (final r in CanvasRatio.values)
+            GestureDetector(
               onTap: () => editor.setRatio(r),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -41,17 +37,17 @@ class RatioPanel extends StatelessWidget {
                     height: 44,
                     child: Center(
                       child: AspectRatio(
-                        aspectRatio: aspect,
+                        aspectRatio: r.value ?? 9 / 16,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: active
+                            color: r == current
                                 ? AppColors.accent.withValues(alpha: 0.2)
                                 : AppColors.surfaceHigh,
                             border: Border.all(
-                              color: active
+                              color: r == current
                                   ? AppColors.accent
                                   : AppColors.clipBorder,
-                              width: active ? 1.8 : 1,
+                              width: r == current ? 1.8 : 1,
                             ),
                             borderRadius: BorderRadius.circular(4),
                           ),
@@ -60,17 +56,20 @@ class RatioPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(r.label,
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color:
-                              active ? AppColors.accent : AppColors.textDim)),
+                  Text(
+                    r.label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: r == current
+                          ? AppColors.accent
+                          : AppColors.textDim,
+                    ),
+                  ),
                 ],
               ),
-            );
-          },
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -88,9 +87,18 @@ class BackgroundPanel extends StatelessWidget {
   final VoidCallback onClose;
 
   static const List<int> _swatches = [
-    0xFF000000, 0xFFFFFFFF, 0xFF141417, 0xFF2E2E38,
-    0xFFE86A5C, 0xFFF2B33D, 0xFF31E1B4, 0xFF2BB8E1,
-    0xFF6B5BD2, 0xFFE85C9E, 0xFF3A6B4A, 0xFF8A5A2B,
+    0xFF000000,
+    0xFFFFFFFF,
+    0xFF141417,
+    0xFF2E2E38,
+    0xFFE86A5C,
+    0xFFF2B33D,
+    0xFF31E1B4,
+    0xFF2BB8E1,
+    0xFF6B5BD2,
+    0xFFE85C9E,
+    0xFF3A6B4A,
+    0xFF8A5A2B,
   ];
 
   static const List<(int, int)> _gradients = [
@@ -117,8 +125,9 @@ class BackgroundPanel extends StatelessWidget {
             ChipStrip(
               labels: const ['Color', 'Blur', 'Gradient'],
               selectedIndex: BackgroundType.values.indexOf(bg.type),
-              onSelected: (i) => editor
-                  .setBackground((b) => b.type = BackgroundType.values[i]),
+              onSelected: (i) => editor.setBackground(
+                (b) => b.type = BackgroundType.values[i],
+              ),
             ),
             const SizedBox(height: 12),
             if (bg.type == BackgroundType.color)
@@ -138,18 +147,20 @@ class BackgroundPanel extends StatelessWidget {
                 max: 60,
                 defaultValue: 18,
                 format: (v) => v.round().toString(),
-                onChanged: (v) =>
-                    editor.setBackground((b) => b.blurAmount = v),
+                onChanged: (v) => editor.setBackground((b) => b.blurAmount = v),
               ),
             const SizedBox(height: 12),
           ],
         ),
-),
+      ),
     );
   }
 
-  Widget _swatchGrid(List<(int, int)> colors,
-      {required int selected, required ValueChanged<int> onTap}) {
+  Widget _swatchGrid(
+    List<(int, int)> colors, {
+    required int selected,
+    required ValueChanged<int> onTap,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Wrap(
@@ -252,8 +263,9 @@ class _TransitionPanelState extends State<TransitionPanel> {
     final maxSeconds = _maxDuration().clamp(0.2, 3.0);
     final items = [
       if (_category == 0) TransitionType.none,
-      ...TransitionType.byCategory(TransitionType.categories[_category])
-          .where((t) => t != TransitionType.none),
+      ...TransitionType.byCategory(
+        TransitionType.categories[_category],
+      ).where((t) => t != TransitionType.none),
     ];
     return PanelShell(
       title: 'Transition',
@@ -273,72 +285,80 @@ class _TransitionPanelState extends State<TransitionPanel> {
             onSelected: (i) => setState(() => _category = i),
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            height: 72,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (context, i) {
-                final t = items[i];
-                final active = clip.transitionType == t;
-                return GestureDetector(
+          PanelStrip(
+            gap: 10,
+            runGap: 10,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            children: [
+              for (final t in items)
+                GestureDetector(
                   onTap: () {
                     editor.setTransition(index, t, clip.transitionDuration);
                     widget.onPreview?.call();
                   },
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: active
+                          color: clip.transitionType == t
                               ? AppColors.accent.withValues(alpha: 0.18)
                               : AppColors.surfaceHigh,
                           borderRadius: BorderRadius.circular(9),
                           border: Border.all(
-                            color:
-                                active ? AppColors.accent : Colors.transparent,
+                            color: clip.transitionType == t
+                                ? AppColors.accent
+                                : Colors.transparent,
                             width: 1.6,
                           ),
                         ),
-                        child: Icon(t.icon,
-                            size: 19,
-                            color: active
-                                ? AppColors.accent
-                                : AppColors.textDim),
+                        child: Icon(
+                          t.icon,
+                          size: 19,
+                          color: clip.transitionType == t
+                              ? AppColors.accent
+                              : AppColors.textDim,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       SizedBox(
                         width: 52,
-                        child: Text(t.label,
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 9,
-                                color: active
-                                    ? AppColors.accent
-                                    : AppColors.textDim)),
+                        child: Text(
+                          t.label,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: clip.transitionType == t
+                                ? AppColors.accent
+                                : AppColors.textDim,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
+                ),
+            ],
           ),
+          const SizedBox(height: 4),
           if (clip.transitionType != TransitionType.none)
             AppSlider(
               label: 'Duration',
-              value: (clip.transitionDuration.inMilliseconds / 1000)
-                  .clamp(0.2, maxSeconds),
+              value: (clip.transitionDuration.inMilliseconds / 1000).clamp(
+                0.2,
+                maxSeconds,
+              ),
               min: 0.2,
               max: maxSeconds,
               format: (v) => '${v.toStringAsFixed(1)}s',
-              onChanged: (v) => editor.setTransition(index, clip.transitionType,
-                  Duration(milliseconds: (v * 1000).round())),
+              onChanged: (v) => editor.setTransition(
+                index,
+                clip.transitionType,
+                Duration(milliseconds: (v * 1000).round()),
+              ),
               onChangeEnd: (_) => widget.onPreview?.call(),
             ),
           const SizedBox(height: 10),

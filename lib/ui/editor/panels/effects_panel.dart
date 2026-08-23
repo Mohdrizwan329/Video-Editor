@@ -14,6 +14,7 @@ import '../../../data/models/video_clip.dart';
 import '../../../data/models/video_effect.dart';
 import '../../../data/services/thumbnail_service.dart';
 import '../../../state/editor_controller.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/app_slider.dart';
 import '../../widgets/panel_shell.dart';
 import 'color_tool_tabs.dart';
@@ -55,12 +56,12 @@ enum _Tab { color, design, fx, emoji, template }
 
 extension on _Tab {
   String get label => switch (this) {
-        _Tab.color => 'Color',
-        _Tab.design => 'Design',
-        _Tab.fx => 'FX',
-        _Tab.emoji => 'Emoji',
-        _Tab.template => 'Template',
-      };
+    _Tab.color => 'Color',
+    _Tab.design => 'Design',
+    _Tab.fx => 'FX',
+    _Tab.emoji => 'Emoji',
+    _Tab.template => 'Template',
+  };
 }
 
 class _EffectsPanelState extends State<EffectsPanel> {
@@ -80,14 +81,14 @@ class _EffectsPanelState extends State<EffectsPanel> {
       widget.overlay?.filterIntensity ?? _clip!.filterIntensity;
 
   List<_Tab> get _tabs => [
-        _Tab.color,
-        _Tab.design,
-        _Tab.fx,
-        _Tab.emoji,
-        // A template re-cuts the main track, which an overlay selection has
-        // no business doing.
-        if (widget.overlay == null) _Tab.template,
-      ];
+    _Tab.color,
+    _Tab.design,
+    _Tab.fx,
+    _Tab.emoji,
+    // A template re-cuts the main track, which an overlay selection has
+    // no business doing.
+    if (widget.overlay == null) _Tab.template,
+  ];
 
   @override
   void initState() {
@@ -129,8 +130,7 @@ class _EffectsPanelState extends State<EffectsPanel> {
         final at = overlay != null
             ? overlay.trimStart
             : clip!.trimStart + (clip.trimEnd - clip.trimStart) ~/ 2;
-        candidate =
-            await ThumbnailService.instance.frame(path, at, height: 96);
+        candidate = await ThumbnailService.instance.frame(path, at, height: 96);
       }
     }
     if (candidate == null || !mounted) return;
@@ -146,8 +146,11 @@ class _EffectsPanelState extends State<EffectsPanel> {
   }) {
     final overlay = widget.overlay;
     if (overlay != null) {
-      widget.editor
-          .updateLayer<OverlayLayer>(overlay, onOverlay, record: record);
+      widget.editor.updateLayer<OverlayLayer>(
+        overlay,
+        onOverlay,
+        record: record,
+      );
     } else {
       widget.editor.updateClip(widget.clipIndex!, onClip, record: record);
     }
@@ -160,25 +163,26 @@ class _EffectsPanelState extends State<EffectsPanel> {
   }
 
   VoidCallback? get _onReset => switch (_tab) {
-        _Tab.color => () => _applyColor(
-              (c) {
-                c.filterId = 'none';
-                c.filterIntensity = 1;
-              },
-              (o) {
-                o.filterId = 'none';
-                o.filterIntensity = 1;
-              },
-            ),
-        _Tab.design => () =>
-            _editProject(() => widget.editor.project.frameId = 'none'),
-        _Tab.fx => () => _editProject(() {
-              widget.editor.project
-                ..fxId = 'none'
-                ..fxIntensity = 1;
-            }),
-        _Tab.emoji || _Tab.template => null,
-      };
+    _Tab.color => () => _applyColor(
+      (c) {
+        c.filterId = 'none';
+        c.filterIntensity = 1;
+      },
+      (o) {
+        o.filterId = 'none';
+        o.filterIntensity = 1;
+      },
+    ),
+    _Tab.design => () => _editProject(
+      () => widget.editor.project.frameId = 'none',
+    ),
+    _Tab.fx => () => _editProject(() {
+      widget.editor.project
+        ..fxId = 'none'
+        ..fxIntensity = 1;
+    }),
+    _Tab.emoji || _Tab.template => null,
+  };
 
   /// Only a colour grade has an "every clip" to spread to: the frame and the
   /// FX already cover the whole project, and an overlay is a lane of one.
@@ -232,9 +236,8 @@ class _EffectsPanelState extends State<EffectsPanel> {
   Widget _colorTab() {
     return _PresetTab(
       categories: FilterLibrary.categories,
-      itemsFor: (c) => c == 'None'
-          ? FilterLibrary.all
-          : FilterLibrary.byCategory(c),
+      itemsFor: (c) =>
+          c == 'None' ? FilterLibrary.all : FilterLibrary.byCategory(c),
       allItems: FilterLibrary.all,
       idOf: (f) => (f as FilterPreset).id,
       nameOf: (f) => (f as FilterPreset).name,
@@ -357,41 +360,46 @@ class _TabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        itemCount: tabs.length,
-        itemBuilder: (context, i) {
-          final tab = tabs[i];
-          final active = tab == selected;
-          return GestureDetector(
+    return PanelStrip(
+      gap: 0,
+      runGap: 0,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      children: [
+        for (final tab in tabs)
+          GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => onSelected(tab),
             child: Container(
-              alignment: Alignment.center,
+              height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: active ? AppColors.accent : Colors.transparent,
+                    color: tab == selected
+                        ? AppColors.accent
+                        : Colors.transparent,
                     width: 2,
                   ),
                 ),
               ),
-              child: Text(
-                tab.label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  color: active ? AppColors.accent : AppColors.textDim,
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  tab.label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: tab == selected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                    color: tab == selected
+                        ? AppColors.accent
+                        : AppColors.textDim,
+                  ),
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+      ],
     );
   }
 }
@@ -445,24 +453,21 @@ class _PresetTabState extends State<_PresetTab> {
           onSelected: (i) => setState(() => _category = i),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 74,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 9),
-            itemBuilder: (context, i) {
-              final item = items[i];
-              return PresetTile(
+        PanelStrip(
+          gap: 9,
+          runGap: 9,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          children: [
+            for (final item in items)
+              PresetTile(
                 label: widget.nameOf(item),
                 active: widget.idOf(item) == widget.activeId,
                 onTap: () => widget.onPick(item),
                 child: widget.preview(item),
-              );
-            },
-          ),
+              ),
+          ],
         ),
+        const SizedBox(height: 4),
         ?widget.slider,
         if (widget.note != null)
           Padding(
@@ -612,55 +617,72 @@ class _EmojiTabState extends State<_EmojiTab> {
   @override
   Widget build(BuildContext context) {
     final isShapes = StickerCatalog.isShapes(_pack);
-    return SizedBox(
-      // The grid scrolls inside the sheet, so it takes the body less the tab
-      // bar above it — any taller and its last row would hang below the sheet.
-      height: PanelShell.bodyHeight(context) - 41,
-      child: Column(
-        children: [
-          const SizedBox(height: 8),
-          ChipStrip(
-            labels: StickerCatalog.packNames,
-            selectedIndex: _pack,
-            onSelected: (i) => setState(() => _pack = i),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 6,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemCount: StickerCatalog.countIn(_pack),
-              itemBuilder: (context, i) {
-                if (isShapes) {
-                  final (key, icon) = StickerCatalog.shapes[i];
-                  return _cell(
-                    child: Icon(icon, size: 24, color: AppColors.text),
-                    onTap: () =>
-                        widget.editor.addSticker(key, isEmoji: false),
-                  );
-                }
-                final emoji = StickerCatalog.packs[_pack]![i];
-                return _cell(
-                  child: Text(emoji, style: const TextStyle(fontSize: 24)),
-                  onTap: () => widget.editor.addSticker(emoji),
-                );
-              },
+    return LayoutBuilder(
+      builder: (context, box) {
+        // Six to a line, the way the grid had them. A Wrap has no column
+        // count of its own, so the cell is worked out from the width — and a
+        // Wrap is what puts the packs past the fold behind 'More options'
+        // instead of under a scroll the sheet gives no sign of.
+        const gap = 8.0;
+        final cell = (box.maxWidth - 28 - gap * 5) / 6;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ChipStrip(
+              labels: StickerCatalog.packNames,
+              selectedIndex: _pack,
+              onSelected: (i) => setState(() => _pack = i),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(height: 10),
+            PanelStrip(
+              gap: gap,
+              runGap: gap,
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              children: [
+                for (var i = 0; i < StickerCatalog.countIn(_pack); i++)
+                  if (isShapes)
+                    _cell(
+                      size: cell,
+                      onTap: () => widget.editor.addSticker(
+                        StickerCatalog.shapes[i].$1,
+                        isEmoji: false,
+                      ),
+                      child: Icon(
+                        StickerCatalog.shapes[i].$2,
+                        size: 24,
+                        color: AppColors.text,
+                      ),
+                    )
+                  else
+                    _cell(
+                      size: cell,
+                      onTap: () => widget.editor.addSticker(
+                        StickerCatalog.packs[_pack]![i],
+                      ),
+                      child: Text(
+                        StickerCatalog.packs[_pack]![i],
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                    ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _cell({required Widget child, required VoidCallback onTap}) {
+  Widget _cell({
+    required Widget child,
+    required VoidCallback onTap,
+    required double size,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           color: AppColors.surfaceHigh,
           borderRadius: BorderRadius.circular(9),
@@ -731,21 +753,19 @@ class _TemplateTabState extends State<_TemplateTab> {
           onSelected: (i) => setState(() => _category = i),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 96,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            itemCount: templates.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 9),
-            itemBuilder: (context, i) {
-              final t = templates[i];
-              return Opacity(
+        PanelStrip(
+          gap: 9,
+          runGap: 9,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          children: [
+            for (final t in templates)
+              Opacity(
                 opacity: empty ? 0.4 : 1,
                 child: GestureDetector(
                   onTap: empty ? null : () => _pick(t),
                   child: Container(
                     width: 132,
+                    height: 96,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceHigh,
@@ -760,14 +780,18 @@ class _TemplateTabState extends State<_TemplateTab> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           '${t.slots.length} cuts · '
                           '${t.approximateDuration.mmss}',
                           style: const TextStyle(
-                              fontSize: 9.5, color: AppColors.textDim),
+                            fontSize: 9.5,
+                            color: AppColors.textDim,
+                          ),
                         ),
                         const Spacer(),
                         Text(
@@ -775,15 +799,16 @@ class _TemplateTabState extends State<_TemplateTab> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 9.5, color: AppColors.textDim),
+                            fontSize: 9.5,
+                            color: AppColors.textDim,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.only(top: 6),
@@ -806,11 +831,15 @@ class _TemplateTabState extends State<_TemplateTab> {
 Future<bool> hasTonalRange(String path) async {
   try {
     final bytes = await File(path).readAsBytes();
-    final codec = await ui.instantiateImageCodec(bytes,
-        targetWidth: 32, targetHeight: 32);
+    final codec = await ui.instantiateImageCodec(
+      bytes,
+      targetWidth: 32,
+      targetHeight: 32,
+    );
     final frame = await codec.getNextFrame();
-    final data =
-        await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final data = await frame.image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
     frame.image.dispose();
     codec.dispose();
     if (data == null) return true;

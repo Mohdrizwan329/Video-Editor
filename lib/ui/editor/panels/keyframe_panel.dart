@@ -10,11 +10,7 @@ import '../../widgets/app_slider.dart';
 /// Keyframe editor: step between keys, drop or remove one at the playhead,
 /// and scrub the value of each animatable property.
 class KeyframePanel extends StatefulWidget {
-  const KeyframePanel({
-    super.key,
-    required this.editor,
-    required this.onClose,
-  });
+  const KeyframePanel({super.key, required this.editor, required this.onClose});
 
   final EditorController editor;
   final VoidCallback onClose;
@@ -32,12 +28,18 @@ class _KeyframePanelState extends State<KeyframePanel> {
         KeyframeProperty.x => (-1, 1, (v) => v.toStringAsFixed(2)),
         KeyframeProperty.y => (-1, 1, (v) => v.toStringAsFixed(2)),
         KeyframeProperty.scale => (0.05, 4, (v) => '${(v * 100).round()}%'),
-        KeyframeProperty.rotation =>
-          (-3.2, 3.2, (v) => '${(v * 57.2958).round()}°'),
+        KeyframeProperty.rotation => (
+          -3.2,
+          3.2,
+          (v) => '${(v * 57.2958).round()}°',
+        ),
         KeyframeProperty.opacity => (0, 1, (v) => '${(v * 100).round()}%'),
         KeyframeProperty.volume => (0, 2, (v) => '${(v * 100).round()}%'),
-        KeyframeProperty.filterIntensity =>
-          (0, 1, (v) => '${(v * 100).round()}%'),
+        KeyframeProperty.filterIntensity => (
+          0,
+          1,
+          (v) => '${(v * 100).round()}%',
+        ),
         KeyframeProperty.cornerRadius => (0, 120, (v) => v.round().toString()),
         KeyframeProperty.blurAmount => (0, 40, (v) => v.round().toString()),
       };
@@ -52,9 +54,11 @@ class _KeyframePanelState extends State<KeyframePanel> {
         onConfirm: widget.onClose,
         child: const Padding(
           padding: EdgeInsets.symmetric(vertical: 28),
-          child: Text('Select a clip or layer first',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.textDim)),
+          child: Text(
+            'Select a clip or layer first',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AppColors.textDim),
+          ),
         ),
       );
     }
@@ -115,16 +119,16 @@ class _KeyframePanelState extends State<KeyframePanel> {
               width: 44,
               height: 36,
               decoration: BoxDecoration(
-                color: onKey
-                    ? AppColors.accent
-                    : AppColors.surfaceHigh,
+                color: onKey ? AppColors.accent : AppColors.surfaceHigh,
                 borderRadius: BorderRadius.circular(9),
               ),
               child: Transform.rotate(
                 angle: 0.785,
-                child: Icon(onKey ? Icons.close : Icons.square,
-                    size: onKey ? 15 : 13,
-                    color: onKey ? AppColors.onAccent : AppColors.accent),
+                child: Icon(
+                  onKey ? Icons.close : Icons.square,
+                  size: onKey ? 15 : 13,
+                  color: onKey ? AppColors.onAccent : AppColors.accent,
+                ),
               ),
             ),
           ),
@@ -140,14 +144,21 @@ class _KeyframePanelState extends State<KeyframePanel> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${owner.keyframeTimes.length} keys',
-                  style: const TextStyle(
-                      fontSize: 10.5, color: AppColors.textFaint)),
-              Text(local.isNegative ? '—' : local.timecode,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textDim,
-                      fontFeatures: [FontFeature.tabularFigures()])),
+              Text(
+                '${owner.keyframeTimes.length} keys',
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  color: AppColors.textFaint,
+                ),
+              ),
+              Text(
+                local.isNegative ? '—' : local.timecode,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textDim,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
             ],
           ),
         ],
@@ -197,8 +208,9 @@ class _KeyframePanelState extends State<KeyframePanel> {
                 decoration: BoxDecoration(
                   color: active ? AppColors.accent : Colors.transparent,
                   border: Border.all(
-                      color: active ? AppColors.accent : AppColors.textFaint,
-                      width: 1.4),
+                    color: active ? AppColors.accent : AppColors.textFaint,
+                    width: 1.4,
+                  ),
                 ),
               ),
             ),

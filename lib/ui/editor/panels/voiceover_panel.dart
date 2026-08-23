@@ -93,16 +93,22 @@ class _VoiceOverPanelState extends State<VoiceOverPanel> {
     if (path == null || _elapsed < const Duration(milliseconds: 400)) return;
 
     widget.editor.seek(_startedAt);
-    final layer = await widget.editor
-        .addAudio(path, kind: AudioKind.voiceover, title: 'Voice-over');
+    final layer = await widget.editor.addAudio(
+      path,
+      kind: AudioKind.voiceover,
+      title: 'Voice-over',
+    );
     if (layer != null) {
       widget.editor.updateLayer<AudioLayer>(layer, (a) {
         a.duration = _elapsed;
       }, record: false);
       final wave = await ClipOperations.waveform(path);
       if (wave.isNotEmpty && mounted) {
-        widget.editor
-            .updateLayer<AudioLayer>(layer, (a) => a.waveform = wave, record: false);
+        widget.editor.updateLayer<AudioLayer>(
+          layer,
+          (a) => a.waveform = wave,
+          record: false,
+        );
       }
     }
   }
@@ -127,8 +133,10 @@ class _VoiceOverPanelState extends State<VoiceOverPanel> {
             if (_permissionDenied)
               const Padding(
                 padding: EdgeInsets.only(bottom: 10),
-                child: Text('Microphone access is off',
-                    style: TextStyle(fontSize: 12, color: AppColors.danger)),
+                child: Text(
+                  'Microphone access is off',
+                  style: TextStyle(fontSize: 12, color: AppColors.danger),
+                ),
               ),
             GestureDetector(
               onTap: _toggle,
@@ -139,12 +147,15 @@ class _VoiceOverPanelState extends State<VoiceOverPanel> {
                   color: _recording ? AppColors.danger : AppColors.surfaceHigh,
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: _recording ? AppColors.danger : AppColors.divider,
-                      width: 2),
+                    color: _recording ? AppColors.danger : AppColors.divider,
+                    width: 2,
+                  ),
                 ),
-                child: Icon(_recording ? Icons.stop : Icons.mic,
-                    size: 26,
-                    color: _recording ? Colors.white : AppColors.text),
+                child: Icon(
+                  _recording ? Icons.stop : Icons.mic,
+                  size: 26,
+                  color: _recording ? Colors.white : AppColors.text,
+                ),
               ),
             ),
             const SizedBox(height: 12),

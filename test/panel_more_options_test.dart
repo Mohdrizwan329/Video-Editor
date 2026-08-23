@@ -22,23 +22,24 @@ import 'helpers/editor_tools.dart';
 /// same project the docked sheet is editing.
 void main() {
   Project project() => Project(
-        name: 'More',
-        ratio: CanvasRatio.r9x16,
-        clips: [
-          VideoClip(
-            path: '/nonexistent/c.jpg',
-            isImage: true,
-            sourceDuration: const Duration(seconds: 4),
-          ),
-        ],
-      );
+    name: 'More',
+    ratio: CanvasRatio.r9x16,
+    clips: [
+      VideoClip(
+        path: '/nonexistent/c.jpg',
+        isImage: true,
+        sourceDuration: const Duration(seconds: 4),
+      ),
+    ],
+  );
 
   /// The Watermark tool, which is the one whose controls still outrun a
   /// phone-sized sheet. Adjust used to be that tool — nineteen sliders in a
   /// stack — and is now one slider and a row of knobs, so it has nothing
   /// past its fold to test with.
   Future<Project> openAdjust(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(390, 844) * tester.view.devicePixelRatio;
+    tester.view.physicalSize =
+        const Size(390, 844) * tester.view.devicePixelRatio;
     addTearDown(tester.view.reset);
     final p = project();
     await tester.pumpWidget(
@@ -61,44 +62,82 @@ void main() {
   /// The docked sheet keeps its own controls in the tree and clips the ones
   /// past its fold, so a control open in both matches twice.
   Finder sliderFor(String label) => find.descendant(
-        of: find.byType(BottomSheet),
-        matching: find.descendant(
-          of: find.ancestor(
-            of: find.text(label),
-            matching: find.byType(AppSlider),
-          ),
-          matching: find.byType(Slider),
-        ),
-      );
+    of: find.byType(BottomSheet),
+    matching: find.descendant(
+      of: find.ancestor(of: find.text(label), matching: find.byType(AppSlider)),
+      matching: find.byType(Slider),
+    ),
+  );
 
-  testWidgets('the sliders past the fold are behind the button',
-      (tester) async {
+  testWidgets('the sliders past the fold are behind the button', (
+    tester,
+  ) async {
     await openAdjust(tester);
 
-    // Watermark's controls outrun the sheet: Size sits above the fold and
-    // Opacity below it.
-    expect(find.text('Size').hitTestable(), findsOneWidget);
+    // Watermark's controls outrun the sheet: the font row sits above the
+    // fold and Opacity below it.
+    expect(find.text('Font').hitTestable(), findsOneWidget);
     // Clipped, not absent: it is in the tree the sheet built and out of
     // reach behind its bottom edge.
-    expect(find.text('Opacity').hitTestable(), findsNothing,
-        reason: 'a control the sheet has no room for is reachable anyway');
+    expect(
+      find.text('Opacity').hitTestable(),
+      findsNothing,
+      reason: 'a control the sheet has no room for is reachable anyway',
+    );
     expect(find.text('More options'), findsOneWidget);
 
     await tester.tap(find.text('More options'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Opacity').hitTestable(), findsOneWidget,
-        reason: 'the sheet the button opens is missing the controls it '
-            'was opened for');
+    // That sheet *is* allowed to scroll — it is a list the user asked for by
+    // name — so the control is reached the way a list is reached.
+    await tester.scrollUntilVisible(
+      find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.text('Opacity'),
+          )
+          .first,
+      -80,
+      scrollable: find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(
+      find.text('Opacity').hitTestable(),
+      findsOneWidget,
+      reason:
+          'the sheet the button opens is missing the controls it '
+          'was opened for',
+    );
   });
 
-  testWidgets('a slider in that sheet edits the project and shows it',
-      (tester) async {
+  testWidgets('a slider in that sheet edits the project and shows it', (
+    tester,
+  ) async {
     final project = await openAdjust(tester);
 
     await tester.tap(find.text('More options'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.text('Opacity'),
+          )
+          .first,
+      -80,
+      scrollable: find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.drag(sliderFor('Opacity'), const Offset(-60, 0));
     // Two frames: the panel writes the value on the first and the sheet
     // picks the rebuilt controls up on the next.
@@ -111,8 +150,9 @@ void main() {
     expect(tester.widget<Slider>(sliderFor('Opacity')).value, lessThan(1));
   });
 
-  testWidgets('closing that sheet leaves the panel open behind it',
-      (tester) async {
+  testWidgets('closing that sheet leaves the panel open behind it', (
+    tester,
+  ) async {
     await openAdjust(tester);
 
     await tester.tap(find.text('More options'));
@@ -121,6 +161,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PanelShell), findsOneWidget);
-    expect(find.text('Size').hitTestable(), findsOneWidget);
+    expect(find.text('Font').hitTestable(), findsOneWidget);
   });
 }

@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/models/layers.dart';
 import '../../../data/models/text_presets.dart';
 import '../../../state/editor_controller.dart';
+import '../../widgets/panel_strip.dart';
 import '../../widgets/panel_shell.dart';
 import '../../widgets/app_slider.dart';
 import 'animation_panel.dart';
@@ -27,8 +28,9 @@ class TextPanel extends StatefulWidget {
 }
 
 class _TextPanelState extends State<TextPanel> {
-  late final TextEditingController _text =
-      TextEditingController(text: widget.layer.text);
+  late final TextEditingController _text = TextEditingController(
+    text: widget.layer.text,
+  );
   int _tab = 0;
   int _presetCategory = 0;
 
@@ -41,9 +43,18 @@ class _TextPanelState extends State<TextPanel> {
   ];
 
   static const List<int> _palette = [
-    0xFFFFFFFF, 0xFF000000, 0xFFFF5A5A, 0xFFFFB020,
-    0xFFFFE55C, 0xFF31E1B4, 0xFF2BB8E1, 0xFF6B5BD2,
-    0xFFE85C9E, 0xFF9BE15C, 0xFFB0B0BC, 0xFF7A4A2B,
+    0xFFFFFFFF,
+    0xFF000000,
+    0xFFFF5A5A,
+    0xFFFFB020,
+    0xFFFFE55C,
+    0xFF31E1B4,
+    0xFF2BB8E1,
+    0xFF6B5BD2,
+    0xFFE85C9E,
+    0xFF9BE15C,
+    0xFFB0B0BC,
+    0xFF7A4A2B,
   ];
 
   @override
@@ -82,13 +93,13 @@ class _TextPanelState extends State<TextPanel> {
               2 => _fontTab(),
               3 => _styleTab(),
               _ => AnimationPicker(
-                  animationIn: widget.layer.animationIn,
-                  animationOut: widget.layer.animationOut,
-                  duration: widget.layer.animationDuration,
-                  onIn: (a) => _update((l) => l.animationIn = a),
-                  onOut: (a) => _update((l) => l.animationOut = a),
-                  onDuration: (d) => _update((l) => l.animationDuration = d),
-                ),
+                animationIn: widget.layer.animationIn,
+                animationOut: widget.layer.animationOut,
+                duration: widget.layer.animationDuration,
+                onIn: (a) => _update((l) => l.animationIn = a),
+                onOut: (a) => _update((l) => l.animationOut = a),
+                onDuration: (d) => _update((l) => l.animationDuration = d),
+              ),
             },
           ],
         ),
@@ -114,30 +125,47 @@ class _TextPanelState extends State<TextPanel> {
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
             ),
             onChanged: (v) => _update((l) => l.text = v, record: false),
           ),
           const SizedBox(height: 10),
           Wrap(
             children: [
-              _toggle(Icons.format_bold, widget.layer.bold,
-                  () => _update((l) => l.bold = !l.bold)),
-              _toggle(Icons.format_italic, widget.layer.italic,
-                  () => _update((l) => l.italic = !l.italic)),
-              _toggle(Icons.format_underline, widget.layer.underline,
-                  () => _update((l) => l.underline = !l.underline)),
+              _toggle(
+                Icons.format_bold,
+                widget.layer.bold,
+                () => _update((l) => l.bold = !l.bold),
+              ),
+              _toggle(
+                Icons.format_italic,
+                widget.layer.italic,
+                () => _update((l) => l.italic = !l.italic),
+              ),
+              _toggle(
+                Icons.format_underline,
+                widget.layer.underline,
+                () => _update((l) => l.underline = !l.underline),
+              ),
               const SizedBox(width: 12),
-              _toggle(Icons.format_align_left,
-                  widget.layer.align == TextAlign.left,
-                  () => _update((l) => l.align = TextAlign.left)),
-              _toggle(Icons.format_align_center,
-                  widget.layer.align == TextAlign.center,
-                  () => _update((l) => l.align = TextAlign.center)),
-              _toggle(Icons.format_align_right,
-                  widget.layer.align == TextAlign.right,
-                  () => _update((l) => l.align = TextAlign.right)),
+              _toggle(
+                Icons.format_align_left,
+                widget.layer.align == TextAlign.left,
+                () => _update((l) => l.align = TextAlign.left),
+              ),
+              _toggle(
+                Icons.format_align_center,
+                widget.layer.align == TextAlign.center,
+                () => _update((l) => l.align = TextAlign.center),
+              ),
+              _toggle(
+                Icons.format_align_right,
+                widget.layer.align == TextAlign.right,
+                () => _update((l) => l.align = TextAlign.right),
+              ),
             ],
           ),
         ],
@@ -158,34 +186,33 @@ class _TextPanelState extends State<TextPanel> {
           onSelected: (i) => setState(() => _presetCategory = i),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 66,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            itemCount: presets.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 9),
-            itemBuilder: (context, i) {
-              final p = presets[i];
-              final active = widget.layer.stylePresetId == p.id;
-              return GestureDetector(
+        PanelStrip(
+          gap: 9,
+          runGap: 9,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          children: [
+            for (final p in presets)
+              GestureDetector(
                 onTap: () => _update((l) => p.applyTo(l)),
                 child: Container(
                   width: 92,
+                  height: 66,
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceHigh,
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(
-                        color: active ? AppColors.accent : Colors.transparent,
-                        width: 1.8),
+                      color: widget.layer.stylePresetId == p.id
+                          ? AppColors.accent
+                          : Colors.transparent,
+                      width: 1.8,
+                    ),
                   ),
                   alignment: Alignment.center,
                   child: _presetSample(p),
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
       ],
     );
@@ -196,37 +223,43 @@ class _TextPanelState extends State<TextPanel> {
     final label = Stack(
       children: [
         if (p.strokeWidth > 0)
-          Text('Aa',
-              style: TextStyle(
-                fontFamily: p.fontFamily,
-                fontSize: 21,
-                fontWeight: p.bold ? FontWeight.w800 : FontWeight.w500,
-                letterSpacing: p.letterSpacing * 0.3,
-                foreground: Paint()
-                  ..style = PaintingStyle.stroke
-                  ..strokeWidth = p.strokeWidth * 0.55
-                  ..strokeJoin = StrokeJoin.round
-                  ..color = Color(p.strokeColor),
-              )),
-        Text('Aa',
+          Text(
+            'Aa',
             style: TextStyle(
               fontFamily: p.fontFamily,
               fontSize: 21,
-              color: Color(p.color),
               fontWeight: p.bold ? FontWeight.w800 : FontWeight.w500,
-              fontStyle: p.italic ? FontStyle.italic : FontStyle.normal,
               letterSpacing: p.letterSpacing * 0.3,
-              shadows: p.shadowBlur > 0
-                  ? [
-                      Shadow(
-                        color: Color(p.shadowColor),
-                        blurRadius: p.shadowBlur * 0.5,
-                        offset: Offset(
-                            p.shadowOffsetX * 0.3, p.shadowOffsetY * 0.3),
-                      )
-                    ]
-                  : null,
-            )),
+              foreground: Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = p.strokeWidth * 0.55
+                ..strokeJoin = StrokeJoin.round
+                ..color = Color(p.strokeColor),
+            ),
+          ),
+        Text(
+          'Aa',
+          style: TextStyle(
+            fontFamily: p.fontFamily,
+            fontSize: 21,
+            color: Color(p.color),
+            fontWeight: p.bold ? FontWeight.w800 : FontWeight.w500,
+            fontStyle: p.italic ? FontStyle.italic : FontStyle.normal,
+            letterSpacing: p.letterSpacing * 0.3,
+            shadows: p.shadowBlur > 0
+                ? [
+                    Shadow(
+                      color: Color(p.shadowColor),
+                      blurRadius: p.shadowBlur * 0.5,
+                      offset: Offset(
+                        p.shadowOffsetX * 0.3,
+                        p.shadowOffsetY * 0.3,
+                      ),
+                    ),
+                  ]
+                : null,
+          ),
+        ),
       ],
     );
     return Column(
@@ -234,21 +267,21 @@ class _TextPanelState extends State<TextPanel> {
       children: [
         hasBg
             ? Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Color(p.backgroundColor),
-                  borderRadius:
-                      BorderRadius.circular(p.backgroundRadius * 0.4),
+                  borderRadius: BorderRadius.circular(p.backgroundRadius * 0.4),
                 ),
                 child: label,
               )
             : label,
         const SizedBox(height: 4),
-        Text(p.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 8.5, color: AppColors.textFaint)),
+        Text(
+          p.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 8.5, color: AppColors.textFaint),
+        ),
       ],
     );
   }
@@ -256,40 +289,42 @@ class _TextPanelState extends State<TextPanel> {
   Widget _fontTab() {
     return Column(
       children: [
-        SizedBox(
-          height: 56,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            itemCount: _fonts.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 9),
-            itemBuilder: (context, i) {
-              final f = _fonts[i];
-              final active = widget.layer.fontFamily == f;
-              return GestureDetector(
+        PanelStrip(
+          gap: 9,
+          runGap: 9,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          children: [
+            for (final f in _fonts)
+              GestureDetector(
                 onTap: () => _update((l) => l.fontFamily = f),
                 child: Container(
                   width: 82,
+                  height: 56,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: active
+                    color: widget.layer.fontFamily == f
                         ? AppColors.accent.withValues(alpha: 0.16)
                         : AppColors.surfaceHigh,
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(
-                      color: active ? AppColors.accent : Colors.transparent,
+                      color: widget.layer.fontFamily == f
+                          ? AppColors.accent
+                          : Colors.transparent,
                     ),
                   ),
-                  child: Text('Aa',
-                      style: TextStyle(
-                        fontFamily: f,
-                        fontSize: 20,
-                        color: active ? AppColors.accent : AppColors.text,
-                      )),
+                  child: Text(
+                    'Aa',
+                    style: TextStyle(
+                      fontFamily: f,
+                      fontSize: 20,
+                      color: widget.layer.fontFamily == f
+                          ? AppColors.accent
+                          : AppColors.text,
+                    ),
+                  ),
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
         AppSlider(
           label: 'Size',
@@ -330,10 +365,16 @@ class _TextPanelState extends State<TextPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _colorRow('Text', widget.layer.color,
-            (c) => _update((l) => l.color = c)),
-        _colorRow('Outline', widget.layer.strokeColor,
-            (c) => _update((l) => l.strokeColor = c)),
+        _colorRow(
+          'Text',
+          widget.layer.color,
+          (c) => _update((l) => l.color = c),
+        ),
+        _colorRow(
+          'Outline',
+          widget.layer.strokeColor,
+          (c) => _update((l) => l.strokeColor = c),
+        ),
         AppSlider(
           label: 'Outline width',
           value: widget.layer.strokeWidth,
@@ -354,9 +395,12 @@ class _TextPanelState extends State<TextPanel> {
           onChanged: (v) => _update((l) => l.shadowBlur = v, record: false),
           onChangeEnd: (v) => _update((l) => l.shadowBlur = v),
         ),
-        _colorRow('Backdrop', widget.layer.backgroundColor,
-            (c) => _update((l) => l.backgroundColor = c),
-            includeClear: true),
+        _colorRow(
+          'Backdrop',
+          widget.layer.backgroundColor,
+          (c) => _update((l) => l.backgroundColor = c),
+          includeClear: true,
+        ),
         AppSlider(
           label: 'Opacity',
           value: widget.layer.transform.opacity,
@@ -372,29 +416,35 @@ class _TextPanelState extends State<TextPanel> {
     );
   }
 
-  Widget _colorRow(String label, int selected, ValueChanged<int> onPick,
-      {bool includeClear = false}) {
+  Widget _colorRow(
+    String label,
+    int selected,
+    ValueChanged<int> onPick, {
+    bool includeClear = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(fontSize: 11, color: AppColors.textDim)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AppColors.textDim),
+          ),
           const SizedBox(height: 6),
-          SizedBox(
-            height: 30,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                if (includeClear)
-                  _swatch(0x00000000, selected == 0x00000000,
-                      () => onPick(0x00000000),
-                      icon: Icons.format_color_reset),
-                for (final c in _palette)
-                  _swatch(c, selected == c, () => onPick(c)),
-              ],
-            ),
+          PanelStrip(
+            padding: EdgeInsets.zero,
+            children: [
+              if (includeClear)
+                _swatch(
+                  0x00000000,
+                  selected == 0x00000000,
+                  () => onPick(0x00000000),
+                  icon: Icons.format_color_reset,
+                ),
+              for (final c in _palette)
+                _swatch(c, selected == c, () => onPick(c)),
+            ],
           ),
         ],
       ),
@@ -402,25 +452,22 @@ class _TextPanelState extends State<TextPanel> {
   }
 
   Widget _swatch(int color, bool active, VoidCallback onTap, {IconData? icon}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: Color(color),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: active ? AppColors.accent : AppColors.divider,
-              width: active ? 2.4 : 1,
-            ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: Color(color),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: active ? AppColors.accent : AppColors.divider,
+            width: active ? 2.4 : 1,
           ),
-          child: icon == null
-              ? null
-              : Icon(icon, size: 13, color: AppColors.textDim),
         ),
+        child: icon == null
+            ? null
+            : Icon(icon, size: 13, color: AppColors.textDim),
       ),
     );
   }
@@ -439,11 +486,14 @@ class _TextPanelState extends State<TextPanel> {
                 : AppColors.surfaceHigh,
             borderRadius: BorderRadius.circular(7),
             border: Border.all(
-                color: active ? AppColors.accent : Colors.transparent),
+              color: active ? AppColors.accent : Colors.transparent,
+            ),
           ),
-          child: Icon(icon,
-              size: 16,
-              color: active ? AppColors.accent : AppColors.textDim),
+          child: Icon(
+            icon,
+            size: 16,
+            color: active ? AppColors.accent : AppColors.textDim,
+          ),
         ),
       ),
     );

@@ -14,11 +14,7 @@ import '../../widgets/app_slider.dart';
 /// Text-to-speech: type a line, pick a device voice, drop the result on the
 /// timeline as narration.
 class TtsPanel extends StatefulWidget {
-  const TtsPanel({
-    super.key,
-    required this.editor,
-    required this.onClose,
-  });
+  const TtsPanel({super.key, required this.editor, required this.onClose});
 
   final EditorController editor;
   final VoidCallback onClose;
@@ -76,7 +72,9 @@ class _TtsPanelState extends State<TtsPanel> {
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.accent),
+                    strokeWidth: 2,
+                    color: AppColors.accent,
+                  ),
                 ),
               )
             : Column(
@@ -96,7 +94,9 @@ class _TtsPanelState extends State<TtsPanel> {
                           borderSide: BorderSide.none,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                       onChanged: (_) => setState(() {}),
                     ),
@@ -108,7 +108,9 @@ class _TtsPanelState extends State<TtsPanel> {
                         'No speech voices are installed on this device. '
                         'Add one in the system settings.',
                         style: TextStyle(
-                            fontSize: 11, color: AppColors.warning),
+                          fontSize: 11,
+                          color: AppColors.warning,
+                        ),
                       ),
                     )
                   else
@@ -139,20 +141,20 @@ class _TtsPanelState extends State<TtsPanel> {
                       children: [
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, 38),
-                              foregroundColor: AppColors.text,
-                              side: const BorderSide(
-                                  color: AppColors.divider)),
+                            minimumSize: const Size(0, 38),
+                            foregroundColor: AppColors.text,
+                            side: const BorderSide(color: AppColors.divider),
+                          ),
                           icon: const Icon(Icons.volume_up, size: 16),
                           label: const Text('Preview'),
                           onPressed: _text.text.trim().isEmpty
                               ? null
                               : () => _tts.preview(
-                                    _text.text,
-                                    voice: _voice,
-                                    rate: _rate,
-                                    pitch: _pitch,
-                                  ),
+                                  _text.text,
+                                  voice: _voice,
+                                  rate: _rate,
+                                  pitch: _pitch,
+                                ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -167,15 +169,17 @@ class _TtsPanelState extends State<TtsPanel> {
                                     width: 14,
                                     height: 14,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 1.8,
-                                        color: Colors.black),
+                                      strokeWidth: 1.8,
+                                      color: Colors.black,
+                                    ),
                                   )
                                 : const Icon(Icons.add, size: 17),
-                            label: Text(_working ? 'Building…' : 'Add to timeline'),
-                            onPressed:
-                                _working || _text.text.trim().isEmpty
-                                    ? null
-                                    : _generate,
+                            label: Text(
+                              _working ? 'Building…' : 'Add to timeline',
+                            ),
+                            onPressed: _working || _text.text.trim().isEmpty
+                                ? null
+                                : _generate,
                           ),
                         ),
                       ],
@@ -192,8 +196,10 @@ class _TtsPanelState extends State<TtsPanel> {
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
       child: Row(
         children: [
-          const Text('Voice',
-              style: TextStyle(fontSize: 11, color: AppColors.textDim)),
+          const Text(
+            'Voice',
+            style: TextStyle(fontSize: 11, color: AppColors.textDim),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Container(
@@ -212,23 +218,36 @@ class _TtsPanelState extends State<TtsPanel> {
                   // fill; the closed field still sits on the light panel, so
                   // it is rebuilt in the page's own ink.
                   style: const TextStyle(
-                      fontSize: 12, color: AppColors.onAppBar),
+                    fontSize: 12,
+                    color: AppColors.onAppBar,
+                  ),
                   selectedItemBuilder: (_) => _voices
-                      .map((v) => Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text('${v.locale} · ${v.shortLabel}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 12, color: AppColors.text)),
-                          ))
+                      .map(
+                        (v) => Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${v.locale} · ${v.shortLabel}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.text,
+                            ),
+                          ),
+                        ),
+                      )
                       .toList(),
                   items: _voices
-                      .map((v) => DropdownMenuItem(
-                            value: v,
-                            child: Text('${v.locale} · ${v.shortLabel}',
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ))
+                      .map(
+                        (v) => DropdownMenuItem(
+                          value: v,
+                          child: Text(
+                            '${v.locale} · ${v.shortLabel}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) {
                     setState(() => _voice = v);
@@ -254,17 +273,24 @@ class _TtsPanelState extends State<TtsPanel> {
     if (!mounted) return;
     if (path == null) {
       setState(() => _working = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('The speech engine produced no audio')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The speech engine produced no audio')),
+      );
       return;
     }
-    final layer = await widget.editor.addAudio(path,
-        kind: AudioKind.voiceover, title: _shortTitle());
+    final layer = await widget.editor.addAudio(
+      path,
+      kind: AudioKind.voiceover,
+      title: _shortTitle(),
+    );
     if (layer != null) {
       final wave = await ClipOperations.waveform(path);
       if (wave.isNotEmpty && mounted) {
-        widget.editor.updateLayer<AudioLayer>(layer, (a) => a.waveform = wave,
-            record: false);
+        widget.editor.updateLayer<AudioLayer>(
+          layer,
+          (a) => a.waveform = wave,
+          record: false,
+        );
       }
     }
     if (mounted) setState(() => _working = false);
@@ -278,11 +304,7 @@ class _TtsPanelState extends State<TtsPanel> {
 
 /// Auto-captions plus SRT import and export.
 class CaptionPanel extends StatefulWidget {
-  const CaptionPanel({
-    super.key,
-    required this.editor,
-    required this.onClose,
-  });
+  const CaptionPanel({super.key, required this.editor, required this.onClose});
 
   final EditorController editor;
   final VoidCallback onClose;
@@ -299,8 +321,7 @@ class _CaptionPanelState extends State<CaptionPanel> {
 
   EditorController get _e => widget.editor;
 
-  int get _captionCount =>
-      _e.project.texts.where((t) => t.isCaption).length;
+  int get _captionCount => _e.project.texts.where((t) => t.isCaption).length;
 
   @override
   void initState() {
@@ -320,9 +341,7 @@ class _CaptionPanelState extends State<CaptionPanel> {
       onClose: widget.onClose,
       onConfirm: widget.onClose,
       onReset: _captionCount > 0 ? _clearCaptions : null,
-      child: PanelBody(
-        child: _working ? _progressView() : _idleView(),
-      ),
+      child: PanelBody(child: _working ? _progressView() : _idleView()),
     );
   }
 
@@ -343,12 +362,15 @@ class _CaptionPanelState extends State<CaptionPanel> {
             ),
           ),
           const SizedBox(height: 14),
-          Text(p?.stage ?? 'Working',
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(
+            p?.stage ?? 'Working',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 4),
-          const Text('Runs on device — no upload',
-              style: TextStyle(fontSize: 10.5, color: AppColors.textFaint)),
+          const Text(
+            'Runs on device — no upload',
+            style: TextStyle(fontSize: 10.5, color: AppColors.textFaint),
+          ),
         ],
       ),
     );
@@ -361,8 +383,10 @@ class _CaptionPanelState extends State<CaptionPanel> {
         const SizedBox(height: 10),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Text('Recognition model',
-              style: TextStyle(fontSize: 11, color: AppColors.textDim)),
+          child: Text(
+            'Recognition model',
+            style: TextStyle(fontSize: 11, color: AppColors.textDim),
+          ),
         ),
         const SizedBox(height: 6),
         ChipStrip(
@@ -384,9 +408,9 @@ class _CaptionPanelState extends State<CaptionPanel> {
             _modelReady == null
                 ? 'Checking for the model…'
                 : _modelReady!
-                    ? 'Model ready on this device.'
-                    : 'The ${_model.label} model (${_model.size}) will be '
-                        'downloaded once before the first run.',
+                ? 'Model ready on this device.'
+                : 'The ${_model.label} model (${_model.size}) will be '
+                      'downloaded once before the first run.',
             style: TextStyle(
               fontSize: 10.5,
               color: _modelReady == false
@@ -405,8 +429,10 @@ class _CaptionPanelState extends State<CaptionPanel> {
               minimumSize: const Size.fromHeight(42),
             ),
             icon: const Icon(Icons.closed_caption, size: 18),
-            label: const Text('Auto-generate captions',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+            label: const Text(
+              'Auto-generate captions',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             onPressed: _e.project.clips.isEmpty ? null : _autoCaption,
           ),
         ),
@@ -438,9 +464,10 @@ class _CaptionPanelState extends State<CaptionPanel> {
         if (_captionCount > 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Text('$_captionCount caption lines on the timeline',
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textDim)),
+            child: Text(
+              '$_captionCount caption lines on the timeline',
+              style: const TextStyle(fontSize: 11, color: AppColors.textDim),
+            ),
           )
         else
           const SizedBox(height: 12),
@@ -449,10 +476,10 @@ class _CaptionPanelState extends State<CaptionPanel> {
   }
 
   ButtonStyle get _outlined => OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 38),
-        foregroundColor: AppColors.text,
-        side: const BorderSide(color: AppColors.divider),
-      );
+    minimumSize: const Size(0, 38),
+    foregroundColor: AppColors.text,
+    side: const BorderSide(color: AppColors.divider),
+  );
 
   /// Transcribe the loudest source available: a voice-over lane if there is
   /// one, otherwise the first clip's own audio.
@@ -483,7 +510,9 @@ class _CaptionPanelState extends State<CaptionPanel> {
       setState(() {
         _working = true;
         _progress = const CaptionProgress(
-            stage: 'Downloading model', value: -1);
+          stage: 'Downloading model',
+          value: -1,
+        );
       });
       final ok = await CaptionService.instance.downloadModel(_model);
       if (!mounted) return;
@@ -519,25 +548,27 @@ class _CaptionPanelState extends State<CaptionPanel> {
   }
 
   Future<bool?> _confirmDownload() => showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Download model?'),
-          content: Text(
-            'The ${_model.label} speech model is about ${_model.size}. '
-            'It downloads once and then works offline.',
-          ),
-          actions: [
-            TextButton(
-                style: AppTheme.outlinedAction(),
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
-            TextButton(
-                style: AppTheme.outlinedAction(),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Download')),
-          ],
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Download model?'),
+      content: Text(
+        'The ${_model.label} speech model is about ${_model.size}. '
+        'It downloads once and then works offline.',
+      ),
+      actions: [
+        TextButton(
+          style: AppTheme.outlinedAction(),
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
         ),
-      );
+        TextButton(
+          style: AppTheme.outlinedAction(),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Download'),
+        ),
+      ],
+    ),
+  );
 
   void _applyLines(List<CaptionLine> lines) {
     final wrapped = CaptionService.wrap(lines);
@@ -559,13 +590,13 @@ class _CaptionPanelState extends State<CaptionPanel> {
   }
 
   Future<void> _exportSrt() async {
-    final lines = _e.project.texts
-        .where((t) => t.isCaption)
-        .map((t) => CaptionLine(start: t.start, end: t.end, text: t.text))
-        .toList()
-      ..sort((a, b) => a.start.compareTo(b.start));
-    final path =
-        await CaptionService.writeSrt(lines, _e.project.name);
+    final lines =
+        _e.project.texts
+            .where((t) => t.isCaption)
+            .map((t) => CaptionLine(start: t.start, end: t.end, text: t.text))
+            .toList()
+          ..sort((a, b) => a.start.compareTo(b.start));
+    final path = await CaptionService.writeSrt(lines, _e.project.name);
     _toast(path == null ? 'Could not write the file' : 'Saved to $path');
   }
 
@@ -578,8 +609,10 @@ class _CaptionPanelState extends State<CaptionPanel> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        content: Text(message, style: const TextStyle(fontSize: 12.5)),
-      ));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message, style: const TextStyle(fontSize: 12.5)),
+        ),
+      );
   }
 }
