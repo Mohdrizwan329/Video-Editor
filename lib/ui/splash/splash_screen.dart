@@ -22,9 +22,9 @@ import '../widgets/app_logo.dart';
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
-  /// The mark stays up at least this long even on a warm start, so the app
-  /// never flickers through the splash too fast to read.
-  static const Duration minimumOnScreen = Duration(milliseconds: 1400);
+  /// The mark stays up at least this long even on a warm start, so the name
+  /// under it has time to arrive and be read, not just flash past.
+  static const Duration minimumOnScreen = Duration(seconds: 3);
 
   /// Startup work is a courtesy, not a gate: if the shader or the repository
   /// hangs, the app still opens.
@@ -36,9 +36,12 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
+  // The whole entrance finishes inside the first second of the three the
+  // splash is held for: at three seconds the name was still fading in as the
+  // home screen replaced it, so it never got read.
   late final AnimationController _anim = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 3),
+    duration: const Duration(milliseconds: 900),
   )..forward();
 
   late final Animation<double> _markIn = CurvedAnimation(
