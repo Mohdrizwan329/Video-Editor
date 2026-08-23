@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -12,18 +13,21 @@ import '../../core/utils/responsive.dart';
 import '../../data/models/adjustments.dart';
 import '../../data/models/filter_preset.dart';
 import '../../data/models/layers.dart';
+import '../../data/models/enums.dart';
 import '../../data/models/photo_edit.dart';
 import '../../data/models/text_presets.dart';
 import '../../data/models/watermark.dart';
 import '../../data/repositories/project_repository.dart';
 import '../../data/services/face_enhancer.dart';
 import '../../data/services/media_library.dart';
+import '../../data/services/photo_cutout.dart';
 import '../../data/services/photo_renderer.dart';
 import '../editor/panels/effects_panel.dart' show PresetTile, SwatchSource;
 import '../editor/panels/sticker_panel.dart' show StickerCatalog;
 import '../editor/preview/grade_extras_box.dart';
 import '../widgets/app_slider.dart';
 import '../widgets/panel_shell.dart' show ChipStrip;
+import '../widgets/panel_strip.dart';
 import 'widgets/crop_overlay.dart';
 
 part 'panels/photo_panels.dart';
@@ -46,55 +50,99 @@ class ImageEditorScreen extends StatefulWidget {
 }
 
 /// The bottom row, left to right, in the order a photo is usually worked.
+/// The tools along the bottom, in the order the photo editor they are
+/// modelled on puts them.
+///
+/// Crop and Rotate are two entries rather than one 'Core': they are the two
+/// things a user reaches for most and burying the second inside the first
+/// cost a tap and a guess. Watermark and Pixelate come after the divider —
+/// they are ours, not on that bar, and the order the user knows should not
+/// be shuffled to make room for them.
 enum _Tool {
-  core,
-  adjust,
+  canvas,
   filter,
-  face,
-  markup,
+  adjust,
+  effect,
+  portrait,
+  sticker,
   text,
+  pip,
+  remove,
+  enhance,
+  cutout,
+  mask,
+  detail,
+  doodle,
+  reshape,
+  replace,
+  crop,
+  rotate,
   watermark,
   pixelate,
-  retouch,
-  sticker,
 }
 
 extension on _Tool {
   String get label => switch (this) {
-    _Tool.core => 'Core',
-    _Tool.adjust => 'Adjust',
+    _Tool.canvas => 'Canvas',
     _Tool.filter => 'Filter',
-    _Tool.face => 'AI Face',
-    _Tool.markup => 'Markup',
+    _Tool.adjust => 'Adjust',
+    _Tool.effect => 'Effect',
+    _Tool.portrait => 'Portrait',
+    _Tool.sticker => 'Sticker',
     _Tool.text => 'Text',
+    _Tool.pip => 'PIP',
+    _Tool.remove => 'Remove',
+    _Tool.enhance => 'Enhance',
+    _Tool.cutout => 'Cutout',
+    _Tool.mask => 'Mask',
+    _Tool.detail => 'Detail',
+    _Tool.doodle => 'Doodle',
+    _Tool.reshape => 'Reshape',
+    _Tool.replace => 'Replace',
+    _Tool.crop => 'Crop',
+    _Tool.rotate => 'Rotate',
     _Tool.watermark => 'Watermark',
     _Tool.pixelate => 'Pixelate',
-    _Tool.retouch => 'Retouch',
-    _Tool.sticker => 'Stickers',
   };
 
   IconData get icon => switch (this) {
-    _Tool.core => Icons.crop_rotate,
-    _Tool.adjust => Icons.tune,
+    _Tool.canvas => Icons.aspect_ratio,
     _Tool.filter => Icons.photo_filter,
-    _Tool.face => Icons.face_retouching_natural,
-    _Tool.markup => Icons.draw_outlined,
+    _Tool.adjust => Icons.tune,
+    _Tool.effect => Icons.auto_awesome,
+    _Tool.portrait => Icons.face_retouching_natural,
+    _Tool.sticker => Icons.emoji_emotions_outlined,
     _Tool.text => Icons.title,
+    _Tool.pip => Icons.picture_in_picture_alt_outlined,
+    _Tool.remove => Icons.healing,
+    _Tool.enhance => Icons.hd,
+    _Tool.cutout => Icons.person_outline,
+    _Tool.mask => Icons.crop_square,
+    _Tool.detail => Icons.details,
+    _Tool.doodle => Icons.draw_outlined,
+    _Tool.reshape => Icons.transform,
+    _Tool.replace => Icons.swap_horiz,
+    _Tool.crop => Icons.crop,
+    _Tool.rotate => Icons.rotate_right,
     _Tool.watermark => Icons.branding_watermark_outlined,
     _Tool.pixelate => Icons.blur_on,
-    _Tool.retouch => Icons.healing,
-    _Tool.sticker => Icons.emoji_emotions_outlined,
   };
 
   /// Tools the user paints with: the stage hands them a stroke instead of a
   /// long-press comparison.
   bool get isBrush =>
-      this == _Tool.markup || this == _Tool.pixelate || this == _Tool.retouch;
+      this == _Tool.doodle || this == _Tool.pixelate || this == _Tool.remove;
 
   /// Tools that place something on the picture and then let it be dragged,
   /// pinched and turned.
   bool get isOverlay =>
-      this == _Tool.text || this == _Tool.sticker || this == _Tool.watermark;
+      this == _Tool.text ||
+      this == _Tool.sticker ||
+      this == _Tool.watermark ||
+      this == _Tool.pip;
+
+  /// Where the bar's own tools end and ours begin.
+  bool get startsExtras => this == _Tool.watermark;
 }
 
 class _ImageEditorScreenState extends State<ImageEditorScreen> {
@@ -103,6 +151,11 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   static const int _previewMaxSide = 1600;
 
   PhotoEdit _edit = PhotoEdit();
+
+  /// The photo being edited. It starts as the one the screen was opened on
+  /// and the Replace tool swaps it, so it is state rather than the widget's
+  /// own field.
+  late String _path = widget.path;
 
   /// The last committed state, and the two stacks either side of it. Slider
   /// drags mutate [_edit] live and commit once on release, so an undo steps
@@ -118,6 +171,14 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   ui.Image? _skinMask;
   bool _lookingForSkin = false;
 
+  /// The subject mask the Cutout pass baked, decoded so the stage can show
+  /// the cut rather than promise it. Null until the pass has run.
+  ui.Image? _cutoutMatte;
+  bool _cuttingOut = false;
+
+  /// Pictures the PIP tool has added, decoded once and kept by path.
+  final Map<String, ui.Image> _pipImages = {};
+
   /// The watermark logo, decoded so the stage can draw the mark itself rather
   /// than a placeholder for it. [_logoPath] is what it was decoded from.
   ui.Image? _logo;
@@ -127,7 +188,8 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   bool _saving = false;
   bool _comparing = false;
   bool _saved = false;
-  _Tool _tool = _Tool.core;
+  _Tool _tool = _Tool.crop;
+
   int _filterCategory = 0;
 
   /// The overlay the stage is acting on, by id — 'watermark' for the mark.
@@ -171,10 +233,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   }
 
   Future<void> _load() async {
-    final image = await PhotoRenderer.decode(
-      widget.path,
-      maxSide: _previewMaxSide,
-    );
+    final image = await PhotoRenderer.decode(_path, maxSide: _previewMaxSide);
     if (!mounted) {
       image?.dispose();
       return;
@@ -426,7 +485,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           math.max(1, c.maxWidth - inset.horizontal),
           math.max(1, c.maxHeight - inset.vertical),
         );
-        final cropping = _tool == _Tool.core;
+        final cropping = _tool == _Tool.crop;
         // Comparing shows the photo exactly as it arrived, which is the point
         // of holding the picture down.
         final edit = _comparing ? PhotoEdit() : _edit;
@@ -441,6 +500,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             edit: edit,
             cropped: !cropping,
             skinMask: _skinMask,
+            cutoutMatte: _cutoutMatte,
           ),
           size: rect.size,
         );
@@ -483,7 +543,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                   child: IgnorePointer(
                     child: RepaintBoundary(
                       child: CustomPaint(
-                        painter: _DecorPainter(edit, _logo),
+                        painter: _DecorPainter(edit, _logo, _pipImages),
                         size: rect.size,
                       ),
                     ),
@@ -615,15 +675,15 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
 
   /// Which list the current brush paints into.
   List<PhotoStroke>? get _brushTarget => switch (_tool) {
-    _Tool.markup => _edit.markup,
+    _Tool.doodle => _edit.markup,
     _Tool.pixelate => _edit.pixelate,
-    _Tool.retouch => _edit.retouch,
+    _Tool.remove => _edit.retouch,
     _ => null,
   };
 
   double get _brushWidth => switch (_tool) {
     _Tool.pixelate => _pixelBrush,
-    _Tool.retouch => _retouchBrush,
+    _Tool.remove => _retouchBrush,
     _ => _inkWidth,
   };
 
@@ -653,7 +713,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     final stroke = PhotoStroke(
       color: _inkColor,
       width: _brushWidth,
-      erase: _tool == _Tool.markup && _erasing,
+      erase: _tool == _Tool.doodle && _erasing,
     )..points.add(_normalise(point, size));
     setState(() {
       target.add(stroke);
@@ -721,6 +781,19 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         if (_toolOwns(_tool, o)) o,
     ].reversed;
     for (final overlay in candidates) {
+      // A picture layer knows its own shape, so it is measured rather than
+      // guessed at by the shared hit test.
+      if (overlay is PhotoImageLayer) {
+        final image = _pipImages[overlay.path];
+        if (image == null) continue;
+        if (PhotoRenderer.pipRect(size, overlay, image).inflate(12).contains(
+          point,
+        )) {
+          if (overlay.id != _selected) setState(() => _selected = overlay.id);
+          return true;
+        }
+        continue;
+      }
       if (PhotoRenderer.hitTest(size, overlay, point, logo: _logo, slop: 12)) {
         final id = _overlayId(overlay);
         if (id != _selected) setState(() => _selected = id);
@@ -734,12 +807,14 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     _Tool.text => overlay is TextLayer,
     _Tool.sticker => overlay is StickerLayer,
     _Tool.watermark => overlay is Watermark,
+    _Tool.pip => overlay is PhotoImageLayer,
     _ => false,
   };
 
   String? _overlayId(Object overlay) => switch (overlay) {
     TextLayer l => l.id,
     StickerLayer l => l.id,
+    PhotoImageLayer l => l.id,
     Watermark _ => 'watermark',
     _ => null,
   };
@@ -793,15 +868,25 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   /// The open tool's controls, built once and used in both places — the
   /// panel and the sheet the button opens.
   Widget _toolControls() => switch (_tool) {
-    _Tool.core => _cropTools(),
+    _Tool.crop => _cropTools(),
     _Tool.filter => _filterTools(),
     _Tool.adjust => _adjustTools(),
-    _Tool.face => _faceTools(),
-    _Tool.markup => _markupTools(),
+    _Tool.portrait => _faceTools(),
+    _Tool.doodle => _markupTools(),
     _Tool.text => _textTools(),
     _Tool.watermark => _watermarkTools(),
     _Tool.pixelate => _pixelateTools(),
-    _Tool.retouch => _retouchTools(),
+    _Tool.remove => _retouchTools(),
+    _Tool.canvas => _canvasTools(),
+    _Tool.effect => _effectTools(),
+    _Tool.pip => _pipTools(),
+    _Tool.enhance => _enhanceTools(),
+    _Tool.cutout => _cutoutTools(),
+    _Tool.mask => _maskTools(),
+    _Tool.detail => _detailTools(),
+    _Tool.reshape => _reshapeTools(),
+    _Tool.replace => _replaceTools(),
+    _Tool.rotate => _rotateTools(),
     _Tool.sticker => _stickerTools(),
   };
 
@@ -947,7 +1032,16 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       padding: EdgeInsets.symmetric(horizontal: r.dp(6), vertical: r.vp(9)),
       child: Row(
         children: [
-          for (final tool in _Tool.values)
+          for (final tool in _Tool.values) ...[
+            // Ours start here. The line says so, rather than letting them
+            // read as two more of the ones the user already knows.
+            if (tool.startsExtras)
+              Container(
+                width: 1,
+                height: r.dp(30),
+                margin: EdgeInsets.symmetric(horizontal: r.dp(6)),
+                color: AppColors.divider,
+              ),
             InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => setState(() {
@@ -991,6 +1085,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
@@ -1018,26 +1113,6 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           runSpacing: r.vp(6),
           children: [
             _action(
-              Icons.rotate_left,
-              'Rotate',
-              () => _edited(() => _edit.rotate(clockwise: false)),
-            ),
-            _action(
-              Icons.rotate_right,
-              'Rotate',
-              () => _edited(() => _edit.rotate()),
-            ),
-            _action(
-              Icons.flip,
-              'Flip H',
-              () => _edited(() => _edit.mirror(horizontal: true)),
-            ),
-            _action(
-              Icons.flip_camera_android_outlined,
-              'Flip V',
-              () => _edited(() => _edit.mirror(horizontal: false)),
-            ),
-            _action(
               Icons.restart_alt,
               'Reset',
               () => _edited(() => _edit.resetCrop()),
@@ -1052,6 +1127,694 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         ),
         SizedBox(height: r.vp(10)),
       ],
+    );
+  }
+
+  // ----------------------------------------------------------- rotate tools
+
+  /// The turns and the mirrors, which used to be buried in the crop panel.
+  /// They are the second thing a user reaches for after the crop itself, and
+  /// a tool of their own is one tap rather than two and a hunt.
+  Widget _rotateTools() {
+    final r = context.r;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(10)),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: r.dp(4),
+          runSpacing: r.vp(6),
+          children: [
+            _action(
+              Icons.rotate_left,
+              'Left',
+              () => _edited(() => _edit.rotate(clockwise: false)),
+            ),
+            _action(
+              Icons.rotate_right,
+              'Right',
+              () => _edited(() => _edit.rotate()),
+            ),
+            _action(
+              Icons.flip,
+              'Flip H',
+              () => _edited(() => _edit.mirror(horizontal: true)),
+            ),
+            _action(
+              Icons.flip_camera_android_outlined,
+              'Flip V',
+              () => _edited(() => _edit.mirror(horizontal: false)),
+            ),
+            _action(Icons.restart_alt, 'Reset', () {
+              _edited(() {
+                _edit.quarterTurns = 0;
+                _edit.flipH = _edit.flipV = false;
+              });
+            }),
+          ],
+        ),
+        SizedBox(height: r.vp(10)),
+      ],
+    );
+  }
+
+  // ----------------------------------------------------------- canvas tools
+
+  /// The shape of the finished picture, and what fills it either side of a
+  /// photo that does not have that shape.
+  Widget _canvasTools() {
+    final r = context.r;
+    final ratios = CropRatio.all;
+    final selected = math.max(
+      0,
+      ratios.indexWhere((c) => c.id == _edit.canvasRatioId),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(10)),
+        ChipStrip(
+          labels: [for (final c in ratios) c.label],
+          selectedIndex: selected,
+          onSelected: (i) => _edited(() {
+            final ratio = ratios[i];
+            _edit.canvasRatioId = ratio.id;
+            // 'Free' here means the photo's own shape — there is nothing to
+            // fill, so the backdrop goes away with it.
+            _edit.canvasAspect = ratio.value;
+          }),
+        ),
+        SizedBox(height: r.vp(10)),
+        PanelStrip(
+          alignment: WrapAlignment.center,
+          children: [
+            for (final c in _kCanvasColours)
+              GestureDetector(
+                onTap: () => _edited(() {
+                  _edit.canvasBackground = c;
+                  _edit.canvasBlurBackdrop = false;
+                }),
+                child: Container(
+                  width: r.dp(30),
+                  height: r.dp(30),
+                  decoration: BoxDecoration(
+                    color: Color(c),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color:
+                          _edit.canvasBackground == c &&
+                              !_edit.canvasBlurBackdrop
+                          ? AppColors.accent
+                          : AppColors.divider,
+                      width:
+                          _edit.canvasBackground == c &&
+                              !_edit.canvasBlurBackdrop
+                          ? 2.4
+                          : 1,
+                    ),
+                  ),
+                ),
+              ),
+            GestureDetector(
+              onTap: () => _edited(
+                () => _edit.canvasBlurBackdrop = !_edit.canvasBlurBackdrop,
+              ),
+              child: Container(
+                width: r.dp(30),
+                height: r.dp(30),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceHigh,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _edit.canvasBlurBackdrop
+                        ? AppColors.accent
+                        : AppColors.divider,
+                    width: _edit.canvasBlurBackdrop ? 2.4 : 1,
+                  ),
+                ),
+                child: Icon(
+                  Icons.blur_on,
+                  size: r.ic(16),
+                  color: _edit.canvasBlurBackdrop
+                      ? AppColors.accent
+                      : AppColors.textDim,
+                ),
+              ),
+            ),
+          ],
+        ),
+        _hint(
+          _edit.canvasAspect == null
+              ? 'Pick a shape to put the photo in'
+              : 'Tap a colour, or the blur, for what fills the sides',
+        ),
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  /// The fills the Canvas tool offers, kept next to the panel that draws
+  /// them rather than in a shared palette: these are backgrounds, not ink.
+  static const List<int> _kCanvasColours = [
+    0xFFFFFFFF,
+    0xFF000000,
+    0xFFF2EFE6,
+    0xFFE8D9C5,
+    0xFFB8C4BB,
+    0xFF9AA7C7,
+    0xFFD9A7A7,
+    0xFF2E2E38,
+  ];
+
+  // ----------------------------------------------------------- effect tools
+
+  /// Effects stack on top of the look rather than replacing it, which is why
+  /// this is a tool of its own and not another row in Filter.
+  Widget _effectTools() {
+    final r = context.r;
+    const effects = <(String, String)>[
+      ('none', 'None'),
+      ('grain', 'Grain'),
+      ('leak', 'Light leak'),
+      ('glow', 'Glow'),
+      ('vignette', 'Vignette'),
+      ('dust', 'Dust'),
+      ('chroma', 'Fringe'),
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(10)),
+        ChipStrip(
+          labels: [for (final (_, label) in effects) label],
+          selectedIndex: math.max(
+            0,
+            effects.indexWhere((e) => e.$1 == _edit.effectId),
+          ),
+          onSelected: (i) => _edited(() => _edit.effectId = effects[i].$1),
+        ),
+        if (_edit.effectId != 'none')
+          AppSlider(
+            label: 'Strength',
+            icon: Icons.auto_awesome,
+            value: _edit.effectIntensity,
+            min: 0,
+            max: 1,
+            defaultValue: 0.7,
+            format: (v) => (v * 100).round().toString(),
+            onChanged: (v) => _dragging(() => _edit.effectIntensity = v),
+            onChangeEnd: (v) => _edited(() => _edit.effectIntensity = v),
+          )
+        else
+          _hint('Tap an effect to lay it over the picture'),
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------- enhance tools
+
+  /// One tap. There is nothing to tune here on purpose — a tool with a
+  /// slider is a tool the user has to think about, and the whole point of
+  /// this one is that they do not.
+  Widget _enhanceTools() {
+    final r = context.r;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(14)),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.symmetric(horizontal: r.dp(16)),
+          dense: true,
+          value: _edit.enhance,
+          activeThumbColor: AppColors.accent,
+          title: Text(
+            'Enhance',
+            style: TextStyle(fontSize: r.sp(12.5), fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            'A little contrast, a little colour, a little sharpening',
+            style: TextStyle(fontSize: r.sp(10.5), color: AppColors.textDim),
+          ),
+          onChanged: (v) => _edited(() => _edit.enhance = v),
+        ),
+        SizedBox(height: r.vp(10)),
+      ],
+    );
+  }
+
+  // ----------------------------------------------------------- detail tools
+
+  /// Sharpening, noise and grain — the half of the grade a colour matrix
+  /// cannot carry, and the half a user thinks of as 'detail' rather than as
+  /// colour. The sliders are the Adjust panel's own, so the two never
+  /// disagree about what a value means.
+  Widget _detailTools() {
+    final adj = _edit.adjustments;
+    final r = context.r;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(6)),
+        AppSlider(
+          label: 'Sharpen',
+          icon: Icons.details,
+          value: adj.sharpen,
+          min: 0,
+          max: 1,
+          defaultValue: 0,
+          format: (v) => (v * 100).round().toString(),
+          onChanged: (v) => _dragging(() => adj.sharpen = v),
+          onChangeEnd: (v) => _edited(() => adj.sharpen = v),
+        ),
+        AppSlider(
+          label: 'Noise reduction',
+          icon: Icons.grain,
+          value: adj.denoise,
+          min: 0,
+          max: 1,
+          defaultValue: 0,
+          format: (v) => (v * 100).round().toString(),
+          onChanged: (v) => _dragging(() => adj.denoise = v),
+          onChangeEnd: (v) => _edited(() => adj.denoise = v),
+        ),
+        AppSlider(
+          label: 'Grain',
+          icon: Icons.blur_linear,
+          value: adj.grain,
+          min: 0,
+          max: 1,
+          defaultValue: 0,
+          format: (v) => (v * 100).round().toString(),
+          onChanged: (v) => _dragging(() => adj.grain = v),
+          onChangeEnd: (v) => _edited(() => adj.grain = v),
+        ),
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------- mask tools
+
+  Widget _maskTools() {
+    final r = context.r;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(8)),
+        PanelStrip(
+          alignment: WrapAlignment.center,
+          gap: r.dp(10),
+          runGap: r.vp(8),
+          children: [
+            for (final shape in MaskShape.values)
+              GestureDetector(
+                onTap: () => _edited(() => _edit.maskShape = shape),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: r.dp(42),
+                      height: r.dp(38),
+                      decoration: BoxDecoration(
+                        color: _edit.maskShape == shape
+                            ? AppColors.accent.withValues(alpha: 0.18)
+                            : AppColors.surfaceHigh,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: _edit.maskShape == shape
+                              ? AppColors.accent
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Icon(
+                        shape.icon,
+                        size: r.ic(18),
+                        color: _edit.maskShape == shape
+                            ? AppColors.accent
+                            : AppColors.textDim,
+                      ),
+                    ),
+                    SizedBox(height: r.vp(3)),
+                    Text(
+                      shape.label,
+                      style: TextStyle(
+                        fontSize: r.sp(9),
+                        color: _edit.maskShape == shape
+                            ? AppColors.accent
+                            : AppColors.textDim,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        if (_edit.hasMask) ...[
+          AppSlider(
+            label: 'Size',
+            icon: Icons.photo_size_select_small,
+            value: _edit.maskSize,
+            min: 0.1,
+            max: 1.4,
+            defaultValue: 0.7,
+            format: (v) => (v * 100).round().toString(),
+            onChanged: (v) => _dragging(() => _edit.maskSize = v),
+            onChangeEnd: (v) => _edited(() => _edit.maskSize = v),
+          ),
+          AppSlider(
+            label: 'Feather',
+            icon: Icons.blur_on,
+            value: _edit.maskFeather,
+            min: 0,
+            max: 0.5,
+            defaultValue: 0.1,
+            format: (v) => (v * 100).round().toString(),
+            onChanged: (v) => _dragging(() => _edit.maskFeather = v),
+            onChangeEnd: (v) => _edited(() => _edit.maskFeather = v),
+          ),
+          AppSlider(
+            label: 'Rotation',
+            icon: Icons.rotate_right,
+            value: _edit.maskRotation,
+            min: -math.pi,
+            max: math.pi,
+            bipolar: true,
+            defaultValue: 0,
+            format: (v) => '${(v * 180 / math.pi).round()}°',
+            onChanged: (v) => _dragging(() => _edit.maskRotation = v),
+            onChangeEnd: (v) => _edited(() => _edit.maskRotation = v),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.symmetric(horizontal: r.dp(16)),
+            dense: true,
+            value: _edit.maskInverted,
+            activeThumbColor: AppColors.accent,
+            title: Text('Invert', style: TextStyle(fontSize: r.sp(12))),
+            onChanged: (v) => _edited(() => _edit.maskInverted = v),
+          ),
+        ] else
+          _hint('Pick a shape to show the photo through'),
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  // ----------------------------------------------------------- reshape tools
+
+  Widget _reshapeTools() {
+    final r = context.r;
+    if (_skinMask == null) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: r.vp(22)),
+        child: Text(
+          _lookingForSkin
+              ? 'Looking for a face…'
+              : 'No face found in this photo',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: r.sp(11.5), color: AppColors.textDim),
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(6)),
+        AppSlider(
+          label: 'Slim',
+          icon: Icons.compress,
+          value: _edit.reshapeSlim,
+          min: -1,
+          max: 1,
+          bipolar: true,
+          defaultValue: 0,
+          format: (v) => (v * 100).round().toString(),
+          onChanged: (v) => _dragging(() => _edit.reshapeSlim = v),
+          onChangeEnd: (v) => _edited(() => _edit.reshapeSlim = v),
+        ),
+        AppSlider(
+          label: 'Brighten',
+          icon: Icons.remove_red_eye_outlined,
+          value: _edit.reshapeEyes,
+          min: -1,
+          max: 1,
+          bipolar: true,
+          defaultValue: 0,
+          format: (v) => (v * 100).round().toString(),
+          onChanged: (v) => _dragging(() => _edit.reshapeEyes = v),
+          onChangeEnd: (v) => _edited(() => _edit.reshapeEyes = v),
+        ),
+        AppSlider(
+          label: 'Soften',
+          icon: Icons.blur_circular,
+          value: _edit.reshapeSmooth,
+          min: 0,
+          max: 1,
+          defaultValue: 0,
+          format: (v) => (v * 100).round().toString(),
+          onChanged: (v) => _dragging(() => _edit.reshapeSmooth = v),
+          onChangeEnd: (v) => _edited(() => _edit.reshapeSmooth = v),
+        ),
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  // --------------------------------------------------------------- PIP tools
+
+  /// Pictures laid over this one. Each is dragged, pinched and turned on the
+  /// stage like any other overlay, so the panel is only what the stage
+  /// cannot say: add one, and how solid the chosen one is.
+  Widget _pipTools() {
+    final r = context.r;
+    final layer = _edit.pips.where((p) => p.id == _selected).firstOrNull;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(10)),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: r.dp(4),
+          runSpacing: r.vp(6),
+          children: [
+            _action(Icons.add_photo_alternate_outlined, 'Add', _addPip),
+            if (layer != null)
+              _action(
+                Icons.delete_outline,
+                'Remove',
+                () => _edited(() {
+                  _edit.pips.removeWhere((p) => p.id == layer.id);
+                  _selected = null;
+                }),
+              ),
+          ],
+        ),
+        if (layer == null)
+          _hint(
+            _edit.pips.isEmpty
+                ? 'Add a picture to lay over this one'
+                : 'Tap a picture on the photo to change it',
+          )
+        else ...[
+          AppSlider(
+            label: 'Opacity',
+            icon: Icons.opacity,
+            value: layer.transform.opacity,
+            min: 0,
+            max: 1,
+            defaultValue: 1,
+            format: (v) => '${(v * 100).round()}%',
+            onChanged: (v) => _dragging(() => layer.transform.opacity = v),
+            onChangeEnd: (v) => _edited(() => layer.transform.opacity = v),
+          ),
+          AppSlider(
+            label: 'Corners',
+            icon: Icons.rounded_corner,
+            value: layer.corner,
+            min: 0,
+            max: 0.5,
+            defaultValue: 0,
+            format: (v) => (v * 100).round().toString(),
+            onChanged: (v) => _dragging(() => layer.corner = v),
+            onChangeEnd: (v) => _edited(() => layer.corner = v),
+          ),
+        ],
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  Future<void> _addPip() async {
+    final picked = await MediaLibrary.instance.pickFiles(
+      allowMultiple: false,
+      kind: PickKind.image,
+    );
+    if (picked.isEmpty || !mounted) return;
+    final path = await picked.first.resolvePath();
+    final image = path == null
+        ? null
+        : await PhotoRenderer.decode(path, maxSide: _previewMaxSide);
+    if (image == null || path == null || !mounted) {
+      _toast('That picture could not be opened');
+      return;
+    }
+    _pipImages[path] = image;
+    final layer = PhotoImageLayer(path: path);
+    // Half the frame, in the middle: big enough to see, small enough that
+    // the photo underneath is still the picture.
+    layer.transform.scale = 0.5;
+    _edited(() {
+      _edit.pips.add(layer);
+      _selected = layer.id;
+    });
+  }
+
+  // ------------------------------------------------------------ cutout tools
+
+  /// Knocks the background off the subject, using the same segmenter the
+  /// video editor's Cutout uses — so a photo and a frame of video are cut
+  /// the same way.
+  Widget _cutoutTools() {
+    final r = context.r;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(10)),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: r.dp(4),
+          runSpacing: r.vp(6),
+          children: [
+            _action(
+              Icons.person_outline,
+              _cutoutMatte == null ? 'Cut out' : 'Redo',
+              _cuttingOut ? () {} : _runCutout,
+            ),
+            if (_cutoutMatte != null)
+              _action(
+                _edit.cutoutOn ? Icons.visibility_off : Icons.visibility,
+                _edit.cutoutOn ? 'Off' : 'On',
+                () => _edited(() => _edit.cutoutOn = !_edit.cutoutOn),
+              ),
+          ],
+        ),
+        _hint(
+          _cuttingOut
+              ? 'Finding the subject…'
+              : _cutoutMatte == null
+              ? 'The pass runs once and is kept with the photo'
+              : _edit.cutoutOn
+              ? 'The background is off. Canvas fills what is behind it.'
+              : 'The cut is ready — tap On to show it',
+        ),
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  Future<void> _runCutout() async {
+    final image = _image;
+    if (image == null || _cuttingOut) return;
+    setState(() => _cuttingOut = true);
+    try {
+      final matte = await PhotoCutout.matteFor(image);
+      if (!mounted) return;
+      if (matte == null) {
+        _toast('No clear subject found in this photo');
+        return;
+      }
+      _cutoutMatte?.dispose();
+      _cutoutMatte = matte;
+      _edited(() {
+        _edit.cutoutOn = true;
+        // The matte lives in memory for this session; the flag is what the
+        // undo stack carries.
+        _edit.cutoutMattePath = 'memory';
+      });
+    } catch (e) {
+      if (mounted) _toast('The cutout could not be run: $e');
+    } finally {
+      if (mounted) setState(() => _cuttingOut = false);
+    }
+  }
+
+  // ----------------------------------------------------------- replace tools
+
+  /// Swaps the photo under the edit, keeping everything that was done to it.
+  ///
+  /// The crop is dropped with the picture — a rectangle measured against one
+  /// photo means nothing on another — but the look, the overlays and the
+  /// brushes are what the user spent their time on and they stay.
+  Widget _replaceTools() {
+    final r = context.r;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: r.vp(10)),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: r.dp(4),
+          runSpacing: r.vp(6),
+          children: [
+            _action(Icons.swap_horiz, 'Choose a photo', _replacePhoto),
+          ],
+        ),
+        _hint('The look and the layers stay; the crop starts again'),
+        SizedBox(height: r.vp(8)),
+      ],
+    );
+  }
+
+  Future<void> _replacePhoto() async {
+    final picked = await MediaLibrary.instance.pickFiles(
+      allowMultiple: false,
+      kind: PickKind.image,
+    );
+    if (picked.isEmpty || !mounted) return;
+    final path = await picked.first.resolvePath();
+    final image = path == null
+        ? null
+        : await PhotoRenderer.decode(path, maxSide: _previewMaxSide);
+    if (image == null || path == null || !mounted) {
+      _toast('That photo could not be opened');
+      return;
+    }
+    final old = _image;
+    setState(() {
+      _path = path;
+      _image = image;
+      _skinMask?.dispose();
+      _skinMask = null;
+      _cutoutMatte?.dispose();
+      _cutoutMatte = null;
+    });
+    old?.dispose();
+    _edited(() {
+      _edit.resetCrop();
+      _edit.cutoutOn = false;
+      _edit.cutoutMattePath = null;
+    });
+    unawaited(_findSkin(image));
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// The line a tool shows when it has nothing to tune yet.
+  Widget _hint(String text) {
+    final r = context.r;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: r.dp(20), vertical: r.vp(12)),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: r.sp(11), color: AppColors.textDim),
+      ),
     );
   }
 
@@ -1131,7 +1894,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       }),
       preview: (i) => ColorFiltered(
         colorFilter: ColorFilter.matrix(items[i].toColorMatrix()),
-        child: SwatchSource(path: widget.path),
+        child: SwatchSource(path: _path),
       ),
       slider: _edit.filterId == 'none'
           ? null
@@ -1350,7 +2113,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     try {
       // The preview runs on a downscaled copy; the file gets every pixel the
       // photo actually has.
-      full = await PhotoRenderer.decode(widget.path);
+      full = await PhotoRenderer.decode(_path);
       final source = full ?? _image;
       if (source == null) {
         failure = 'That photo could not be opened';
@@ -1362,6 +2125,8 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           _edit,
           path: '${dir.path}/photo_$stamp.png',
           skinMask: _skinMask,
+          cutoutMatte: _cutoutMatte,
+          pips: _pipImages,
         );
         failure = saved == null ? 'Could not render the photo' : null;
       }
@@ -1444,12 +2209,14 @@ class _PhotoPainter extends CustomPainter {
     required this.edit,
     required this.cropped,
     this.skinMask,
+    this.cutoutMatte,
   });
 
   final ui.Image image;
   final PhotoEdit edit;
   final bool cropped;
   final ui.Image? skinMask;
+  final ui.Image? cutoutMatte;
 
   @override
   void paint(Canvas canvas, Size size) => PhotoRenderer.paintPicture(
@@ -1459,6 +2226,7 @@ class _PhotoPainter extends CustomPainter {
     edit,
     cropped: cropped,
     skinMask: skinMask,
+    cutoutMatte: cutoutMatte,
   );
 
   @override
@@ -1468,15 +2236,19 @@ class _PhotoPainter extends CustomPainter {
 /// The grain, the FX texture and the frame, and then everything laid over
 /// the picture — in the order the exporter stacks them.
 class _DecorPainter extends CustomPainter {
-  const _DecorPainter(this.edit, this.logo);
+  const _DecorPainter(this.edit, this.logo, this.pips);
 
   final PhotoEdit edit;
   final ui.Image? logo;
 
+  /// The pictures the PIP tool added, by path. They are decoded once when
+  /// they are chosen rather than on every paint.
+  final Map<String, ui.Image> pips;
+
   @override
   void paint(Canvas canvas, Size size) {
     PhotoRenderer.paintDecorations(canvas, size, edit);
-    PhotoRenderer.paintOverlays(canvas, size, edit, logo: logo);
+    PhotoRenderer.paintOverlays(canvas, size, edit, logo: logo, pips: pips);
   }
 
   @override

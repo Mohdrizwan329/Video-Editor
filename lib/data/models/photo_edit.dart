@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'adjustments.dart';
+import 'enums.dart';
 import 'filter_preset.dart';
 import 'layers.dart';
 import 'watermark.dart';
@@ -47,6 +48,33 @@ class PhotoStroke {
     erase: erase,
     points: List<Offset>.of(points),
   );
+}
+
+/// A picture laid over the photo — what the PIP tool adds.
+///
+/// It carries the same [LayerTransform] a caption or a sticker does, so the
+/// stage drags, pinches and turns all three with one piece of code, and the
+/// renderer paints them in one pass.
+class PhotoImageLayer {
+  PhotoImageLayer({required this.path, LayerTransform? transform})
+    : id = 'pip_${DateTime.now().microsecondsSinceEpoch}',
+      transform = transform ?? LayerTransform();
+
+  final String id;
+
+  /// Where the picture lives on disk.
+  final String path;
+
+  final LayerTransform transform;
+
+  /// Rounded corners, 0..1 of the shorter side.
+  double corner = 0;
+
+  PhotoImageLayer copy() {
+    final out = PhotoImageLayer(path: path, transform: transform.copy())
+      ..corner = corner;
+    return out;
+  }
 }
 
 /// The portrait pass: soften skin, lift it, even it out and put the detail
@@ -150,6 +178,63 @@ class PhotoEdit {
   /// The creator's mark, burned into the saved file.
   Watermark watermark = Watermark();
 
+  /// Pictures laid over this one, each dragged, pinched and turned like any
+  /// other overlay. The PIP tool's whole output.
+  final List<PhotoImageLayer> pips = [];
+
+  // ------------------------------------------------------------------ canvas
+  /// The shape of the finished picture. Null keeps the photo's own, which is
+  /// what every edit that never opens Canvas wants.
+  double? canvasAspect;
+
+  /// Which ratio chip is lit, so undo restores the row as well as the shape.
+  String canvasRatioId = 'original';
+
+  /// What fills the canvas either side of a letterboxed photo.
+  int canvasBackground = 0xFFFFFFFF;
+
+  /// A blurred copy of the photo behind it instead of a flat colour — the
+  /// backdrop a square crop of a tall photo usually wants.
+  bool canvasBlurBackdrop = false;
+
+  // ------------------------------------------------------------------ effect
+  /// An effect preset over the finished picture: grain, a light leak, a
+  /// vignette. Separate from [filterId] because they stack.
+  String effectId = 'none';
+  double effectIntensity = 0.7;
+
+  // ----------------------------------------------------------------- enhance
+  /// The one-tap pass: a little contrast, a little colour, a little
+  /// sharpening. It is the same tone the video editor's Enhance applies, so
+  /// a photo and a clip come out of it looking alike.
+  bool enhance = false;
+
+  // ------------------------------------------------------------------ cutout
+  /// The subject mask the Cutout tool baked, as a greyscale PNG the renderer
+  /// merges. Null until the pass has run.
+  String? cutoutMattePath;
+
+  /// Whether the cut is showing. Baking it and turning it off is cheaper than
+  /// baking it twice.
+  bool cutoutOn = false;
+
+  // -------------------------------------------------------------------- mask
+  /// A shape the picture is shown through. Off by default.
+  MaskShape maskShape = MaskShape.none;
+  double maskSize = 0.7;
+  double maskFeather = 0.1;
+  double maskX = 0.5;
+  double maskY = 0.5;
+  double maskRotation = 0;
+  bool maskInverted = false;
+
+  // ----------------------------------------------------------------- reshape
+  /// Face and body shaping, applied through the same skin mask the portrait
+  /// pass uses. Each is -1..1 and each is off at zero.
+  double reshapeSlim = 0;
+  double reshapeEyes = 0;
+  double reshapeSmooth = 0;
+
   /// The chosen look at the chosen strength.
   FilterPreset get filter =>
       FilterPreset.fromId(filterId).lerpFromIdentity(filterIntensity);
@@ -165,6 +250,44 @@ class PhotoEdit {
   bool get hasCrop =>
       cropLeft > 0 || cropTop > 0 || cropRight > 0 || cropBottom > 0;
 
+  /// The cut is only showing when the pass has actually left a matte.
+  bool get hasCutout => cutoutOn && cutoutMattePath != null;
+
+  bool get hasMask => maskShape != MaskShape.none;
+
+  bool get hasReshape =>
+      reshapeSlim != 0 || reshapeEyes != 0 || reshapeSmooth != 0;
+
+  /// The grade with Enhance folded in, which is the one the renderer paints.
+  ///
+  /// Enhance is a tone rather than a look: it rides on top of whatever filter
+  /// is chosen instead of replacing it.
+  FilterPreset get gradedFilter {
+    if (!enhance) return grade;
+    final g = grade;
+    return FilterPreset(
+      id: g.id,
+      name: g.name,
+      category: g.category,
+      brightness: g.brightness,
+      contrast: g.contrast * (1 + kEnhanceContrast),
+      saturation: g.saturation * (1 + kEnhanceSaturation),
+      temperature: g.temperature,
+      tint: g.tint,
+      gamma: g.gamma * kEnhanceGamma,
+      fade: g.fade,
+      vignette: g.vignette,
+      hue: g.hue,
+    );
+  }
+
+  /// The tone one tap of Enhance adds. The same numbers the video editor
+  /// uses, so a photo and a clip come out of it looking alike.
+  static const double kEnhanceContrast = 0.06;
+  static const double kEnhanceSaturation = 0.06;
+  static const double kEnhanceGamma = 1.02;
+  static const double kEnhanceSharpen = 0.6;
+
   bool get isClean =>
       !hasCrop &&
       quarterTurns == 0 &&
@@ -178,11 +301,19 @@ class PhotoEdit {
       retouch.isEmpty &&
       texts.isEmpty &&
       stickers.isEmpty &&
-      !watermark.isReady;
+      !watermark.isReady &&
+      pips.isEmpty &&
+      canvasAspect == null &&
+      effectId == 'none' &&
+      !enhance &&
+      !cutoutOn &&
+      !hasMask &&
+      !hasReshape;
 
   /// Every overlay the stage can select, back to front — the order the
   /// renderer paints them in.
   List<Object> get overlays => [
+    ...pips,
     ...stickers,
     ...texts,
     if (watermark.isReady) watermark,
@@ -198,12 +329,16 @@ class PhotoEdit {
     for (final t in texts) {
       if (t.id == id) return t;
     }
+    for (final p in pips) {
+      if (p.id == id) return p;
+    }
     return null;
   }
 
   void removeOverlay(String id) {
     stickers.removeWhere((s) => s.id == id);
     texts.removeWhere((t) => t.id == id);
+    pips.removeWhere((p) => p.id == id);
     if (id == 'watermark') watermark.enabled = false;
   }
 
@@ -281,6 +416,25 @@ class PhotoEdit {
     ..pixelSize = pixelSize
     ..retouchStrength = retouchStrength
     ..watermark = watermark.copy()
+    ..canvasAspect = canvasAspect
+    ..canvasRatioId = canvasRatioId
+    ..canvasBackground = canvasBackground
+    ..canvasBlurBackdrop = canvasBlurBackdrop
+    ..effectId = effectId
+    ..effectIntensity = effectIntensity
+    ..enhance = enhance
+    ..cutoutMattePath = cutoutMattePath
+    ..cutoutOn = cutoutOn
+    ..maskShape = maskShape
+    ..maskSize = maskSize
+    ..maskFeather = maskFeather
+    ..maskX = maskX
+    ..maskY = maskY
+    ..maskRotation = maskRotation
+    ..maskInverted = maskInverted
+    ..reshapeSlim = reshapeSlim
+    ..reshapeEyes = reshapeEyes
+    ..reshapeSmooth = reshapeSmooth
     // The layer ids survive the copy: the stage tracks its selection by id,
     // so an undo has to hand back the same overlay rather than a twin of it.
     ..markup.addAll([for (final s in markup) s.copy()])
@@ -289,7 +443,8 @@ class PhotoEdit {
     ..texts.addAll([for (final t in texts) TextLayer.fromJson(t.toJson())])
     ..stickers.addAll([
       for (final s in stickers) StickerLayer.fromJson(s.toJson()),
-    ]);
+    ])
+    ..pips.addAll([for (final p in pips) p.copy()]);
 }
 
 /// One entry in the crop ratio row. A null [value] leaves the rectangle free;

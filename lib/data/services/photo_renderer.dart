@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/utils/constants.dart';
 import '../models/adjustments.dart';
+import '../models/enums.dart';
 import '../models/filter_preset.dart';
 import '../models/layers.dart';
 import '../models/photo_edit.dart';
@@ -27,11 +28,22 @@ class PhotoRenderer {
   const PhotoRenderer._();
 
   /// The size of the picture this edit produces, in source pixels.
+  ///
+  /// The Canvas tool asks for a shape the photo may not have. Rather than
+  /// stretch it, the box takes that shape and the photo is fitted inside it
+  /// — the empty sides are what [paintMedia] fills.
   static Size outputSize(ui.Image image, PhotoEdit e) {
     final iw = image.width.toDouble(), ih = image.height.toDouble();
     final odd = e.quarterTurns.isOdd;
     final ow = odd ? ih : iw, oh = odd ? iw : ih;
-    return Size(math.max(1, ow * e.cropWidth), math.max(1, oh * e.cropHeight));
+    final w = math.max(1.0, ow * e.cropWidth);
+    final h = math.max(1.0, oh * e.cropHeight);
+    final canvas = e.canvasAspect;
+    if (canvas == null) return Size(w, h);
+    // The longer side is kept, so a photo never loses resolution to a shape.
+    return canvas >= w / h
+        ? Size(math.max(1, h * canvas), h)
+        : Size(w, math.max(1, w / canvas));
   }
 
   /// The picture's aspect ratio (width / height) once framed.
@@ -75,6 +87,13 @@ class PhotoRenderer {
     final windowW = (cropped ? e.cropWidth : 1.0) * ow;
     final windowH = (cropped ? e.cropHeight : 1.0) * oh;
 
+    // The Canvas tool's fill, under everything. It only shows where the photo
+    // does not reach, which is why it is painted rather than left blank: a
+    // transparent margin comes out of a JPEG black.
+    if (cropped && sampler == null && e.canvasAspect != null) {
+      paintBackdrop(canvas, size, image, e);
+    }
+
     // The box is normally cut to the picture's own aspect; when it is not,
     // the picture sits in the middle of it rather than stretching.
     final scale = math.min(size.width / windowW, size.height / windowH);
@@ -83,7 +102,9 @@ class PhotoRenderer {
     // very same framing so it stays registered to the face — and it is never
     // graded, blurred or vignetted: it is a stencil, not a picture.
     if (sampler != null) graded = false;
-    final grade = graded ? e.grade : FilterLibrary.none;
+    // gradedFilter, not grade: Enhance is a tone folded into the look rather
+    // than a pass of its own, so it has to ride along here.
+    final grade = graded ? e.gradedFilter : FilterLibrary.none;
     // The exporter's `gblur` is 12px at 1080p — 1.11% of the frame height —
     // so the same slider softens by the same fraction at any size.
     final sigma = graded ? e.adjustments.blur * 0.0111 * drawn.height : 0.0;
@@ -147,6 +168,51 @@ class PhotoRenderer {
     canvas.restore();
   }
 
+  /// What fills the canvas either side of a photo the Canvas tool has given a
+  /// shape the photo does not have.
+  ///
+  /// A flat colour, or a blurred copy of the photo blown up to cover — the
+  /// backdrop a square crop of a tall photo usually wants, and the one that
+  /// makes the margin read as deliberate rather than as a mistake.
+  static void paintBackdrop(
+    Canvas canvas,
+    Size size,
+    ui.Image image,
+    PhotoEdit e,
+  ) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..color = Color(e.canvasBackground));
+    if (!e.canvasBlurBackdrop) return;
+
+    final iw = image.width.toDouble(), ih = image.height.toDouble();
+    if (iw <= 0 || ih <= 0) return;
+    // Cover, not fit: the whole box has to be filled or the colour shows
+    // through in a band and the backdrop reads as a second mistake.
+    final cover = math.max(size.width / iw, size.height / ih);
+    final drawn = Size(iw * cover, ih * cover);
+    canvas.saveLayer(
+      rect,
+      Paint()
+        ..imageFilter = ui.ImageFilter.blur(
+          sigmaX: size.shortestSide * 0.06,
+          sigmaY: size.shortestSide * 0.06,
+          tileMode: TileMode.clamp,
+        ),
+    );
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, iw, ih),
+      Rect.fromLTWH(
+        (size.width - drawn.width) / 2,
+        (size.height - drawn.height) / 2,
+        drawn.width,
+        drawn.height,
+      ),
+      Paint()..filterQuality = FilterQuality.low,
+    );
+    canvas.restore();
+  }
+
   /// The corner darkening [GradedBox] lays over a graded clip.
   static void paintVignette(Canvas canvas, Size size, double strength) {
     if (size.isEmpty || strength <= 0) return;
@@ -178,7 +244,6 @@ class PhotoRenderer {
     );
   }
 
-
   // ------------------------------------------------------- picture + brushes
 
   /// The whole picture: the framing and the grade, then the passes that need
@@ -200,12 +265,312 @@ class PhotoRenderer {
     PhotoEdit e, {
     bool cropped = true,
     ui.Image? skinMask,
+    ui.Image? cutoutMatte,
   }) {
+    // The cut and the mask both knock holes in the picture, so everything
+    // that paints *on* the picture — the portrait pass, the brushes — has to
+    // happen inside the same layer, or it would paint over the hole.
+    final knocksOut = cropped && (e.hasCutout || e.hasMask);
+    if (knocksOut) canvas.saveLayer(Offset.zero & size, Paint());
+
     paintMedia(canvas, size, image, e, cropped: cropped);
-    if (!cropped || size.isEmpty) return;
-    paintFace(canvas, size, image, e, skinMask);
-    paintRetouch(canvas, size, image, e);
-    paintPixelate(canvas, size, image, e);
+    if (cropped && !size.isEmpty) {
+      paintFace(canvas, size, image, e, skinMask);
+      paintRetouch(canvas, size, image, e);
+      paintPixelate(canvas, size, image, e);
+      paintReshape(canvas, size, image, e, skinMask);
+    }
+
+    if (knocksOut) {
+      if (e.hasCutout) paintCutout(canvas, size, cutoutMatte);
+      if (e.hasMask) paintMask(canvas, size, e);
+      canvas.restore();
+    }
+    if (cropped && !size.isEmpty) paintEffect(canvas, size, e);
+  }
+
+  /// Keeps the picture where the matte is bright and drops it where the matte
+  /// is dark — the cut the Cutout tool baked.
+  ///
+  /// The matte is grey rather than transparent, the way the video editor's is,
+  /// because `alphamerge` reads brightness. `dstIn` reads alpha, so the
+  /// brightness is moved across as it is drawn.
+  static void paintCutout(Canvas canvas, Size size, ui.Image? matte) {
+    if (matte == null || size.isEmpty) return;
+    canvas.saveLayer(Offset.zero & size, Paint()..blendMode = BlendMode.dstIn);
+    canvas.drawImageRect(
+      matte,
+      Rect.fromLTWH(0, 0, matte.width.toDouble(), matte.height.toDouble()),
+      Offset.zero & size,
+      Paint()
+        ..filterQuality = FilterQuality.high
+        // Brightness into alpha: the matte's own colour is thrown away and
+        // what is left is how opaque the picture is under it.
+        ..colorFilter = const ColorFilter.matrix(<double>[
+          0,
+          0,
+          0,
+          0,
+          255,
+          0,
+          0,
+          0,
+          0,
+          255,
+          0,
+          0,
+          0,
+          0,
+          255,
+          1,
+          0,
+          0,
+          0,
+          0,
+        ]),
+    );
+    canvas.restore();
+  }
+
+  /// Shows the picture through a shape — the Mask tool.
+  static void paintMask(Canvas canvas, Size size, PhotoEdit e) {
+    if (size.isEmpty || !e.hasMask) return;
+    final shorter = size.shortestSide;
+    final radius = e.maskSize * shorter / 2;
+    final centre = Offset(e.maskX * size.width, e.maskY * size.height);
+    final feather = math.max(0.5, e.maskFeather * shorter / 2);
+
+    final path = Path();
+    switch (e.maskShape) {
+      case MaskShape.none:
+        return;
+      case MaskShape.circle:
+        path.addOval(Rect.fromCircle(center: centre, radius: radius));
+      case MaskShape.rectangle:
+        path.addRect(
+          Rect.fromCenter(
+            center: centre,
+            width: radius * 2,
+            height: radius * 2 * 0.68,
+          ),
+        );
+      case MaskShape.heart:
+        path.addPath(_heart(centre, radius), Offset.zero);
+      case MaskShape.star:
+        path.addPath(_star(centre, radius), Offset.zero);
+      case MaskShape.linear:
+        path.addRect(
+          Rect.fromLTWH(0, centre.dy - radius, size.width, radius * 2),
+        );
+      case MaskShape.mirror:
+        path.addRect(Rect.fromLTWH(0, 0, size.width, centre.dy));
+    }
+
+    final turned = Path()
+      ..addPath(
+        path,
+        Offset.zero,
+        matrix4:
+            (Matrix4.identity()
+                  ..translateByDouble(centre.dx, centre.dy, 0, 1)
+                  ..rotateZ(e.maskRotation)
+                  ..translateByDouble(-centre.dx, -centre.dy, 0, 1))
+                .storage,
+      );
+
+    // The shape is drawn into alpha with a soft edge, then used to keep or
+    // to cut, which is what makes 'inverted' one flag rather than two paths.
+    canvas.saveLayer(
+      Offset.zero & size,
+      Paint()..blendMode = e.maskInverted ? BlendMode.dstOut : BlendMode.dstIn,
+    );
+    canvas.drawPath(
+      turned,
+      Paint()
+        ..isAntiAlias = true
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, feather),
+    );
+    canvas.restore();
+  }
+
+  static Path _heart(Offset c, double r) {
+    final path = Path()..moveTo(c.dx, c.dy + r * 0.75);
+    path.cubicTo(
+      c.dx - r * 1.6,
+      c.dy - r * 0.2,
+      c.dx - r * 0.6,
+      c.dy - r * 1.2,
+      c.dx,
+      c.dy - r * 0.45,
+    );
+    path.cubicTo(
+      c.dx + r * 0.6,
+      c.dy - r * 1.2,
+      c.dx + r * 1.6,
+      c.dy - r * 0.2,
+      c.dx,
+      c.dy + r * 0.75,
+    );
+    return path..close();
+  }
+
+  static Path _star(Offset c, double r) {
+    final path = Path();
+    for (var i = 0; i < 10; i++) {
+      final radius = i.isEven ? r : r * 0.44;
+      final a = -math.pi / 2 + i * math.pi / 5;
+      final p = Offset(
+        c.dx + radius * math.cos(a),
+        c.dy + radius * math.sin(a),
+      );
+      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+    }
+    return path..close();
+  }
+
+  /// Face and body shaping, painted through the same skin mask the portrait
+  /// pass uses.
+  ///
+  /// A true liquify would push pixels about; this reads as one because the
+  /// three sliders do what the eye reads as slimming, brightening the eyes
+  /// and softening — through the mask, so nothing outside the skin moves.
+  static void paintReshape(
+    Canvas canvas,
+    Size size,
+    ui.Image image,
+    PhotoEdit e,
+    ui.Image? skinMask,
+  ) {
+    if (!e.hasReshape || skinMask == null || size.isEmpty) return;
+    canvas.saveLayer(Offset.zero & size, Paint());
+    // Slimming darkens the edge of the skin so the shape reads narrower;
+    // the eyes slider lifts it; smoothing softens what is left.
+    final darken = (e.reshapeSlim.clamp(-1.0, 1.0) * 0.28);
+    final lift = (e.reshapeEyes.clamp(-1.0, 1.0) * 0.22);
+    paintMedia(canvas, size, image, e, sampler: skinMask);
+    canvas.saveLayer(Offset.zero & size, Paint()..blendMode = BlendMode.srcIn);
+    if (e.reshapeSmooth != 0) {
+      canvas.saveLayer(
+        Offset.zero & size,
+        Paint()
+          ..imageFilter = ui.ImageFilter.blur(
+            sigmaX: e.reshapeSmooth.abs() * size.shortestSide * 0.01,
+            sigmaY: e.reshapeSmooth.abs() * size.shortestSide * 0.01,
+            tileMode: TileMode.clamp,
+          ),
+      );
+      paintMedia(canvas, size, image, e);
+      canvas.restore();
+    }
+    if (darken != 0 || lift != 0) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..color = (lift >= 0 ? Colors.white : Colors.black).withValues(
+            alpha: (lift.abs() + darken.abs()).clamp(0.0, 0.5),
+          )
+          ..blendMode = BlendMode.overlay,
+      );
+    }
+    canvas.restore();
+    canvas.restore();
+  }
+
+  /// The Effect tool: grain, a leak of light, a bloom. It goes on last, over
+  /// everything the picture is made of, the way an effect layer does in the
+  /// video editor.
+  static void paintEffect(Canvas canvas, Size size, PhotoEdit e) {
+    if (size.isEmpty || e.effectId == 'none') return;
+    final strength = e.effectIntensity.clamp(0.0, 1.0);
+    if (strength <= 0) return;
+    final rect = Offset.zero & size;
+    switch (e.effectId) {
+      case 'grain':
+        _paintGrain(canvas, size, strength);
+      case 'leak':
+        canvas.drawRect(
+          rect,
+          Paint()
+            ..blendMode = BlendMode.screen
+            ..shader = ui.Gradient.linear(
+              rect.topRight,
+              rect.bottomLeft,
+              [
+                const Color(0xFFFF7A3D).withValues(alpha: 0.62 * strength),
+                const Color(0x00000000),
+              ],
+              const [0.0, 0.62],
+            ),
+        );
+      case 'glow':
+        canvas.drawRect(
+          rect,
+          Paint()
+            ..blendMode = BlendMode.softLight
+            ..shader = ui.Gradient.radial(rect.center, rect.longestSide * 0.6, [
+              Colors.white.withValues(alpha: 0.75 * strength),
+              const Color(0x00FFFFFF),
+            ]),
+        );
+      case 'vignette':
+        paintVignette(canvas, size, strength);
+      case 'dust':
+        _paintDust(canvas, size, strength);
+      case 'chroma':
+        // A red/cyan split at the edges, the way a cheap lens fringes.
+        final shift = strength * size.shortestSide * 0.006;
+        canvas.drawRect(
+          rect.translate(shift, 0),
+          Paint()
+            ..blendMode = BlendMode.screen
+            ..color = const Color(
+              0xFFFF0040,
+            ).withValues(alpha: 0.16 * strength),
+        );
+        canvas.drawRect(
+          rect.translate(-shift, 0),
+          Paint()
+            ..blendMode = BlendMode.screen
+            ..color = const Color(
+              0xFF00E5FF,
+            ).withValues(alpha: 0.16 * strength),
+        );
+    }
+  }
+
+  static void _paintGrain(Canvas canvas, Size size, double strength) {
+    // A fixed pattern rather than a random one: the same picture has to come
+    // out of the preview and out of the saved file looking the same.
+    final rnd = math.Random(7);
+    final paint = Paint()..blendMode = BlendMode.overlay;
+    final count = (size.width * size.height / 900).clamp(200, 9000).toInt();
+    final dot = math.max(1.0, size.shortestSide / 600);
+    for (var i = 0; i < count; i++) {
+      final grey = rnd.nextDouble();
+      paint.color = (grey > 0.5 ? Colors.white : Colors.black).withValues(
+        alpha: 0.30 * strength * (grey - 0.5).abs() * 2,
+      );
+      canvas.drawCircle(
+        Offset(rnd.nextDouble() * size.width, rnd.nextDouble() * size.height),
+        dot,
+        paint,
+      );
+    }
+  }
+
+  static void _paintDust(Canvas canvas, Size size, double strength) {
+    final rnd = math.Random(19);
+    final paint = Paint()
+      ..blendMode = BlendMode.screen
+      ..color = Colors.white.withValues(alpha: 0.5 * strength)
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 46; i++) {
+      final x = rnd.nextDouble() * size.width;
+      final y = rnd.nextDouble() * size.height;
+      final len = rnd.nextDouble() * size.shortestSide * 0.05;
+      paint.strokeWidth = math.max(0.6, size.shortestSide * 0.0016);
+      canvas.drawLine(Offset(x, y), Offset(x, y + len), paint);
+    }
   }
 
   /// The portrait pass, gated by the skin mask [FaceEnhancer] found. Without
@@ -457,9 +822,14 @@ class PhotoRenderer {
     Size size,
     PhotoEdit e, {
     ui.Image? logo,
+    Map<String, ui.Image> pips = const {},
   }) {
     if (size.isEmpty) return;
     paintMarkup(canvas, size, e);
+    // Pictures first: a caption or an emoji is meant to sit on top of one.
+    for (final p in e.pips) {
+      paintPip(canvas, size, p, pips[p.path]);
+    }
     for (final s in e.stickers) {
       paintSticker(canvas, size, s);
     }
@@ -546,9 +916,11 @@ class PhotoRenderer {
     }
     final origin = Offset(-painter.width / 2, -painter.height / 2);
     if (layer.strokeWidth > 0) {
-      (OverlayRasterizer.buildTextPainter(layer, scale, strokeOnly: true)
-            ..layout(maxWidth: maxWidth))
-          .paint(canvas, origin);
+      (OverlayRasterizer.buildTextPainter(
+        layer,
+        scale,
+        strokeOnly: true,
+      )..layout(maxWidth: maxWidth)).paint(canvas, origin);
     }
     painter.paint(canvas, origin);
     if (opacity < 1) canvas.restore();
@@ -568,11 +940,7 @@ class PhotoRenderer {
     if (layer.transform.rotation != 0) canvas.rotate(layer.transform.rotation);
     if (opacity < 1) {
       canvas.saveLayer(
-        Rect.fromCenter(
-          center: Offset.zero,
-          width: side * 2,
-          height: side * 2,
-        ),
+        Rect.fromCenter(center: Offset.zero, width: side * 2, height: side * 2),
         Paint()..color = Color.fromRGBO(0, 0, 0, opacity),
       );
     }
@@ -642,8 +1010,60 @@ class PhotoRenderer {
     TextLayer l => l.transform,
     StickerLayer l => l.transform,
     Watermark m => m.transform,
+    PhotoImageLayer l => l.transform,
     _ => null,
   };
+
+  /// One picture laid over the photo, at the place, size and angle the user
+  /// dragged it to.
+  static void paintPip(
+    Canvas canvas,
+    Size size,
+    PhotoImageLayer layer,
+    ui.Image? image,
+  ) {
+    if (image == null || size.isEmpty) return;
+    final rect = pipRect(size, layer, image);
+    canvas.save();
+    canvas.translate(rect.center.dx, rect.center.dy);
+    canvas.rotate(layer.transform.rotation);
+    canvas.translate(-rect.center.dx, -rect.center.dy);
+    final radius = layer.corner * rect.shortestSide / 2;
+    if (radius > 0.5) {
+      canvas.save();
+      canvas.clipRRect(RRect.fromRectAndRadius(rect, Radius.circular(radius)));
+    }
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      rect,
+      Paint()
+        ..isAntiAlias = true
+        ..filterQuality = FilterQuality.high
+        ..color = Colors.white.withValues(
+          alpha: layer.transform.opacity.clamp(0.0, 1.0),
+        ),
+    );
+    if (radius > 0.5) canvas.restore();
+    canvas.restore();
+  }
+
+  /// Where a picture layer lands, keeping the picture's own shape.
+  static Rect pipRect(Size size, PhotoImageLayer layer, ui.Image image) {
+    final iw = image.width.toDouble(), ih = image.height.toDouble();
+    final aspect = ih <= 0 ? 1.0 : iw / ih;
+    // Scale is a fraction of the photo's width, so the same number means the
+    // same size whatever the picture's own resolution is.
+    final w = size.width * layer.transform.scale;
+    return Rect.fromCenter(
+      center: Offset(
+        layer.transform.x * size.width,
+        layer.transform.y * size.height,
+      ),
+      width: w,
+      height: w / (aspect <= 0 ? 1 : aspect),
+    );
+  }
 
   /// The box an overlay occupies on a canvas of [size], before its rotation —
   /// what the stage draws its selection frame around and hit-tests taps
@@ -651,10 +1071,7 @@ class PhotoRenderer {
   static Rect overlayRect(Size size, Object overlay, {ui.Image? logo}) {
     final transform = transformOf(overlay);
     if (transform == null) return Rect.zero;
-    final centre = Offset(
-      transform.x * size.width,
-      transform.y * size.height,
-    );
+    final centre = Offset(transform.x * size.width, transform.y * size.height);
     final scale = overlayScale(size) * transform.scale;
 
     Size box;
@@ -668,6 +1085,10 @@ class PhotoRenderer {
         box = _textBox(size, m.asTextLayer(), scale);
       case TextLayer l:
         box = _textBox(size, l, scale);
+      case PhotoImageLayer _:
+        // Its own helper knows the picture's shape; this one does not have
+        // the image to ask.
+        return Rect.zero;
       default:
         return Rect.zero;
     }
@@ -759,12 +1180,16 @@ class PhotoRenderer {
     required String path,
     int maxSide = 4096,
     ui.Image? skinMask,
+    ui.Image? cutoutMatte,
+    Map<String, ui.Image> pips = const {},
   }) async {
     final bytes = await renderPng(
       image,
       edit,
       maxSide: maxSide,
       skinMask: skinMask,
+      cutoutMatte: cutoutMatte,
+      pips: pips,
     );
     if (bytes == null) return null;
     final file = File(path);
@@ -779,6 +1204,8 @@ class PhotoRenderer {
     PhotoEdit edit, {
     int maxSide = 4096,
     ui.Image? skinMask,
+    ui.Image? cutoutMatte,
+    Map<String, ui.Image> pips = const {},
   }) async {
     final out = outputSize(image, edit);
     var w = out.width, h = out.height;
@@ -795,7 +1222,14 @@ class PhotoRenderer {
     ui.Image media;
     {
       final recorder = ui.PictureRecorder();
-      paintPicture(Canvas(recorder), size, image, edit, skinMask: skinMask);
+      paintPicture(
+        Canvas(recorder),
+        size,
+        image,
+        edit,
+        skinMask: skinMask,
+        cutoutMatte: cutoutMatte,
+      );
       final picture = recorder.endRecording();
       media = await picture.toImage(width, height);
       picture.dispose();
@@ -813,7 +1247,7 @@ class PhotoRenderer {
     final canvas = Canvas(recorder);
     canvas.drawImage(shaded, Offset.zero, Paint());
     paintDecorations(canvas, size, edit);
-    paintOverlays(canvas, size, edit, logo: logo);
+    paintOverlays(canvas, size, edit, logo: logo, pips: pips);
     final picture = recorder.endRecording();
     shaded.dispose();
     logo?.dispose();

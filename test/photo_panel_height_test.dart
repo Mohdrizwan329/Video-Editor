@@ -19,12 +19,12 @@ void main() {
   /// on two lines is taller than the ceiling, and two lines the user can see
   /// beats one line with the rest off the edge.
   const fitsOnAPhone = [
-    'Core',
+    'Crop',
     'Filter',
-    'Markup',
+    'Doodle',
     'Text',
     'Pixelate',
-    'Retouch',
+    'Remove',
   ];
 
   Future<void> open(WidgetTester tester, Size size) async {
@@ -70,7 +70,7 @@ void main() {
   testWidgets('the photo keeps the larger half of the screen', (tester) async {
     await open(tester, const Size(390, 844));
 
-    for (final tool in const ['Core', 'Adjust', 'Watermark']) {
+    for (final tool in const ['Crop', 'Adjust', 'Watermark']) {
       await tapTool(tester, tool);
       final panel = tester.getRect(find.byKey(panelKey));
       expect(panel.height / 844, lessThan(0.5),
@@ -85,8 +85,8 @@ void main() {
     await open(tester, const Size(360, 640));
 
     for (final tool in const [
-      'Core', 'Adjust', 'Filter', 'AI Face', 'Markup',
-      'Text', 'Watermark', 'Pixelate', 'Retouch',
+      'Crop', 'Adjust', 'Filter', 'Portrait', 'Doodle',
+      'Text', 'Watermark', 'Pixelate', 'Remove',
     ]) {
       await tapTool(tester, tool);
       expect(tester.takeException(), isNull, reason: '$tool overflowed');

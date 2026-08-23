@@ -147,9 +147,9 @@ void main() {
       expect(out.at(0.5, 0.75).b, lessThan(80), reason: 'the dark half');
     });
 
-    testWidgets('Core crops to the ratio that was chosen', (tester) async {
+    testWidgets('Crop crops to the ratio that was chosen', (tester) async {
       await open(tester);
-      await tapTool(tester, 'Core');
+      await tapTool(tester, 'Crop');
       await tester.tap(find.text('9:16'));
       await tester.pump();
       final out = await save(tester);
@@ -180,9 +180,9 @@ void main() {
       expect(moved, greaterThan(10), reason: 'the look should have landed');
     });
 
-    testWidgets('Markup ink is drawn where the finger went', (tester) async {
+    testWidgets('Doodle ink is drawn where the finger went', (tester) async {
       await open(tester);
-      await tapTool(tester, 'Markup');
+      await tapTool(tester, 'Doodle');
       final rect = stage(tester);
 
       // A line across the dark half, three quarters of the way down.
@@ -224,9 +224,9 @@ void main() {
       expect(out.at(0.1, 0.51).r, lessThan(60));
     });
 
-    testWidgets('Retouch softens the spot it was dabbed on', (tester) async {
+    testWidgets('Remove softens the spot it was dabbed on', (tester) async {
       await open(tester);
-      await tapTool(tester, 'Retouch');
+      await tapTool(tester, 'Remove');
       final rect = stage(tester);
 
       await tester.dragFrom(
@@ -243,10 +243,10 @@ void main() {
       expect(dabbed, greaterThan(untouched + 10));
     });
 
-    testWidgets('AI Face lifts the skin and leaves the rest alone',
+    testWidgets('Portrait lifts the skin and leaves the rest alone',
         (tester) async {
       await open(tester);
-      await tapTool(tester, 'AI Face');
+      await tapTool(tester, 'Portrait');
       // The photo is half complexion, so the pass has something to work on.
       expect(find.textContaining('No face found'), findsNothing);
 
@@ -286,7 +286,7 @@ void main() {
 
     testWidgets('a sticker shape is placed at the middle', (tester) async {
       await open(tester);
-      await tapTool(tester, 'Stickers');
+      await tapTool(tester, 'Sticker');
       await tester.tap(find.text('Shapes'));
       await tester.pump();
       // The first shape is a filled circle, in the ink colour.
@@ -320,7 +320,7 @@ void main() {
         (tester) async {
       await open(tester);
 
-      await tapTool(tester, 'Markup');
+      await tapTool(tester, 'Doodle');
       final rect = stage(tester);
       await tester.dragFrom(
         Offset(rect.left + rect.width * 0.2, rect.top + rect.height * 0.75),
@@ -328,7 +328,7 @@ void main() {
       );
       await tester.pump();
 
-      await tapTool(tester, 'Core');
+      await tapTool(tester, 'Crop');
       await tester.tap(find.text('1:1'));
       await tester.pump();
 
@@ -345,7 +345,7 @@ void main() {
 
     testWidgets('undo takes back what the last gesture did', (tester) async {
       await open(tester);
-      await tapTool(tester, 'Markup');
+      await tapTool(tester, 'Doodle');
       final rect = stage(tester);
       await tester.dragFrom(
         Offset(rect.left + rect.width * 0.2, rect.top + rect.height * 0.75),

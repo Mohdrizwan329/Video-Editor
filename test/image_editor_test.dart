@@ -554,16 +554,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       for (final tool in const [
-        'Core',
+        'Crop',
         'Adjust',
         'Filter',
-        'AI Face',
-        'Markup',
+        'Portrait',
+        'Doodle',
         'Text',
         'Watermark',
         'Pixelate',
-        'Retouch',
-        'Stickers',
+        'Remove',
+        'Sticker',
       ]) {
         expect(find.text(tool), findsWidgets, reason: '$tool is missing');
       }
@@ -579,7 +579,7 @@ void main() {
       expect(find.text('Brightness'), findsOneWidget);
       expect(find.text('Sharpen'), findsOneWidget);
 
-      await _tapTool(tester, 'Stickers');
+      await _tapTool(tester, 'Sticker');
       expect(find.text('Faces'), findsOneWidget);
       expect(find.text('Brightness'), findsNothing);
     });
@@ -613,14 +613,14 @@ void main() {
           for (final tool in const [
             'Filter',
             'Adjust',
-            'AI Face',
-            'Markup',
+            'Portrait',
+            'Doodle',
             'Text',
             'Watermark',
             'Pixelate',
-            'Retouch',
-            'Stickers',
-            'Core',
+            'Remove',
+            'Sticker',
+            'Crop',
           ]) {
             await _tapTool(tester, tool);
             expect(
@@ -671,7 +671,7 @@ void main() {
           .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
       await tester.pump(const Duration(milliseconds: 300));
 
-      await _tapTool(tester, 'Stickers');
+      await _tapTool(tester, 'Sticker');
       expect(find.text('Delete'), findsNothing);
       expect(find.textContaining('Tap a sticker'), findsOneWidget);
 
@@ -759,7 +759,7 @@ void main() {
           .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
       await tester.pump(const Duration(milliseconds: 300));
 
-      await _tapTool(tester, 'Markup');
+      await _tapTool(tester, 'Doodle');
       expect(find.text('Draw'), findsOneWidget);
       expect(find.text('Erase'), findsOneWidget);
       expect(find.text('Brush'), findsOneWidget);
@@ -774,10 +774,10 @@ void main() {
       // The slider is the same one, renamed for what it now does.
       expect(find.text('Block size'), findsNothing);
 
-      await _tapTool(tester, 'Retouch');
+      await _tapTool(tester, 'Remove');
       expect(find.text('Strength'), findsOneWidget);
 
-      await _tapTool(tester, 'AI Face');
+      await _tapTool(tester, 'Portrait');
       expect(find.text('Auto'), findsOneWidget);
       expect(find.text('Smooth'), findsOneWidget);
       expect(find.text('Even tone'), findsOneWidget);
