@@ -9,8 +9,10 @@ void main() {
   test('no cast leaves the channels alone', () {
     final a = Adjustments();
     expect(a.colorCastFactors, (1.0, 1.0, 1.0));
-    expect(a.toFFmpegExtras().where((f) => f.startsWith('colorchannelmixer')),
-        isEmpty);
+    expect(
+      a.toFFmpegExtras().where((f) => f.startsWith('colorchannelmixer')),
+      isEmpty,
+    );
   });
 
   test('a cast at zero strength is still no cast', () {
@@ -44,9 +46,9 @@ void main() {
       ..colorCastHue = 0.55
       ..colorCastAmount = 0.4;
     final (r, g, b) = a.colorCastFactors;
-    final filter = a
-        .toFFmpegExtras()
-        .firstWhere((f) => f.startsWith('colorchannelmixer'));
+    final filter = a.toFFmpegExtras().firstWhere(
+      (f) => f.startsWith('colorchannelmixer'),
+    );
     expect(filter, contains('rr=${r.toStringAsFixed(4)}'));
     expect(filter, contains('gg=${g.toStringAsFixed(4)}'));
     expect(filter, contains('bb=${b.toStringAsFixed(4)}'));

@@ -37,7 +37,10 @@ void main() {
 
   test('on, the grade carries the tonal lift', () {
     final c = clip()..enhance = true;
-    expect(c.gradedFilter.contrast, closeTo(1 + VideoClip.enhanceContrast, 1e-9));
+    expect(
+      c.gradedFilter.contrast,
+      closeTo(1 + VideoClip.enhanceContrast, 1e-9),
+    );
     expect(
       c.gradedFilter.saturation,
       closeTo(1 + VideoClip.enhanceSaturation, 1e-9),
@@ -77,8 +80,11 @@ void main() {
   test('it does not touch the clip the user is actually editing', () {
     final c = clip()..enhance = true;
     c.shownAdjustments.sharpen = 1;
-    expect(c.adjustments.sharpen, 0,
-        reason: 'the preview copy is writing back into the project');
+    expect(
+      c.adjustments.sharpen,
+      0,
+      reason: 'the preview copy is writing back into the project',
+    );
   });
 
   test('the preview has something to paint with it on', () {

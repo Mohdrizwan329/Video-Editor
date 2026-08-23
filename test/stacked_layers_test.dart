@@ -22,16 +22,16 @@ import 'helpers/editor_tools.dart';
 /// the track.
 void main() {
   Project project() => Project(
-        name: 'Stacked',
-        ratio: CanvasRatio.r9x16,
-        clips: [
-          VideoClip(
-            path: '/nonexistent/c.jpg',
-            isImage: true,
-            sourceDuration: const Duration(seconds: 4),
-          ),
-        ],
-      );
+    name: 'Stacked',
+    ratio: CanvasRatio.r9x16,
+    clips: [
+      VideoClip(
+        path: '/nonexistent/c.jpg',
+        isImage: true,
+        sourceDuration: const Duration(seconds: 4),
+      ),
+    ],
+  );
 
   group('a second overlay on the same frame', () {
     test('is not dropped on top of the first', () {
@@ -48,9 +48,11 @@ void main() {
         [first, third],
         [second, third],
       ]) {
-        expect((pair[0].transform.y - pair[1].transform.y).abs(),
-            greaterThan(0.02),
-            reason: 'two texts share a spot, so they draw as one smear');
+        expect(
+          (pair[0].transform.y - pair[1].transform.y).abs(),
+          greaterThan(0.02),
+          reason: 'two texts share a spot, so they draw as one smear',
+        );
       }
       // Still on the frame, not pushed off the top or the bottom of it.
       for (final layer in [second, third]) {
@@ -93,9 +95,13 @@ void main() {
       // The second text overlaps the first, so the lane splits in two.
       editor.addText();
       final twoRows = TimelineView.heightFor(editor);
-      expect(twoRows - oneRow, kLaneHeight + LaneRow.kSubRowGap,
-          reason: 'the box is short by exactly the sub-row it does not know '
-              'the lane is drawing');
+      expect(
+        twoRows - oneRow,
+        kLaneHeight + LaneRow.kSubRowGap,
+        reason:
+            'the box is short by exactly the sub-row it does not know '
+            'the lane is drawing',
+      );
     });
 
     testWidgets('draws without an overflow stripe', (tester) async {
@@ -107,6 +113,7 @@ void main() {
         ChangeNotifierProvider(
           create: (_) => ProjectsController(),
           child: MaterialApp(
+            debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             scrollBehavior: const AppScrollBehavior(),
             home: EditorScreen(project: project()),
@@ -129,8 +136,11 @@ void main() {
       editor.addSticker('heart');
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(tester.takeException(), isNull,
-          reason: 'a lane drawn two rows deep overflowed the timeline');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'a lane drawn two rows deep overflowed the timeline',
+      );
       expect(
         tester.getSize(find.byType(TimelineView)).height,
         TimelineView.heightFor(editor),

@@ -36,21 +36,30 @@ void main() {
 
   test('a dark frame is opened up', () {
     final a = AutoAdjust.measure(ramp(0, 90));
-    expect(a.brightness, greaterThan(0),
-        reason: 'a frame sitting in the shadows was not lifted');
+    expect(
+      a.brightness,
+      greaterThan(0),
+      reason: 'a frame sitting in the shadows was not lifted',
+    );
   });
 
   test('a blown frame is brought down', () {
     final a = AutoAdjust.measure(ramp(190, 255));
-    expect(a.brightness, lessThan(0),
-        reason: 'a frame sitting in the highlights was not pulled back');
+    expect(
+      a.brightness,
+      lessThan(0),
+      reason: 'a frame sitting in the highlights was not pulled back',
+    );
   });
 
   test('a flat frame is stretched', () {
     // Half the range, centred: exposure is fine, contrast is not.
     final a = AutoAdjust.measure(ramp(64, 190));
-    expect(a.contrast, greaterThan(0),
-        reason: 'a frame using half the range was not given contrast');
+    expect(
+      a.contrast,
+      greaterThan(0),
+      reason: 'a frame using half the range was not given contrast',
+    );
   });
 
   test('a frame already using the range is left alone', () {
@@ -61,8 +70,11 @@ void main() {
 
   test('a monochrome frame keeps its colour choice', () {
     final a = AutoAdjust.measure(ramp(0, 255));
-    expect(a.saturation, 0,
-        reason: 'grey footage was pushed towards colour it does not have');
+    expect(
+      a.saturation,
+      0,
+      reason: 'grey footage was pushed towards colour it does not have',
+    );
   });
 
   test('a flat-coloured frame is given some colour back', () {

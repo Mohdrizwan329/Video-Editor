@@ -23,17 +23,17 @@ void main() {
   const phone = Size(390, 844);
 
   Project project() => Project(
-        name: 'Pause',
-        ratio: CanvasRatio.r9x16,
-        clips: [
-          for (var i = 0; i < 2; i++)
-            VideoClip(
-              path: '/nonexistent/c$i.jpg',
-              isImage: true,
-              sourceDuration: const Duration(seconds: 4),
-            ),
-        ],
-      );
+    name: 'Pause',
+    ratio: CanvasRatio.r9x16,
+    clips: [
+      for (var i = 0; i < 2; i++)
+        VideoClip(
+          path: '/nonexistent/c$i.jpg',
+          isImage: true,
+          sourceDuration: const Duration(seconds: 4),
+        ),
+    ],
+  );
 
   Future<(EditorController, PreviewEngine)> open(WidgetTester tester) async {
     tester.view.physicalSize = phone * tester.view.devicePixelRatio;
@@ -42,6 +42,7 @@ void main() {
       ChangeNotifierProvider(
         create: (_) => ProjectsController(),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           scrollBehavior: const AppScrollBehavior(),
           home: EditorScreen(project: project()),
@@ -56,8 +57,9 @@ void main() {
     );
   }
 
-  testWidgets('the play button stops the clock, not just the icon',
-      (tester) async {
+  testWidgets('the play button stops the clock, not just the icon', (
+    tester,
+  ) async {
     final (editor, engine) = await open(tester);
 
     await engine.play();
@@ -70,8 +72,11 @@ void main() {
 
     final parked = editor.position.value;
     await tester.pump(const Duration(milliseconds: 600));
-    expect(editor.position.value, parked,
-        reason: 'the playhead kept moving after pause');
+    expect(
+      editor.position.value,
+      parked,
+      reason: 'the playhead kept moving after pause',
+    );
   });
 
   testWidgets('a tap on the canvas plays and pauses', (tester) async {
@@ -79,17 +84,24 @@ void main() {
 
     await tester.tap(find.byType(PreviewStage).first);
     await tester.pump(const Duration(milliseconds: 300));
-    expect(editor.isPlaying.value, isTrue,
-        reason: 'tapping the canvas did not start playback');
+    expect(
+      editor.isPlaying.value,
+      isTrue,
+      reason: 'tapping the canvas did not start playback',
+    );
 
     await tester.tap(find.byType(PreviewStage).first);
     await tester.pump(const Duration(milliseconds: 300));
-    expect(editor.isPlaying.value, isFalse,
-        reason: 'tapping the canvas did not stop playback');
+    expect(
+      editor.isPlaying.value,
+      isFalse,
+      reason: 'tapping the canvas did not stop playback',
+    );
   });
 
-  testWidgets('taking hold of the timeline stops playback for real',
-      (tester) async {
+  testWidgets('taking hold of the timeline stops playback for real', (
+    tester,
+  ) async {
     final (editor, engine) = await open(tester);
 
     await engine.play();
@@ -103,17 +115,24 @@ void main() {
     final grab = strip.intersect(Offset.zero & phone).center;
     await tester.dragFrom(grab, const Offset(-40, 0));
     await tester.pump(const Duration(milliseconds: 200));
-    expect(editor.isPlaying.value, isFalse,
-        reason: 'a finger on the timeline did not stop playback');
+    expect(
+      editor.isPlaying.value,
+      isFalse,
+      reason: 'a finger on the timeline did not stop playback',
+    );
 
     final parked = editor.position.value;
     await tester.pump(const Duration(milliseconds: 600));
-    expect(editor.position.value, parked,
-        reason: 'scrubbing left the clock running behind the paused icon');
+    expect(
+      editor.position.value,
+      parked,
+      reason: 'scrubbing left the clock running behind the paused icon',
+    );
   });
 
-  testWidgets('the timeline following the playhead does not stop playback',
-      (tester) async {
+  testWidgets('the timeline following the playhead does not stop playback', (
+    tester,
+  ) async {
     final (editor, engine) = await open(tester);
 
     await engine.play();
@@ -124,8 +143,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(editor.isPlaying.value, isTrue,
-        reason: 'the timeline auto-follow paused playback');
+    expect(
+      editor.isPlaying.value,
+      isTrue,
+      reason: 'the timeline auto-follow paused playback',
+    );
     expect(editor.position.value, greaterThan(Duration.zero));
   });
 

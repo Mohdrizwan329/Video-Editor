@@ -30,16 +30,14 @@ void main() {
   });
 
   test('the treatment is the same one the render applies', () {
-    final chain = clip(enhance: true, fx: VoiceEffect.chipmunk)
-        .audioFilterChain()
-        .join(',');
+    final chain = clip(
+      enhance: true,
+      fx: VoiceEffect.chipmunk,
+    ).audioFilterChain().join(',');
     // Clean-up first, then the shift — the order the exporter emits.
     expect(chain, contains('afftdn'));
     expect(chain, contains('asetrate'));
-    expect(
-      chain.indexOf('afftdn'),
-      lessThan(chain.indexOf('asetrate')),
-    );
+    expect(chain.indexOf('afftdn'), lessThan(chain.indexOf('asetrate')));
   });
 
   test('changing the effect asks for a different copy', () {

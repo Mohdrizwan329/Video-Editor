@@ -45,8 +45,11 @@ void main() {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFFFFF6E4), Color(0xFFF0C08A), Color(0xFFE86A5C),
-            Color(0xFF4A5FA8), Color(0xFF14202E),
+            Color(0xFFFFF6E4),
+            Color(0xFFF0C08A),
+            Color(0xFFE86A5C),
+            Color(0xFF4A5FA8),
+            Color(0xFF14202E),
           ],
           stops: [0, 0.24, 0.5, 0.76, 1],
         ).createShader(rect),
@@ -84,120 +87,168 @@ void main() {
     source = await writeSource(dir);
   });
 
-  testWidgets('every colour grade is accepted by this device\'s FFmpeg',
-      (tester) async {
-    final looks = FilterLibrary.all.where((f) => f.id != 'none').toList();
-    final failed = <String>[];
-    var checked = 0;
+  testWidgets(
+    'every colour grade is accepted by this device\'s FFmpeg',
+    (tester) async {
+      final looks = FilterLibrary.all.where((f) => f.id != 'none').toList();
+      final failed = <String>[];
+      var checked = 0;
 
-    for (final look in looks) {
-      final chain = look.toFFmpegFilter();
-      final out = '${dir.path}/grade_${look.id}.jpg';
-      final error = await run('-hide_banner -y -i "$source" '
-          '-vf "$chain" -frames:v 1 "$out"');
-      if (error != null) {
-        failed.add('${look.id} (${look.category}): $chain -> $error');
-        continue;
-      }
-      // A command can exit zero and still write nothing worth having.
-      final file = File(out);
-      if (!file.existsSync() || file.lengthSync() < 512) {
-        failed.add('${look.id}: wrote '
-            '${file.existsSync() ? file.lengthSync() : 0} bytes');
-        continue;
-      }
-      checked++;
-    }
-
-    // Counted only where the frame actually landed, so the line cannot read
-    // like a pass while the list below says otherwise.
-    debugPrint('FFmpeg rendered $checked/${looks.length} grades');
-    expect(failed, isEmpty, reason: 'these looks would fail an export:\n'
-        '${failed.join('\n')}');
-  }, timeout: const Timeout(Duration(minutes: 12)));
-
-  testWidgets('every grade survives the manual sliders on top of it',
-      (tester) async {
-    // The exporter never emits a preset alone — it emits the preset folded
-    // together with the Adjust panel's values, and that is the chain that has
-    // to parse. Pushed to the ends, where the numbers are most likely to run
-    // out of a filter's range.
-    final adj = Adjustments(
-      brightness: 1, contrast: 1, saturation: 1, temperature: 1, tint: -1,
-      highlights: -1, shadows: 1, hue: 1, fade: 1, vignette: 1,
-      curveLow: 1, curveMid: -1, curveHigh: 1,
-      sharpen: 1, grain: 1, blur: 1, denoise: 1,
-    );
-    final failed = <String>[];
-
-    for (final look in FilterLibrary.all) {
-      final chain = [
-        adj.merge(look.lerpFromIdentity(1)).toFFmpegFilter(),
-        ...adj.toFFmpegExtras(),
-      ].where((p) => p.isNotEmpty).join(',');
-      final out = '${dir.path}/full_${look.id}.jpg';
-      final error = await run('-hide_banner -y -i "$source" '
-          '-vf "$chain" -frames:v 1 "$out"');
-      if (error != null) failed.add('${look.id}: $chain -> $error');
-    }
-
-    expect(failed, isEmpty, reason: 'these looks fail once the Adjust panel '
-        'is pushed to its limits:\n${failed.join('\n')}');
-  }, timeout: const Timeout(Duration(minutes: 12)));
-
-  testWidgets('every effect bakes its loop and the renderer can read it',
-      (tester) async {
-    // rasterizeFx writes into the app's temp directory, which is why this
-    // cannot run on the host at all.
-    final failed = <String>[];
-
-    for (final fx in FxLibrary.all.where((f) => !f.isNone)) {
-      final baked = await OverlayRasterizer.instance
-          .rasterizeFx(fx, 1, outWidth: 480, outHeight: 854);
-      if (baked == null) {
-        failed.add('${fx.id}: baked nothing');
-        continue;
-      }
-      if (fx.isAnimated) {
-        if (!baked.isSequence || baked.frameCount != fx.frameCount) {
-          failed.add('${fx.id}: expected ${fx.frameCount} frames, '
-              'got ${baked.frameCount}');
+      for (final look in looks) {
+        final chain = look.toFFmpegFilter();
+        final out = '${dir.path}/grade_${look.id}.jpg';
+        final error = await run(
+          '-hide_banner -y -i "$source" '
+          '-vf "$chain" -frames:v 1 "$out"',
+        );
+        if (error != null) {
+          failed.add('${look.id} (${look.category}): $chain -> $error');
           continue;
         }
-        // Every frame of the strip has to be on disk under the name the
-        // `%03d` pattern will look for, or FFmpeg stops at the gap.
-        for (var i = 0; i < baked.frameCount; i++) {
-          final f = File(baked.path
-              .replaceAll('%03d', i.toString().padLeft(3, '0')));
-          if (!f.existsSync() || f.lengthSync() < 128) {
-            failed.add('${fx.id}: frame $i missing or empty');
-            break;
+        // A command can exit zero and still write nothing worth having.
+        final file = File(out);
+        if (!file.existsSync() || file.lengthSync() < 512) {
+          failed.add(
+            '${look.id}: wrote '
+            '${file.existsSync() ? file.lengthSync() : 0} bytes',
+          );
+          continue;
+        }
+        checked++;
+      }
+
+      // Counted only where the frame actually landed, so the line cannot read
+      // like a pass while the list below says otherwise.
+      debugPrint('FFmpeg rendered $checked/${looks.length} grades');
+      expect(
+        failed,
+        isEmpty,
+        reason:
+            'these looks would fail an export:\n'
+            '${failed.join('\n')}',
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 12)),
+  );
+
+  testWidgets(
+    'every grade survives the manual sliders on top of it',
+    (tester) async {
+      // The exporter never emits a preset alone — it emits the preset folded
+      // together with the Adjust panel's values, and that is the chain that has
+      // to parse. Pushed to the ends, where the numbers are most likely to run
+      // out of a filter's range.
+      final adj = Adjustments(
+        brightness: 1,
+        contrast: 1,
+        saturation: 1,
+        temperature: 1,
+        tint: -1,
+        highlights: -1,
+        shadows: 1,
+        hue: 1,
+        fade: 1,
+        vignette: 1,
+        curveLow: 1,
+        curveMid: -1,
+        curveHigh: 1,
+        sharpen: 1,
+        grain: 1,
+        blur: 1,
+        denoise: 1,
+      );
+      final failed = <String>[];
+
+      for (final look in FilterLibrary.all) {
+        final chain = [
+          adj.merge(look.lerpFromIdentity(1)).toFFmpegFilter(),
+          ...adj.toFFmpegExtras(),
+        ].where((p) => p.isNotEmpty).join(',');
+        final out = '${dir.path}/full_${look.id}.jpg';
+        final error = await run(
+          '-hide_banner -y -i "$source" '
+          '-vf "$chain" -frames:v 1 "$out"',
+        );
+        if (error != null) failed.add('${look.id}: $chain -> $error');
+      }
+
+      expect(
+        failed,
+        isEmpty,
+        reason:
+            'these looks fail once the Adjust panel '
+            'is pushed to its limits:\n${failed.join('\n')}',
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 12)),
+  );
+
+  testWidgets(
+    'every effect bakes its loop and the renderer can read it',
+    (tester) async {
+      // rasterizeFx writes into the app's temp directory, which is why this
+      // cannot run on the host at all.
+      final failed = <String>[];
+
+      for (final fx in FxLibrary.all.where((f) => !f.isNone)) {
+        final baked = await OverlayRasterizer.instance.rasterizeFx(
+          fx,
+          1,
+          outWidth: 480,
+          outHeight: 854,
+        );
+        if (baked == null) {
+          failed.add('${fx.id}: baked nothing');
+          continue;
+        }
+        if (fx.isAnimated) {
+          if (!baked.isSequence || baked.frameCount != fx.frameCount) {
+            failed.add(
+              '${fx.id}: expected ${fx.frameCount} frames, '
+              'got ${baked.frameCount}',
+            );
+            continue;
+          }
+          // Every frame of the strip has to be on disk under the name the
+          // `%03d` pattern will look for, or FFmpeg stops at the gap.
+          for (var i = 0; i < baked.frameCount; i++) {
+            final f = File(
+              baked.path.replaceAll('%03d', i.toString().padLeft(3, '0')),
+            );
+            if (!f.existsSync() || f.lengthSync() < 128) {
+              failed.add('${fx.id}: frame $i missing or empty');
+              break;
+            }
+          }
+        } else if (baked.isSequence) {
+          failed.add('${fx.id}: a still effect baked a sequence');
+        }
+
+        // And the input form the exporter builds has to actually decode.
+        final rate = baked.isSequence ? baked.frameRate : 30;
+        final out = '${dir.path}/fx_${fx.id}.mp4';
+        final error = await run(
+          '-hide_banner -y -f lavfi -t 2 -i color=c=gray:s=480x854:r=30 '
+          '-loop 1 -framerate $rate -i "${baked.path}" '
+          '-filter_complex "[1:v] format=rgba [fx];[0:v][fx] overlay=0:0:format=auto [v]" '
+          '-map "[v]" -c:v libx264 -pix_fmt yuv420p -t 2 "$out"',
+        );
+        if (error != null) {
+          failed.add('${fx.id}: renderer rejected the loop -> $error');
+        } else {
+          final file = File(out);
+          if (!file.existsSync() || file.lengthSync() < 1024) {
+            failed.add('${fx.id}: overlay produced no video');
           }
         }
-      } else if (baked.isSequence) {
-        failed.add('${fx.id}: a still effect baked a sequence');
       }
 
-      // And the input form the exporter builds has to actually decode.
-      final rate = baked.isSequence ? baked.frameRate : 30;
-      final out = '${dir.path}/fx_${fx.id}.mp4';
-      final error = await run(
-        '-hide_banner -y -f lavfi -t 2 -i color=c=gray:s=480x854:r=30 '
-        '-loop 1 -framerate $rate -i "${baked.path}" '
-        '-filter_complex "[1:v] format=rgba [fx];[0:v][fx] overlay=0:0:format=auto [v]" '
-        '-map "[v]" -c:v libx264 -pix_fmt yuv420p -t 2 "$out"',
+      expect(
+        failed,
+        isEmpty,
+        reason: 'these effects would not export:\n${failed.join('\n')}',
       );
-      if (error != null) {
-        failed.add('${fx.id}: renderer rejected the loop -> $error');
-      } else {
-        final file = File(out);
-        if (!file.existsSync() || file.lengthSync() < 1024) {
-          failed.add('${fx.id}: overlay produced no video');
-        }
-      }
-    }
-
-    expect(failed, isEmpty,
-        reason: 'these effects would not export:\n${failed.join('\n')}');
-  }, timeout: const Timeout(Duration(minutes: 20)));
+    },
+    timeout: const Timeout(Duration(minutes: 20)),
+  );
 }

@@ -43,6 +43,7 @@ void main() {
       ChangeNotifierProvider(
         create: (_) => ProjectsController(),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           scrollBehavior: const AppScrollBehavior(),
           home: EditorScreen(project: project()),
@@ -213,6 +214,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
+        debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         scrollBehavior: const AppScrollBehavior(),
         home: ExportScreen(project: project()),

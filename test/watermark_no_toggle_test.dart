@@ -13,13 +13,14 @@ import 'package:video_editor/ui/editor/editor_screen.dart';
 import 'helpers/editor_tools.dart';
 
 Widget _host(Widget child) => ChangeNotifierProvider(
-      create: (_) => ProjectsController(),
-      child: MaterialApp(
-        theme: AppTheme.light,
-        scrollBehavior: const AppScrollBehavior(),
-        home: child,
-      ),
-    );
+  create: (_) => ProjectsController(),
+  child: MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    scrollBehavior: const AppScrollBehavior(),
+    home: child,
+  ),
+);
 
 Project _project({Watermark? mark}) {
   final p = Project(
@@ -56,21 +57,25 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('opens on an empty caption so nothing is on by surprise',
-        (tester) async {
+    testWidgets('opens on an empty caption so nothing is on by surprise', (
+      tester,
+    ) async {
       final project = _project();
       await _openPanel(tester, project);
 
       // Merely reaching for the tool must not brand the video: the box is
       // empty, the mark is off, and the canvas is untouched.
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          isEmpty);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
       expect(project.watermark.enabled, isFalse);
       expect(project.watermark.isReady, isFalse);
     });
 
-    testWidgets('the caption is the switch, in both directions',
-        (tester) async {
+    testWidgets('the caption is the switch, in both directions', (
+      tester,
+    ) async {
       final project = _project();
       await _openPanel(tester, project);
 
@@ -87,8 +92,9 @@ void main() {
       expect(project.watermark.isReady, isFalse);
     });
 
-    testWidgets('switching to Logo with no logo picked leaves the mark off',
-        (tester) async {
+    testWidgets('switching to Logo with no logo picked leaves the mark off', (
+      tester,
+    ) async {
       final project = _project();
       await _openPanel(tester, project);
 
@@ -99,8 +105,11 @@ void main() {
       await tester.tap(find.text('Logo'));
       await tester.pump(const Duration(milliseconds: 300));
       expect(project.watermark.type, WatermarkType.image);
-      expect(project.watermark.enabled, isFalse,
-          reason: 'there is no logo behind it yet');
+      expect(
+        project.watermark.enabled,
+        isFalse,
+        reason: 'there is no logo behind it yet',
+      );
 
       // Going back to Text finds the caption still there and lights it again.
       await tester.tap(find.text('Text'));
@@ -110,13 +119,13 @@ void main() {
     });
 
     testWidgets('a mark that was already on keeps its caption', (tester) async {
-      final project = _project(
-        mark: Watermark(enabled: true, text: 'Saleem'),
-      );
+      final project = _project(mark: Watermark(enabled: true, text: 'Saleem'));
       await _openPanel(tester, project);
 
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Saleem');
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Saleem',
+      );
       expect(project.watermark.enabled, isTrue);
     });
   });
@@ -128,8 +137,9 @@ void main() {
 
 void _defaults() {
   group('a mark the user never captioned', () {
-    testWidgets('opens on an empty box even when a logo turned it on',
-        (tester) async {
+    testWidgets('opens on an empty box even when a logo turned it on', (
+      tester,
+    ) async {
       // Picking a logo is what sets `enabled`, and the model still carries a
       // placeholder caption. Neither may arrive pre-filled in the box, or
       // switching to Text would put words on the video nobody typed.
@@ -142,8 +152,10 @@ void _defaults() {
       await tester.tap(find.text('Text'));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          isEmpty);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
       expect(project.watermark.text, isEmpty);
       expect(project.watermark.enabled, isFalse);
       expect(project.watermark.isReady, isFalse);

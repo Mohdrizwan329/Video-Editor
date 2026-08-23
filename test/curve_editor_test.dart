@@ -16,8 +16,11 @@ void main() {
         // the clamp is doing its job and the point stops at the edge.
         final (lo, span) = CurveEditor.ranges[i];
         if (y >= lo && y <= lo + span) {
-          expect(back, closeTo(y, 1e-9),
-              reason: 'point $i dragged to $y settled at $back');
+          expect(
+            back,
+            closeTo(y, 1e-9),
+            reason: 'point $i dragged to $y settled at $back',
+          );
         } else {
           expect(back, inInclusiveRange(lo, lo + span));
         }

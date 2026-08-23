@@ -39,7 +39,10 @@ void main() {
 
   /// The preview's own maths, on the device's own Skia: a patch of [rgb]
   /// drawn through the preset's colour matrix, read back.
-  Future<List<int>> previewPixel(FilterPreset look, (String, int, int, int) p) async {
+  Future<List<int>> previewPixel(
+    FilterPreset look,
+    (String, int, int, int) p,
+  ) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     canvas.drawRect(
@@ -60,10 +63,13 @@ void main() {
   /// The renderer's maths, on the device's own FFmpeg: the same patch put
   /// through the chain the exporter would emit, read back out of the file.
   Future<List<int>?> exportPixel(
-      FilterPreset look, (String, int, int, int) p) async {
+    FilterPreset look,
+    (String, int, int, int) p,
+  ) async {
     final chain = look.toFFmpegFilter();
     final out = '${dir.path}/x_${look.id}_${p.$1}.png';
-    final hex = '0x${p.$2.toRadixString(16).padLeft(2, '0')}'
+    final hex =
+        '0x${p.$2.toRadixString(16).padLeft(2, '0')}'
         '${p.$3.toRadixString(16).padLeft(2, '0')}'
         '${p.$4.toRadixString(16).padLeft(2, '0')}';
     final vf = chain.isEmpty ? 'null' : chain;
@@ -76,8 +82,9 @@ void main() {
     final bytes = await File(out).readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
-    final data =
-        await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final data = await frame.image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
     frame.image.dispose();
     codec.dispose();
     final px = data!.buffer.asUint8List();
@@ -91,71 +98,82 @@ void main() {
     dir.createSync(recursive: true);
   });
 
-  testWidgets('every look, one at a time, preview against export',
-      (tester) async {
-    final dead = <String>[];
-    final broken = <String>[];
-    final drift = <String, int>{};
+  testWidgets(
+    'every look, one at a time, preview against export',
+    (tester) async {
+      final dead = <String>[];
+      final broken = <String>[];
+      final drift = <String, int>{};
 
-    await tester.runAsync(() async {
-      for (final look in FilterLibrary.all) {
-        var worst = 0;
-        var moved = 0;
-        final line = StringBuffer(look.id.padRight(18));
+      await tester.runAsync(() async {
+        for (final look in FilterLibrary.all) {
+          var worst = 0;
+          var moved = 0;
+          final line = StringBuffer(look.id.padRight(18));
 
-        for (final p in probes) {
-          final preview = await previewPixel(look, p);
-          final export = await exportPixel(look, p);
-          if (export == null) {
-            broken.add('${look.id}: FFmpeg refused "${look.toFFmpegFilter()}"');
-            break;
+          for (final p in probes) {
+            final preview = await previewPixel(look, p);
+            final export = await exportPixel(look, p);
+            if (export == null) {
+              broken.add(
+                '${look.id}: FFmpeg refused "${look.toFFmpegFilter()}"',
+              );
+              break;
+            }
+            final source = [p.$2, p.$3, p.$4];
+            for (var c = 0; c < 3; c++) {
+              final d = (preview[c] - export[c]).abs();
+              if (d > worst) worst = d;
+              final m = (preview[c] - source[c]).abs();
+              if (m > moved) moved = m;
+            }
+            if (p.$1 == 'skin') {
+              line.write(
+                ' skin ${preview.join(",").padRight(11)}'
+                '-> ${export.join(",").padRight(11)}',
+              );
+            }
           }
-          final source = [p.$2, p.$3, p.$4];
-          for (var c = 0; c < 3; c++) {
-            final d = (preview[c] - export[c]).abs();
-            if (d > worst) worst = d;
-            final m = (preview[c] - source[c]).abs();
-            if (m > moved) moved = m;
+
+          drift[look.id] = worst;
+          line.write(' worstDrift=$worst moved=$moved');
+          debugPrint(line.toString());
+
+          if (look.id != 'none' && moved == 0) {
+            dead.add('${look.id} changed nothing on any probe colour');
           }
-          if (p.$1 == 'skin') {
-            line.write(' skin ${preview.join(",").padRight(11)}'
-                '-> ${export.join(",").padRight(11)}');
+          if (look.id == 'none' && worst > 2) {
+            broken.add('none drifted by $worst, so the baseline itself is off');
           }
         }
+      });
 
-        drift[look.id] = worst;
-        line.write(' worstDrift=$worst moved=$moved');
-        debugPrint(line.toString());
-
-        if (look.id != 'none' && moved == 0) {
-          dead.add('${look.id} changed nothing on any probe colour');
-        }
-        if (look.id == 'none' && worst > 2) {
-          broken.add('none drifted by $worst, so the baseline itself is off');
-        }
+      final ranked = drift.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      debugPrint('=== worst preview/export drift ===');
+      for (final e in ranked.take(15)) {
+        debugPrint('  ${e.key.padRight(18)} ${e.value}');
       }
-    });
+      final over = ranked.where((e) => e.value > 24).map((e) => e.key).toList();
+      debugPrint('looks drifting over 24/255: ${over.length}/${drift.length}');
 
-    final ranked = drift.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    debugPrint('=== worst preview/export drift ===');
-    for (final e in ranked.take(15)) {
-      debugPrint('  ${e.key.padRight(18)} ${e.value}');
-    }
-    final over = ranked.where((e) => e.value > 24).map((e) => e.key).toList();
-    debugPrint('looks drifting over 24/255: ${over.length}/${drift.length}');
-
-    expect(broken, isEmpty, reason: broken.join('\n'));
-    expect(dead, isEmpty, reason: dead.join('\n'));
-  }, timeout: const Timeout(Duration(minutes: 25)));
+      expect(broken, isEmpty, reason: broken.join('\n'));
+      expect(dead, isEmpty, reason: dead.join('\n'));
+    },
+    timeout: const Timeout(Duration(minutes: 25)),
+  );
 
   testWidgets('every effect, one at a time', (tester) async {
     final failed = <String>[];
 
     await tester.runAsync(() async {
       for (final fx in FxLibrary.all.where((f) => !f.isNone)) {
-        final baked = await OverlayRasterizer.instance
-            .rasterizeFx(fx, 1, outWidth: 240, outHeight: 426);
+        final baked = await OverlayRasterizer.instance.rasterizeFx(
+          fx,
+          1,
+          outWidth: 240,
+          outHeight: 426,
+        );
         if (baked == null) {
           failed.add('${fx.id}: baked nothing');
           debugPrint('${fx.id.padRight(12)} FAILED to bake');
@@ -172,10 +190,16 @@ void main() {
         for (var i = 0; i < fx.frameCount; i++) {
           final recorder = ui.PictureRecorder();
           EffectPainter.paintFx(
-              Canvas(recorder), const Size(120, 213), fx, 1, frame: i);
+            Canvas(recorder),
+            const Size(120, 213),
+            fx,
+            1,
+            frame: i,
+          );
           final image = await recorder.endRecording().toImage(120, 213);
-          final data =
-              await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+          final data = await image.toByteData(
+            format: ui.ImageByteFormat.rawRgba,
+          );
           image.dispose();
           final px = data!.buffer.asUint8List();
           var marked = 0;
@@ -201,21 +225,26 @@ void main() {
           '[0:v][fx] overlay=0:0:format=auto [v]" '
           '-map "[v]" -c:v libx264 -pix_fmt yuv420p -t 2 "$out"',
         );
-        final ok = ReturnCode.isSuccess(await session.getReturnCode()) &&
+        final ok =
+            ReturnCode.isSuccess(await session.getReturnCode()) &&
             File(out).existsSync() &&
             File(out).lengthSync() > 1024;
 
         final distinct = signature.toSet().length;
-        debugPrint('${fx.id.padRight(12)} '
-            '${fx.frameCount.toString().padLeft(2)} frames @${rate}fps  '
-            'lit=${lit.first}..${lit.reduce((a, b) => a > b ? a : b)}  '
-            'distinctFrames=$distinct/${fx.frameCount}  '
-            'render=${ok ? "ok" : "FAILED"}');
+        debugPrint(
+          '${fx.id.padRight(12)} '
+          '${fx.frameCount.toString().padLeft(2)} frames @${rate}fps  '
+          'lit=${lit.first}..${lit.reduce((a, b) => a > b ? a : b)}  '
+          'distinctFrames=$distinct/${fx.frameCount}  '
+          'render=${ok ? "ok" : "FAILED"}',
+        );
 
         if (!ok) failed.add('${fx.id}: the renderer would not composite it');
         if (fx.isAnimated && distinct == 1) {
-          failed.add('${fx.id}: all ${fx.frameCount} frames of the loop are '
-              'the same picture, so it would export as a still');
+          failed.add(
+            '${fx.id}: all ${fx.frameCount} frames of the loop are '
+            'the same picture, so it would export as a still',
+          );
         }
         if (lit.every((n) => n == 0)) {
           failed.add('${fx.id}: marked no pixels on any frame');

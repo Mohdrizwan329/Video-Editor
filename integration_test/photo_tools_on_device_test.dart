@@ -61,6 +61,7 @@ void main() {
   Future<void> open(WidgetTester tester, String key) async {
     await tester.pumpWidget(
       MaterialApp(
+        debugShowCheckedModeBanner: false,
         key: ValueKey(key),
         theme: AppTheme.light,
         scrollBehavior: const AppScrollBehavior(),

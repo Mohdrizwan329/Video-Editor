@@ -209,6 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.text_fields,
         iconSize: r.ic(26),
         title: 'Generate Text to Video',
+        badge: 'Coming soon',
         subtitle: 'Describe a shot, AI films it',
         subtitleColor: const Color(0xE6FFFFFF),
         gradient: AppColors.heroGradient,
@@ -730,11 +731,16 @@ class _HeroCard extends StatelessWidget {
     required this.gradient,
     required this.glow,
     required this.onTap,
+    this.badge,
   });
 
   final IconData icon;
   final double iconSize;
   final String title;
+
+  /// A word beside the title — 'Coming soon' on a way in that is not
+  /// finished yet. Null on the ones that are.
+  final String? badge;
   final String subtitle;
   final Color subtitleColor;
   final Gradient gradient;
@@ -747,70 +753,104 @@ class _HeroCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
-      child: Container(
-        // A minimum rather than a fixed height: at the largest text scale the
-        // two lines grow the card instead of overflowing it.
-        constraints: BoxConstraints(minHeight: r.vp(98)),
-        padding: EdgeInsets.symmetric(vertical: r.vp(10)),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: glow,
-        ),
-        child: Row(
-          children: [
-            SizedBox(width: r.dp(18)),
-            Container(
-              width: r.dp(50),
-              height: r.dp(50),
-              decoration: BoxDecoration(
-                color: AppColors.onAppBar.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.onAppBar.withValues(alpha: 0.28),
-                  width: 1,
+      child: Stack(
+        children: [
+          _card(context, r),
+          // Top right of the card, out of the title's way: beside the title
+          // it took room off a name that needs all of it, and 'Generate Text
+          // to Video' came out as 'Generate Text to…'.
+          if (badge != null)
+            Positioned(
+              top: r.vp(10),
+              right: r.dp(12),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: r.dp(9),
+                  vertical: r.vp(3),
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.onAppBar.withValues(alpha: 0.20),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.onAppBar.withValues(alpha: 0.34),
+                  ),
+                ),
+                child: Text(
+                  badge!,
+                  style: TextStyle(
+                    fontSize: r.sp(9.5),
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onAppBar,
+                  ),
                 ),
               ),
-              child: Icon(icon, color: AppColors.onAppBar, size: iconSize),
             ),
-            SizedBox(width: r.dp(14)),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: r.sp(17),
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.onAppBar,
-                    ),
-                  ),
-                  SizedBox(height: r.vp(3)),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: r.sp(11.5),
-                      color: subtitleColor,
-                    ),
-                  ),
-                ],
+        ],
+      ),
+    );
+  }
+
+  Widget _card(BuildContext context, Responsive r) {
+    return Container(
+      // A minimum rather than a fixed height: at the largest text scale the
+      // two lines grow the card instead of overflowing it.
+      constraints: BoxConstraints(minHeight: r.vp(98)),
+      padding: EdgeInsets.symmetric(vertical: r.vp(10)),
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: glow,
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: r.dp(18)),
+          Container(
+            width: r.dp(50),
+            height: r.dp(50),
+            decoration: BoxDecoration(
+              color: AppColors.onAppBar.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.onAppBar.withValues(alpha: 0.28),
+                width: 1,
               ),
             ),
-            Icon(
-              Icons.arrow_forward_rounded,
-              color: AppColors.onAppBar,
-              size: r.ic(21),
+            child: Icon(icon, color: AppColors.onAppBar, size: iconSize),
+          ),
+          SizedBox(width: r.dp(14)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: r.sp(17),
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.onAppBar,
+                  ),
+                ),
+                SizedBox(height: r.vp(3)),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: r.sp(11.5), color: subtitleColor),
+                ),
+              ],
             ),
-            SizedBox(width: r.dp(16)),
-          ],
-        ),
+          ),
+          Icon(
+            Icons.arrow_forward_rounded,
+            color: AppColors.onAppBar,
+            size: r.ic(21),
+          ),
+          SizedBox(width: r.dp(16)),
+        ],
       ),
     );
   }

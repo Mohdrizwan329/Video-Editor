@@ -681,10 +681,12 @@ Future<void> tapLook(WidgetTester tester, String name) async {
   await tester.pump(const Duration(milliseconds: 300));
   // The sheet's way out is the cross top right now, not a word.
   await tester.tap(
-    find.descendant(
-      of: find.byType(BottomSheet),
-      matching: find.byIcon(Icons.close),
-    ).last,
+    find
+        .descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byIcon(Icons.close),
+        )
+        .last,
   );
   await tester.pumpAndSettle();
 }

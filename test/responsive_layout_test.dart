@@ -47,6 +47,7 @@ Widget _host(Widget child, {double textScale = 1.0}) {
   return ChangeNotifierProvider(
     create: (_) => ProjectsController(),
     child: MaterialApp(
+      debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       scrollBehavior: const AppScrollBehavior(),
       // copyWith, not a fresh MediaQueryData — the latter would hand every

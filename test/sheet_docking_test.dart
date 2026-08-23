@@ -28,20 +28,18 @@ void main() {
       )
       .map((b) => b.color);
 
-  Future<void> openWatermark(
-    WidgetTester tester, {
-    double keyboard = 0,
-  }) async {
+  Future<void> openWatermark(WidgetTester tester, {double keyboard = 0}) async {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => ProjectsController(),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           home: Builder(
             builder: (context) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                viewInsets: EdgeInsets.only(bottom: keyboard),
-              ),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(viewInsets: EdgeInsets.only(bottom: keyboard)),
               child: EditorScreen(
                 project: Project(name: 'p', ratio: CanvasRatio.r9x16),
               ),
@@ -56,14 +54,16 @@ void main() {
     expect(find.byType(PanelShell), findsWidgets);
   }
 
-  testWidgets('a docked sheet shows the timeline through its corners',
-      (tester) async {
+  testWidgets('a docked sheet shows the timeline through its corners', (
+    tester,
+  ) async {
     await openWatermark(tester);
     expect(behindTheSheet(tester), contains(AppColors.timelineBg));
   });
 
-  testWidgets('with the keyboard up it shows the page it is docked under',
-      (tester) async {
+  testWidgets('with the keyboard up it shows the page it is docked under', (
+    tester,
+  ) async {
     // The keyboard takes the timeline away and moves the sheet under the
     // preview, so the timeline's colour would show as two lavender shoulders.
     await openWatermark(tester, keyboard: 320);

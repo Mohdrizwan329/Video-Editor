@@ -14,33 +14,36 @@ import 'package:video_editor/ui/editor/panels/effect_panels.dart';
 import 'package:video_editor/ui/editor/preview/clip_view.dart';
 import 'package:video_editor/ui/editor/toolbar/editor_toolbar.dart';
 
-
 VideoClip _clip() => VideoClip(
-      path: '/nonexistent/c.jpg',
-      isImage: true,
-      sourceDuration: const Duration(seconds: 4),
-    );
+  path: '/nonexistent/c.jpg',
+  isImage: true,
+  sourceDuration: const Duration(seconds: 4),
+);
 
 Widget _host(Widget child) => ChangeNotifierProvider(
-      create: (_) => ProjectsController(),
-      child: MaterialApp(theme: AppTheme.light, home: child),
-    );
+  create: (_) => ProjectsController(),
+  child: MaterialApp(theme: AppTheme.light, home: child),
+);
 
 EditorController _editorOf(WidgetTester t) => Provider.of<EditorController>(
-      t.element(find.byType(ClipView).first),
-      listen: false,
-    );
+  t.element(find.byType(ClipView).first),
+  listen: false,
+);
 
 /// Taps a bottom-bar tool by label. `scrollUntilVisible` alone can stop with
 /// the button's centre still outside the strip, which turns `tap` into a
 /// silent no-op — `ensureVisible` finishes the job.
 Future<void> _tapTool(WidgetTester t, String label) async {
   final button = find.descendant(
-      of: find.byType(EditorToolbar), matching: find.text(label));
+    of: find.byType(EditorToolbar),
+    matching: find.text(label),
+  );
   // A set of six or fewer is spread across the strip rather than scrolled,
   // so there is nothing to scroll and every button is already mounted.
   final bar = find.descendant(
-      of: find.byType(EditorToolbar), matching: find.byType(Scrollable));
+    of: find.byType(EditorToolbar),
+    matching: find.byType(Scrollable),
+  );
   if (button.evaluate().isEmpty && bar.evaluate().isNotEmpty) {
     await t.scrollUntilVisible(button, 120, scrollable: bar);
   }
@@ -53,14 +56,18 @@ Future<void> _tapTool(WidgetTester t, String label) async {
 /// A project with one of every selectable thing, all parked at the head of
 /// the timeline so the playhead can be moved well clear of them.
 ({Project project, TextLayer text, StickerLayer sticker, OverlayLayer overlay})
-    _fixture() {
+_fixture() {
   final project = Project(name: 'Tools', clips: [_clip(), _clip(), _clip()]);
   final text = TextLayer(
-      start: Duration.zero, duration: const Duration(seconds: 3), text: 'Hi');
+    start: Duration.zero,
+    duration: const Duration(seconds: 3),
+    text: 'Hi',
+  );
   final sticker = StickerLayer(
-      start: Duration.zero,
-      duration: const Duration(seconds: 3),
-      content: '\u{1F600}');
+    start: Duration.zero,
+    duration: const Duration(seconds: 3),
+    content: '\u{1F600}',
+  );
   final overlay = OverlayLayer(
     start: Duration.zero,
     duration: const Duration(seconds: 3),
@@ -81,13 +88,15 @@ void main() {
   /// One mount per tool on purpose: the bottom bar is replaced by the panel
   /// as soon as a tool opens one, so a second tap would have nothing to hit.
   Future<
-      ({
-        Project project,
-        TextLayer text,
-        StickerLayer sticker,
-        OverlayLayer overlay,
-        EditorController editor,
-      })> openTool(
+    ({
+      Project project,
+      TextLayer text,
+      StickerLayer sticker,
+      OverlayLayer overlay,
+      EditorController editor,
+    })
+  >
+  openTool(
     WidgetTester tester,
     String tool,
     void Function(EditorController, dynamic) select,
@@ -121,8 +130,11 @@ void main() {
   group('a tool always brings its target on screen', () {
     for (final tool in ['Edit', 'Animate', 'Keyframe']) {
       testWidgets('text — $tool', (tester) async {
-        final r = await openTool(tester, tool,
-            (ed, f) => ed.select(LaneKind.text, f.text.id));
+        final r = await openTool(
+          tester,
+          tool,
+          (ed, f) => ed.select(LaneKind.text, f.text.id),
+        );
         expect(r.text.isVisibleAt(r.editor.position.value), isTrue);
         await teardown(tester);
       });
@@ -130,18 +142,33 @@ void main() {
 
     for (final tool in ['Style', 'Animate', 'Keyframe']) {
       testWidgets('sticker — $tool', (tester) async {
-        final r = await openTool(tester, tool,
-            (ed, f) => ed.select(LaneKind.sticker, f.sticker.id));
+        final r = await openTool(
+          tester,
+          tool,
+          (ed, f) => ed.select(LaneKind.sticker, f.sticker.id),
+        );
         expect(r.sticker.isVisibleAt(r.editor.position.value), isTrue);
         await teardown(tester);
       });
     }
 
-    for (final tool in ['Adjust', 'Animate', 'Keyframe', 'Mask', 'Chroma',
-        'Blend', 'Filter', 'Effects', 'Color']) {
+    for (final tool in [
+      'Adjust',
+      'Animate',
+      'Keyframe',
+      'Mask',
+      'Chroma',
+      'Blend',
+      'Filter',
+      'Effects',
+      'Color',
+    ]) {
       testWidgets('overlay — $tool', (tester) async {
-        final r = await openTool(tester, tool,
-            (ed, f) => ed.select(LaneKind.overlay, f.overlay.id));
+        final r = await openTool(
+          tester,
+          tool,
+          (ed, f) => ed.select(LaneKind.overlay, f.overlay.id),
+        );
         expect(r.overlay.isVisibleAt(r.editor.position.value), isTrue);
         await teardown(tester);
       });
@@ -150,8 +177,11 @@ void main() {
     for (final tool in ['Rotate', 'Mirror']) {
       testWidgets('one-shot clip action — $tool', (tester) async {
         final r = await openTool(tester, tool, (ed, _) => ed.selectClip(0));
-        expect(r.project.clipIndexAt(r.editor.position.value), 0,
-            reason: '$tool changed a clip the user could not see');
+        expect(
+          r.project.clipIndexAt(r.editor.position.value),
+          0,
+          reason: '$tool changed a clip the user could not see',
+        );
         // The action itself still has to happen, not just the seek.
         final clip = r.project.clips.first;
         expect(clip.rotation != 0 || clip.mirrored, isTrue);
@@ -161,18 +191,25 @@ void main() {
 
     testWidgets('transition parks on the junction it dresses', (tester) async {
       final r = await openTool(
-          tester, 'Transition', (ed, _) => ed.selectClip(0));
+        tester,
+        'Transition',
+        (ed, _) => ed.selectClip(0),
+      );
       expect(r.editor.position.value, r.project.clipStart(1));
       await teardown(tester);
     });
   });
 
-  testWidgets('the chroma panel opens for an overlay with no key picked',
-      (tester) async {
+  testWidgets('the chroma panel opens for an overlay with no key picked', (
+    tester,
+  ) async {
     // `overlay?.chromaKeyColor ?? clips[clipIndex!]` fell through to the clip
     // branch whenever no key was set, and clipIndex is null there.
-    final r = await openTool(tester, 'Chroma',
-        (ed, f) => ed.select(LaneKind.overlay, f.overlay.id));
+    final r = await openTool(
+      tester,
+      'Chroma',
+      (ed, f) => ed.select(LaneKind.overlay, f.overlay.id),
+    );
     expect(r.overlay.chromaKeyColor, isNull);
     expect(tester.takeException(), isNull);
     expect(find.byType(ChromaPanel), findsOneWidget);

@@ -31,15 +31,17 @@ void main() {
     gallery = Directory.systemTemp.createTempSync('gallery');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async => sandbox.path,
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async => sandbox.path,
+        );
   });
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/path_provider'), null);
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
     for (final d in [sandbox, gallery]) {
       if (d.existsSync()) d.deleteSync(recursive: true);
     }
@@ -61,11 +63,17 @@ void main() {
     await editor.addMedia([source.path]);
 
     final stored = editor.project.clips.single.path;
-    expect(stored, isNot(source.path),
-        reason: 'the clip still points at the picked file');
+    expect(
+      stored,
+      isNot(source.path),
+      reason: 'the clip still points at the picked file',
+    );
     expect(File(stored).existsSync(), isTrue);
-    expect(stored.startsWith(sandbox.path), isTrue,
-        reason: 'the copy is not in the app\'s own storage: $stored');
+    expect(
+      stored.startsWith(sandbox.path),
+      isTrue,
+      reason: 'the copy is not in the app\'s own storage: $stored',
+    );
   });
 
   test('deleting the picked file leaves the project working', () async {
@@ -76,8 +84,11 @@ void main() {
     await editor.addMedia([source.path]);
     source.deleteSync();
 
-    expect(File(editor.project.clips.single.path).existsSync(), isTrue,
-        reason: 'the project died with the file in the gallery');
+    expect(
+      File(editor.project.clips.single.path).existsSync(),
+      isTrue,
+      reason: 'the project died with the file in the gallery',
+    );
   });
 
   test('a file already in app storage is not copied again', () async {
@@ -89,8 +100,11 @@ void main() {
     final first = editor.project.clips.single.path;
     await editor.addMedia([first]);
 
-    expect(editor.project.clips[1].path, first,
-        reason: 'app storage got a copy of its own copy');
+    expect(
+      editor.project.clips[1].path,
+      first,
+      reason: 'app storage got a copy of its own copy',
+    );
   });
 
   test('overlays and audio are kept too', () async {
@@ -100,12 +114,16 @@ void main() {
     await editor.addOverlay(picked('pip.png').path);
     await editor.addAudio(picked('song.png').path);
 
-    expect(editor.project.overlays.single.path.startsWith(sandbox.path), isTrue);
+    expect(
+      editor.project.overlays.single.path.startsWith(sandbox.path),
+      isTrue,
+    );
     expect(editor.project.audios.single.path.startsWith(sandbox.path), isTrue);
   });
 
   testWidgets('a project whose media is gone says so', (tester) async {
-    tester.view.physicalSize = const Size(390, 844) * tester.view.devicePixelRatio;
+    tester.view.physicalSize =
+        const Size(390, 844) * tester.view.devicePixelRatio;
     addTearDown(tester.view.reset);
 
     final project = Project(
@@ -123,6 +141,7 @@ void main() {
       ChangeNotifierProvider(
         create: (_) => ProjectsController(),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           scrollBehavior: const AppScrollBehavior(),
           home: EditorScreen(project: project),
@@ -131,10 +150,14 @@ void main() {
     );
     // The check is real file IO, which only runs on the live event loop.
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('missing'), findsOneWidget,
-        reason: 'the editor opened on a black canvas without a word');
+    expect(
+      find.textContaining('missing'),
+      findsOneWidget,
+      reason: 'the editor opened on a black canvas without a word',
+    );
   });
 }

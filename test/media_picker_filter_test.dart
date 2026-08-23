@@ -7,15 +7,17 @@ import 'package:video_editor/core/utils/responsive.dart';
 import 'package:video_editor/ui/picker/media_picker_screen.dart';
 
 Widget _host(Widget child) => MaterialApp(
-      theme: AppTheme.light,
-      scrollBehavior: const AppScrollBehavior(),
-      home: child,
-    );
+  debugShowCheckedModeBanner: false,
+  theme: AppTheme.light,
+  scrollBehavior: const AppScrollBehavior(),
+  home: child,
+);
 
 void main() {
   group('a picker asked for one kind of media', () {
-    testWidgets('offers photos only, with no way to reach a video',
-        (tester) async {
+    testWidgets('offers photos only, with no way to reach a video', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _host(
           const MediaPickerScreen(
@@ -43,8 +45,9 @@ void main() {
       expect(find.text('All'), findsNothing);
     });
 
-    testWidgets('still offers every tab when the caller wants anything',
-        (tester) async {
+    testWidgets('still offers every tab when the caller wants anything', (
+      tester,
+    ) async {
       await tester.pumpWidget(_host(const MediaPickerScreen()));
       await tester.pump(const Duration(milliseconds: 300));
 

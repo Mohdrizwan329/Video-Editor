@@ -13,13 +13,14 @@ import 'package:video_editor/ui/editor/editor_screen.dart';
 import 'helpers/editor_tools.dart';
 
 Widget _host(Widget child) => ChangeNotifierProvider(
-      create: (_) => ProjectsController(),
-      child: MaterialApp(
-        theme: AppTheme.light,
-        scrollBehavior: const AppScrollBehavior(),
-        home: child,
-      ),
-    );
+  create: (_) => ProjectsController(),
+  child: MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    scrollBehavior: const AppScrollBehavior(),
+    home: child,
+  ),
+);
 
 Project _project({Watermark? mark}) {
   final p = Project(
@@ -44,8 +45,9 @@ void _phone(WidgetTester tester) {
 
 void main() {
   group('the watermark caption', () {
-    testWidgets('lands on the project and on the canvas as it is typed',
-        (tester) async {
+    testWidgets('lands on the project and on the canvas as it is typed', (
+      tester,
+    ) async {
       _phone(tester);
       final project = _project();
       await tester.pumpWidget(_host(EditorScreen(project: project)));
@@ -71,9 +73,7 @@ void main() {
   group('the watermark on the canvas', () {
     testWidgets('cannot be dragged out of the frame', (tester) async {
       _phone(tester);
-      final project = _project(
-        mark: Watermark(enabled: true, text: 'Saleem'),
-      );
+      final project = _project(mark: Watermark(enabled: true, text: 'Saleem'));
       await tester.pumpWidget(_host(EditorScreen(project: project)));
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -86,30 +86,42 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final t = project.watermark.transform;
-      expect(t.x, inInclusiveRange(0, 1),
-          reason: 'the mark was dragged off the side of the canvas');
-      expect(t.y, inInclusiveRange(0, 1),
-          reason: 'the mark was dragged off the top of the canvas');
+      expect(
+        t.x,
+        inInclusiveRange(0, 1),
+        reason: 'the mark was dragged off the side of the canvas',
+      );
+      expect(
+        t.y,
+        inInclusiveRange(0, 1),
+        reason: 'the mark was dragged off the top of the canvas',
+      );
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('opens its panel when tapped', (tester) async {
       _phone(tester);
       final project = _project(
-        mark: Watermark(enabled: true, text: 'Saleem')..applyAnchor(
-            WatermarkAnchor.center),
+        mark: Watermark(enabled: true, text: 'Saleem')
+          ..applyAnchor(WatermarkAnchor.center),
       );
       await tester.pumpWidget(_host(EditorScreen(project: project)));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Watermark'), findsNothing,
-          reason: 'the panel should be closed to begin with');
+      expect(
+        find.text('Watermark'),
+        findsNothing,
+        reason: 'the panel should be closed to begin with',
+      );
 
       await tester.tap(find.text('Saleem').first, warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.text('Watermark'), findsWidgets,
-          reason: 'tapping the mark did not open its panel');
+      expect(
+        find.text('Watermark'),
+        findsWidgets,
+        reason: 'tapping the mark did not open its panel',
+      );
       expect(tester.takeException(), isNull);
     });
   });

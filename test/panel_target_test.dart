@@ -37,6 +37,7 @@ void main() {
   Widget host(Widget child) => ChangeNotifierProvider(
     create: (_) => ProjectsController(),
     child: MaterialApp(
+      debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       scrollBehavior: const AppScrollBehavior(),
       home: child,
@@ -61,10 +62,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
-  EditorController editorOf(WidgetTester tester) => Provider.of<EditorController>(
-    tester.element(find.byType(PreviewStage).first),
-    listen: false,
-  );
+  EditorController editorOf(WidgetTester tester) =>
+      Provider.of<EditorController>(
+        tester.element(find.byType(PreviewStage).first),
+        listen: false,
+      );
 
   /// The clip the preview is drawing.
   int shownClip(EditorController editor) =>
@@ -79,8 +81,9 @@ void main() {
     return editorOf(tester);
   }
 
-  testWidgets('opening a clip tool puts the preview on the clip it edits',
-      (tester) async {
+  testWidgets('opening a clip tool puts the preview on the clip it edits', (
+    tester,
+  ) async {
     final editor = await openEditor(tester);
     editor.selectClip(0);
     editor.seek(const Duration(seconds: 9)); // inside the third clip
@@ -93,22 +96,25 @@ void main() {
     expect(shownClip(editor), 0);
   });
 
-  testWidgets('picking another clip with the tool open brings the preview along',
-      (tester) async {
-    final editor = await openEditor(tester);
-    editor.selectClip(0);
-    await tester.pump(const Duration(milliseconds: 300));
-    await tapTool(tester, 'Crop');
-    expect(shownClip(editor), 0);
+  testWidgets(
+    'picking another clip with the tool open brings the preview along',
+    (tester) async {
+      final editor = await openEditor(tester);
+      editor.selectClip(0);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tapTool(tester, 'Crop');
+      expect(shownClip(editor), 0);
 
-    editor.selectClip(2);
-    await tester.pump(const Duration(milliseconds: 300));
+      editor.selectClip(2);
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(shownClip(editor), 2);
-  });
+      expect(shownClip(editor), 2);
+    },
+  );
 
-  testWidgets('a slider drag does not move the playhead off the clip',
-      (tester) async {
+  testWidgets('a slider drag does not move the playhead off the clip', (
+    tester,
+  ) async {
     final editor = await openEditor(tester);
     editor.selectClip(2);
     await tester.pump(const Duration(milliseconds: 300));

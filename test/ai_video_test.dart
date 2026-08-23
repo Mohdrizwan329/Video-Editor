@@ -19,8 +19,10 @@ void main() {
 
     test('Veo 2 takes a duration, Veo 3 does not', () {
       const veo2 = VeoModel(id: 'veo-2.0-generate-001', displayName: 'Veo 2');
-      const veo3 =
-          VeoModel(id: 'veo-3.0-generate-preview', displayName: 'Veo 3');
+      const veo3 = VeoModel(
+        id: 'veo-3.0-generate-preview',
+        displayName: 'Veo 3',
+      );
       expect(veo2.takesDuration, isTrue);
       expect(veo3.takesDuration, isFalse);
       // Resolution and audio are the other way round.
@@ -49,10 +51,10 @@ void main() {
           'generateVideoResponse': {
             'generatedSamples': [
               {
-                'video': {'uri': 'https://g.dev/files/abc:download?alt=media'}
-              }
-            ]
-          }
+                'video': {'uri': 'https://g.dev/files/abc:download?alt=media'},
+              },
+            ],
+          },
         },
       });
       expect(op.videoUri, 'https://g.dev/files/abc:download?alt=media');
@@ -66,9 +68,9 @@ void main() {
         'response': {
           'generatedVideos': [
             {
-              'video': {'uri': 'https://g.dev/files/xyz'}
-            }
-          ]
+              'video': {'uri': 'https://g.dev/files/xyz'},
+            },
+          ],
         },
       });
       expect(op.videoUri, 'https://g.dev/files/xyz');
@@ -81,8 +83,8 @@ void main() {
         'done': true,
         'response': {
           'videos': [
-            {'bytesBase64Encoded': long}
-          ]
+            {'bytesBase64Encoded': long},
+          ],
         },
       });
       expect(op.videoUri, isNull);
@@ -110,7 +112,8 @@ void main() {
   group('shots and settings', () {
     test('a blank line starts a new shot', () {
       final shots = AiVideoService.splitShots(
-          'A wide desert road.\nDust in the air.\n\nClose up of the driver.');
+        'A wide desert road.\nDust in the air.\n\nClose up of the driver.',
+      );
       expect(shots.length, 2);
       expect(shots.first, 'A wide desert road. Dust in the air.');
       expect(shots.last, 'Close up of the driver.');
@@ -151,8 +154,11 @@ void main() {
       final settings = AiSettings();
       expect(settings.apiKey, 'AIzaSecret');
       expect(settings.hasKey, isTrue);
-      expect(settings.toJson().toString(), isNot(contains('AIzaSecret')),
-          reason: 'the key belongs to the build, not to saved state');
+      expect(
+        settings.toJson().toString(),
+        isNot(contains('AIzaSecret')),
+        reason: 'the key belongs to the build, not to saved state',
+      );
     });
 
     test('no key configured reads as not connected', () {
@@ -179,12 +185,17 @@ void main() {
         'duration': 5,
       });
       expect(settings.model, AiVideoService.defaultModel);
-      expect(settings.hasKey, isFalse, reason: 'an old token is not a Google key');
+      expect(
+        settings.hasKey,
+        isFalse,
+        reason: 'an old token is not a Google key',
+      );
     });
 
     test('a real Veo id is kept', () {
-      final settings =
-          AiSettings.fromJson({'model': 'veo-3.0-generate-preview'});
+      final settings = AiSettings.fromJson({
+        'model': 'veo-3.0-generate-preview',
+      });
       expect(settings.model, 'veo-3.0-generate-preview');
     });
 
@@ -227,43 +238,49 @@ void main() {
   });
 
   group('choosing a model for the user', () {
-    List<VeoModel> models(List<String> ids) =>
-        [for (final id in ids) VeoModel(id: id, displayName: id)];
+    List<VeoModel> models(List<String> ids) => [
+      for (final id in ids) VeoModel(id: id, displayName: id),
+    ];
 
     test('the cheapest tier wins when the app has to pick', () {
       expect(
-        AiVideoService.preferredModel(models([
-          'veo-3.1-generate-preview',
-          'veo-3.1-fast-generate-preview',
-          'veo-3.1-lite-generate-preview',
-        ])),
+        AiVideoService.preferredModel(
+          models([
+            'veo-3.1-generate-preview',
+            'veo-3.1-fast-generate-preview',
+            'veo-3.1-lite-generate-preview',
+          ]),
+        ),
         'veo-3.1-lite-generate-preview',
       );
     });
 
     test('fast is taken when there is no lite', () {
       expect(
-        AiVideoService.preferredModel(models([
-          'veo-3.1-generate-preview',
-          'veo-3.1-fast-generate-preview',
-        ])),
+        AiVideoService.preferredModel(
+          models(['veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview']),
+        ),
         'veo-3.1-fast-generate-preview',
       );
     });
 
     test('within a tier the newer name wins', () {
       expect(
-        AiVideoService.preferredModel(models([
-          'veo-3.0-lite-generate-preview',
-          'veo-3.1-lite-generate-preview',
-        ])),
+        AiVideoService.preferredModel(
+          models([
+            'veo-3.0-lite-generate-preview',
+            'veo-3.1-lite-generate-preview',
+          ]),
+        ),
         'veo-3.1-lite-generate-preview',
       );
     });
 
     test('a single full model is still used', () {
-      expect(AiVideoService.preferredModel(models(['veo-3.1-generate-preview'])),
-          'veo-3.1-generate-preview');
+      expect(
+        AiVideoService.preferredModel(models(['veo-3.1-generate-preview'])),
+        'veo-3.1-generate-preview',
+      );
     });
   });
 }

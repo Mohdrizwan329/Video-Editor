@@ -27,6 +27,7 @@ void main() {
       ChangeNotifierProvider(
         create: (_) => ProjectsController(),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           scrollBehavior: const AppScrollBehavior(),
           // A fresh key per project: the editor holds its controller in
@@ -51,14 +52,20 @@ void main() {
       ],
     );
     if (layers) {
-      p.texts.add(TextLayer(
+      p.texts.add(
+        TextLayer(
           start: Duration.zero,
           duration: const Duration(seconds: 3),
-          text: 'Hi'));
-      p.stickers.add(StickerLayer(
+          text: 'Hi',
+        ),
+      );
+      p.stickers.add(
+        StickerLayer(
           start: Duration.zero,
           duration: const Duration(seconds: 3),
-          content: '\u{1F600}'));
+          content: '\u{1F600}',
+        ),
+      );
     }
     return p;
   }
@@ -70,13 +77,17 @@ void main() {
     return box.bottom - tester.getRect(last).bottom;
   }
 
-  testWidgets('a bare track leaves no room for lanes it is not drawing',
-      (tester) async {
+  testWidgets('a bare track leaves no room for lanes it is not drawing', (
+    tester,
+  ) async {
     await pumpEditor(tester, projectWith());
 
     final tail = tailUnder(tester, find.byType(ClipStrip).first);
-    expect(tail, lessThanOrEqualTo(10),
-        reason: 'dead space under the track: ${tail}pt');
+    expect(
+      tail,
+      lessThanOrEqualTo(10),
+      reason: 'dead space under the track: ${tail}pt',
+    );
   });
 
   testWidgets('the lanes it does draw still fit', (tester) async {
@@ -91,10 +102,16 @@ void main() {
       if (r.height > 0 && r.bottom > lowest) lowest = r.bottom;
     }
     final box = tester.getRect(find.byType(TimelineView));
-    expect(lowest, lessThanOrEqualTo(box.bottom),
-        reason: 'a lane hangs past the bottom of the timeline');
-    expect(box.bottom - lowest, lessThanOrEqualTo(10),
-        reason: 'dead space under the lanes: ${box.bottom - lowest}pt');
+    expect(
+      lowest,
+      lessThanOrEqualTo(box.bottom),
+      reason: 'a lane hangs past the bottom of the timeline',
+    );
+    expect(
+      box.bottom - lowest,
+      lessThanOrEqualTo(10),
+      reason: 'dead space under the lanes: ${box.bottom - lowest}pt',
+    );
     expect(tester.takeException(), isNull);
   });
 

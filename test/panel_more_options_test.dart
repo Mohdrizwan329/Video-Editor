@@ -46,6 +46,7 @@ void main() {
       ChangeNotifierProvider(
         create: (_) => ProjectsController(),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           scrollBehavior: const AppScrollBehavior(),
           home: EditorScreen(project: p),

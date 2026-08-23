@@ -18,7 +18,10 @@ class FakeGemini {
     this.pollsBeforeDone = 1,
     this.failWith,
     this.responseBuilder,
-    this.models = const ['veo-3.0-fast-generate-preview', 'veo-2.0-generate-001'],
+    this.models = const [
+      'veo-3.0-fast-generate-preview',
+      'veo-2.0-generate-001',
+    ],
   });
 
   final int pollsBeforeDone;
@@ -41,8 +44,10 @@ class FakeGemini {
 
   String get host => '${_server.address.host}:${_server.port}';
 
-  static final List<int> videoBytes =
-      List<int>.generate(8192, (i) => (i * 11) % 251);
+  static final List<int> videoBytes = List<int>.generate(
+    8192,
+    (i) => (i * 11) % 251,
+  );
 
   Future<void> start() async {
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -86,7 +91,7 @@ class FakeGemini {
             'code': 404,
             'message': 'models/$asked is not found',
             'status': 'NOT_FOUND',
-          }
+          },
         });
         return;
       }
@@ -109,15 +114,16 @@ class FakeGemini {
         _json(request, {
           'name': 'op1',
           'done': true,
-          'response': responseBuilder?.call(host) ??
+          'response':
+              responseBuilder?.call(host) ??
               {
                 'generateVideoResponse': {
                   'generatedSamples': [
                     {
-                      'video': {'uri': 'http://$host/v1beta/files/out'}
-                    }
-                  ]
-                }
+                      'video': {'uri': 'http://$host/v1beta/files/out'},
+                    },
+                  ],
+                },
               },
         });
       }
@@ -134,7 +140,7 @@ class FakeGemini {
     }
     request.response.statusCode = 404;
     _json(request, {
-      'error': {'code': 404, 'message': 'not found', 'status': 'NOT_FOUND'}
+      'error': {'code': 404, 'message': 'not found', 'status': 'NOT_FOUND'},
     });
   }
 
@@ -172,15 +178,17 @@ void main() {
     sandbox = Directory.systemTemp.createTempSync('ai_flow');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async => sandbox.path,
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async => sandbox.path,
+        );
   });
 
   tearDownAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/path_provider'), null);
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
     if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
   });
 
@@ -198,11 +206,7 @@ void main() {
   });
 
   AiSettings settings({String model = 'veo-3.0-fast-generate-preview'}) =>
-      AiSettings(
-        model: model,
-        aspectRatio: '9:16',
-        durationSeconds: 8,
-      );
+      AiSettings(model: model, aspectRatio: '9:16', durationSeconds: 8);
 
   Future<FakeGemini> serve(FakeGemini fake) async {
     await fake.start();
@@ -227,8 +231,10 @@ void main() {
 
     // The prompt went out in the shape the API expects.
     final instances = fake.lastBody!['instances'] as List;
-    expect((instances.first as Map)['prompt'],
-        'a cartoon with two people talking');
+    expect(
+      (instances.first as Map)['prompt'],
+      'a cartoon with two people talking',
+    );
     expect(fake.generationsStarted, 1);
 
     // It really waited for the operation instead of taking the first answer.
@@ -253,8 +259,11 @@ void main() {
     final params = fake.lastBody!['parameters'] as Map;
     expect(params['aspectRatio'], '9:16');
     expect(params['negativePrompt'], 'blurry, watermark');
-    expect(params.containsKey('durationSeconds'), isFalse,
-        reason: 'Veo 3 renders a fixed length and rejects the parameter');
+    expect(
+      params.containsKey('durationSeconds'),
+      isFalse,
+      reason: 'Veo 3 renders a fixed length and rejects the parameter',
+    );
   });
 
   test('Veo 2 is sent a duration, clamped to what it allows', () async {
@@ -287,35 +296,52 @@ void main() {
 
   test('an empty negative prompt is not sent at all', () async {
     final fake = await serve(FakeGemini(pollsBeforeDone: 0));
-    await AiVideoService.instance
-        .generateShot(prompt: 'x', settings: settings(), negativePrompt: '  ');
-    expect((fake.lastBody!['parameters'] as Map).containsKey('negativePrompt'),
-        isFalse);
+    await AiVideoService.instance.generateShot(
+      prompt: 'x',
+      settings: settings(),
+      negativePrompt: '  ',
+    );
+    expect(
+      (fake.lastBody!['parameters'] as Map).containsKey('negativePrompt'),
+      isFalse,
+    );
   });
 
-  test('a video inlined as base64 is written out instead of downloaded',
-      () async {
-    final bytes = base64Encode(FakeGemini.videoBytes);
-    await serve(FakeGemini(
-      pollsBeforeDone: 0,
-      responseBuilder: (_) => {
-        'videos': [
-          {'bytesBase64Encoded': bytes}
-        ]
-      },
-    ));
-    final path = await AiVideoService.instance
-        .generateShot(prompt: 'x', settings: settings());
-    expect(File(path).readAsBytesSync().length, FakeGemini.videoBytes.length);
-  });
+  test(
+    'a video inlined as base64 is written out instead of downloaded',
+    () async {
+      final bytes = base64Encode(FakeGemini.videoBytes);
+      await serve(
+        FakeGemini(
+          pollsBeforeDone: 0,
+          responseBuilder: (_) => {
+            'videos': [
+              {'bytesBase64Encoded': bytes},
+            ],
+          },
+        ),
+      );
+      final path = await AiVideoService.instance.generateShot(
+        prompt: 'x',
+        settings: settings(),
+      );
+      expect(File(path).readAsBytesSync().length, FakeGemini.videoBytes.length);
+    },
+  );
 
   test('a blocked prompt is reported in the model\'s own words', () async {
-    await serve(FakeGemini(
-        pollsBeforeDone: 0, failWith: 'blocked by safety filters'));
+    await serve(
+      FakeGemini(pollsBeforeDone: 0, failWith: 'blocked by safety filters'),
+    );
     await expectLater(
       AiVideoService.instance.generateShot(prompt: 'x', settings: settings()),
-      throwsA(isA<AiVideoException>().having(
-          (e) => e.message, 'message', contains('safety filters'))),
+      throwsA(
+        isA<AiVideoException>().having(
+          (e) => e.message,
+          'message',
+          contains('safety filters'),
+        ),
+      ),
     );
   });
 
@@ -323,8 +349,13 @@ void main() {
     await serve(FakeGemini(pollsBeforeDone: 0, responseBuilder: (_) => {}));
     await expectLater(
       AiVideoService.instance.generateShot(prompt: 'x', settings: settings()),
-      throwsA(isA<AiVideoException>()
-          .having((e) => e.message, 'message', contains('no video'))),
+      throwsA(
+        isA<AiVideoException>().having(
+          (e) => e.message,
+          'message',
+          contains('no video'),
+        ),
+      ),
     );
   });
 
@@ -341,18 +372,23 @@ void main() {
           if (u.stage == AiJobStage.rendering) cancel.cancel();
         },
       ),
-      throwsA(isA<AiVideoException>()
-          .having((e) => e.message, 'message', contains('cancelled'))),
+      throwsA(
+        isA<AiVideoException>().having(
+          (e) => e.message,
+          'message',
+          contains('cancelled'),
+        ),
+      ),
     );
   });
 
-  test('listing models keeps the video ones and drops the text ones',
-      () async {
+  test('listing models keeps the video ones and drops the text ones', () async {
     final fake = await serve(FakeGemini());
-    final models =
-        await AiVideoService.instance.availableModels('AIzaTest');
-    expect(models.map((m) => m.id),
-        containsAll(['veo-3.0-fast-generate-preview', 'veo-2.0-generate-001']));
+    final models = await AiVideoService.instance.availableModels('AIzaTest');
+    expect(
+      models.map((m) => m.id),
+      containsAll(['veo-3.0-fast-generate-preview', 'veo-2.0-generate-001']),
+    );
     expect(models.any((m) => m.id.contains('gemini-2.5-flash')), isFalse);
     expect(fake.modelListings, 1);
   });
@@ -363,59 +399,88 @@ void main() {
         'code': 400,
         'message': 'API key not valid. Please pass a valid API key.',
         'status': 'INVALID_ARGUMENT',
-      }
+      },
     });
     addTearDown(() => server.close(force: true));
 
-    final client = GeminiVideoClient('bad',
-        host: '${server.address.host}:${server.port}', secure: false);
+    final client = GeminiVideoClient(
+      'bad',
+      host: '${server.address.host}:${server.port}',
+      secure: false,
+    );
     await expectLater(
       client.listVideoModels(),
-      throwsA(isA<GeminiException>()
-          .having((e) => e.message, 'message', contains('rejected'))
-          .having((e) => e.message, 'message', contains('.env'))),
+      throwsA(
+        isA<GeminiException>()
+            .having((e) => e.message, 'message', contains('rejected'))
+            .having((e) => e.message, 'message', contains('.env')),
+      ),
     );
   });
 
   test('a quota error explains that video is not on the free tier', () async {
     final server = await erroringServer(429, {
-      'error': {'code': 429, 'message': 'Quota exceeded', 'status': 'RESOURCE_EXHAUSTED'}
+      'error': {
+        'code': 429,
+        'message': 'Quota exceeded',
+        'status': 'RESOURCE_EXHAUSTED',
+      },
     });
     addTearDown(() => server.close(force: true));
 
-    final client = GeminiVideoClient('AIzaTest',
-        host: '${server.address.host}:${server.port}', secure: false);
+    final client = GeminiVideoClient(
+      'AIzaTest',
+      host: '${server.address.host}:${server.port}',
+      secure: false,
+    );
     await expectLater(
       client.listVideoModels(),
-      throwsA(isA<GeminiException>()
-          .having((e) => e.message, 'message', contains('free tier'))
-          .having((e) => e.message, 'message', contains('paid plan'))
-          .having((e) => e.retryable, 'retryable', isTrue)),
+      throwsA(
+        isA<GeminiException>()
+            .having((e) => e.message, 'message', contains('free tier'))
+            .having((e) => e.message, 'message', contains('paid plan'))
+            .having((e) => e.retryable, 'retryable', isTrue),
+      ),
     );
   });
 
-  test('a key with no video access is refused before any billing happens',
-      () async {
-    final server = await erroringServer(403, {
-      'error': {'code': 403, 'message': 'PERMISSION_DENIED'}
-    });
-    addTearDown(() => server.close(force: true));
+  test(
+    'a key with no video access is refused before any billing happens',
+    () async {
+      final server = await erroringServer(403, {
+        'error': {'code': 403, 'message': 'PERMISSION_DENIED'},
+      });
+      addTearDown(() => server.close(force: true));
 
-    final client = GeminiVideoClient('AIzaTest',
-        host: '${server.address.host}:${server.port}', secure: false);
-    await expectLater(
-      client.listVideoModels(),
-      throwsA(isA<GeminiException>()
-          .having((e) => e.message, 'message', contains('billing'))),
-    );
-  });
+      final client = GeminiVideoClient(
+        'AIzaTest',
+        host: '${server.address.host}:${server.port}',
+        secure: false,
+      );
+      await expectLater(
+        client.listVideoModels(),
+        throwsA(
+          isA<GeminiException>().having(
+            (e) => e.message,
+            'message',
+            contains('billing'),
+          ),
+        ),
+      );
+    },
+  );
 
   test('an unconfigured .env never reaches the network', () async {
     AppEnv.overrideKey = '';
     await expectLater(
       AiVideoService.instance.generateShot(prompt: 'x', settings: AiSettings()),
-      throwsA(isA<AiVideoException>()
-          .having((e) => e.message, 'message', contains('.env'))),
+      throwsA(
+        isA<AiVideoException>().having(
+          (e) => e.message,
+          'message',
+          contains('.env'),
+        ),
+      ),
     );
   });
 
@@ -424,24 +489,39 @@ void main() {
     final fake = await serve(FakeGemini(pollsBeforeDone: 0));
     final chosen = settings(model: 'veo-9.9-does-not-exist');
 
-    final path = await AiVideoService.instance
-        .generateShot(prompt: 'x', settings: chosen);
+    final path = await AiVideoService.instance.generateShot(
+      prompt: 'x',
+      settings: chosen,
+    );
 
     expect(File(path).existsSync(), isTrue);
     expect(fake.modelListings, 1, reason: 'it asked what the key can film');
-    expect(fake.generationsStarted, 2,
-        reason: 'one rejected attempt, then the resolved model');
-    expect(chosen.model, 'veo-3.0-fast-generate-preview',
-        reason: 'the working model is remembered for next time');
+    expect(
+      fake.generationsStarted,
+      2,
+      reason: 'one rejected attempt, then the resolved model',
+    );
+    expect(
+      chosen.model,
+      'veo-3.0-fast-generate-preview',
+      reason: 'the working model is remembered for next time',
+    );
   });
 
   test('a key with no video models fails with a billing message', () async {
     await serve(FakeGemini(pollsBeforeDone: 0, models: const []));
     await expectLater(
       AiVideoService.instance.generateShot(
-          prompt: 'x', settings: settings(model: 'veo-9.9-does-not-exist')),
-      throwsA(isA<AiVideoException>()
-          .having((e) => e.message, 'message', contains('billing'))),
+        prompt: 'x',
+        settings: settings(model: 'veo-9.9-does-not-exist'),
+      ),
+      throwsA(
+        isA<AiVideoException>().having(
+          (e) => e.message,
+          'message',
+          contains('billing'),
+        ),
+      ),
     );
   });
 }

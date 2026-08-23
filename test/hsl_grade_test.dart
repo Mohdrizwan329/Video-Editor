@@ -19,8 +19,11 @@ void main() {
   test('a band centre belongs entirely to that band', () {
     for (var i = 0; i < HslGrade.bandCount; i++) {
       final w = HslGrade.weightsFor(HslGrade.bandCentres[i]);
-      expect(w[i], closeTo(1.0, 1e-9),
-          reason: '${HslGrade.bandNames[i]} does not own its own centre');
+      expect(
+        w[i],
+        closeTo(1.0, 1e-9),
+        reason: '${HslGrade.bandNames[i]} does not own its own centre',
+      );
     }
   });
 

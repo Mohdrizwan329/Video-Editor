@@ -9,11 +9,8 @@ import 'package:video_editor/data/models/video_clip.dart';
 import 'package:video_editor/data/services/caption_service.dart';
 import 'package:video_editor/data/services/sound_library.dart';
 
-VideoClip _media(Duration d) => VideoClip(
-      path: '/tmp/a.mp4',
-      isImage: false,
-      sourceDuration: d,
-    );
+VideoClip _media(Duration d) =>
+    VideoClip(path: '/tmp/a.mp4', isImage: false, sourceDuration: d);
 
 void main() {
   group('SRT', () {
@@ -53,7 +50,8 @@ Good line
 
     test('accepts a dot as the millisecond separator', () {
       final lines = CaptionService.parseSrt(
-          '1\n00:00:01.250 --> 00:00:02.750\nDotted\n');
+        '1\n00:00:01.250 --> 00:00:02.750\nDotted\n',
+      );
       expect(lines.single.start, const Duration(milliseconds: 1250));
     });
 
@@ -70,9 +68,10 @@ Good line
     test('leaves short lines alone', () {
       final lines = [
         const CaptionLine(
-            start: Duration.zero,
-            end: Duration(seconds: 2),
-            text: 'Short enough')
+          start: Duration.zero,
+          end: Duration(seconds: 2),
+          text: 'Short enough',
+        ),
       ];
       expect(CaptionService.wrap(lines).length, 1);
     });
@@ -81,15 +80,18 @@ Good line
       const line = CaptionLine(
         start: Duration(seconds: 1),
         end: Duration(seconds: 5),
-        text: 'This sentence is definitely far too long to sit on one '
+        text:
+            'This sentence is definitely far too long to sit on one '
             'single caption line without spilling over the canvas',
       );
       final wrapped = CaptionService.wrap([line], maxChars: 30);
       expect(wrapped.length, greaterThan(1));
       expect(wrapped.first.start, line.start);
       // Allow a millisecond of rounding across the shares.
-      expect((wrapped.last.end - line.end).inMilliseconds.abs(),
-          lessThanOrEqualTo(2));
+      expect(
+        (wrapped.last.end - line.end).inMilliseconds.abs(),
+        lessThanOrEqualTo(2),
+      );
       for (final w in wrapped) {
         expect(w.text.length, lessThanOrEqualTo(30));
       }
@@ -98,7 +100,10 @@ Good line
     test('caption layers are flagged so they can be cleared as a group', () {
       final layers = CaptionService.toLayers([
         const CaptionLine(
-            start: Duration.zero, end: Duration(seconds: 2), text: 'Hi')
+          start: Duration.zero,
+          end: Duration(seconds: 2),
+          text: 'Hi',
+        ),
       ]);
       expect(layers.single.isCaption, isTrue);
     });

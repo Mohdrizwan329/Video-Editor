@@ -79,6 +79,34 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
       appBar: AppBar(
         titleSpacing: 0,
         title: const Text('Text to Video'),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: res.dp(12)),
+            child: Center(
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: res.dp(9),
+                  vertical: res.vp(3),
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.onAppBar.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.onAppBar.withValues(alpha: 0.34),
+                  ),
+                ),
+                child: Text(
+                  'Coming soon',
+                  style: TextStyle(
+                    fontSize: res.sp(10),
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onAppBar,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Stack(
@@ -86,7 +114,9 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
             if (settings == null)
               const Center(
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: AppColors.accent),
+                  strokeWidth: 2,
+                  color: AppColors.accent,
+                ),
               )
             else
               ContentBox(
@@ -127,6 +157,39 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
   /// screen's card uses, so arriving here reads as the card that was tapped.
   Widget _headerCard() {
     final res = context.r;
+    return Stack(
+      children: [
+        _headerBody(res),
+        // Top right of the card, out of the title's way — the same corner
+        // the home screen's card puts it in, so the two read as one thing.
+        Positioned(
+          top: res.vp(10),
+          right: res.dp(12),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: res.dp(9),
+              vertical: res.vp(3),
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.20),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
+            ),
+            child: Text(
+              'Coming soon',
+              style: TextStyle(
+                fontSize: res.sp(9.5),
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerBody(Responsive res) {
     return Container(
       padding: EdgeInsets.symmetric(vertical: res.vp(16)),
       decoration: BoxDecoration(
@@ -145,8 +208,11 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
               borderRadius: BorderRadius.circular(15),
               border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
             ),
-            child: Icon(Icons.movie_filter,
-                color: Colors.white, size: res.ic(24)),
+            child: Icon(
+              Icons.movie_filter,
+              color: Colors.white,
+              size: res.ic(24),
+            ),
           ),
           SizedBox(width: res.dp(14)),
           Expanded(
@@ -171,7 +237,9 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontSize: res.sp(11.5), color: const Color(0xCCFFFFFF)),
+                    fontSize: res.sp(11.5),
+                    color: const Color(0xCCFFFFFF),
+                  ),
                 ),
               ],
             ),
@@ -186,7 +254,9 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
     final res = context.r;
     return _card(
       padding: EdgeInsets.symmetric(
-          horizontal: res.dp(14), vertical: res.vp(12)),
+        horizontal: res.dp(14),
+        vertical: res.vp(12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -213,10 +283,13 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
               minimumSize: const Size(0, 32),
             ),
             icon: Icon(
-                _showNegative ? Icons.expand_less : Icons.expand_more,
-                size: res.ic(17)),
-            label: Text('Things to avoid (optional)',
-                style: TextStyle(fontSize: res.sp(11.5))),
+              _showNegative ? Icons.expand_less : Icons.expand_more,
+              size: res.ic(17),
+            ),
+            label: Text(
+              'Things to avoid (optional)',
+              style: TextStyle(fontSize: res.sp(11.5)),
+            ),
             onPressed: () => setState(() => _showNegative = !_showNegative),
           ),
           if (_showNegative)
@@ -225,8 +298,9 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
               minLines: 1,
               maxLines: 3,
               style: const TextStyle(fontSize: 12.5),
-              decoration:
-                  _fieldDecoration('blurry, text, watermark, distorted hands'),
+              decoration: _fieldDecoration(
+                'blurry, text, watermark, distorted hands',
+              ),
             ),
         ],
       ),
@@ -245,8 +319,7 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
       children: [
         _pill(Icons.videocam_outlined, '$shots shot${shots == 1 ? '' : 's'}'),
         _pill(Icons.schedule, '≈ ${total.mmss} of video'),
-        if (shots > 1)
-          _pill(Icons.payments_outlined, '$shots billed runs'),
+        if (shots > 1) _pill(Icons.payments_outlined, '$shots billed runs'),
       ],
     );
   }
@@ -260,14 +333,19 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
         padding: EdgeInsets.all(res.dp(13)),
         child: Row(
           children: [
-            Icon(Icons.timer_outlined,
-                size: res.ic(17), color: AppColors.appBarMuted),
+            Icon(
+              Icons.timer_outlined,
+              size: res.ic(17),
+              color: AppColors.appBarMuted,
+            ),
             SizedBox(width: res.dp(12)),
             Expanded(
               child: Text(
                 'This model films 8 seconds per shot, with sound.',
                 style: TextStyle(
-                    fontSize: res.sp(12), color: AppColors.textDim),
+                  fontSize: res.sp(12),
+                  color: AppColors.textDim,
+                ),
               ),
             ),
           ],
@@ -301,19 +379,24 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
           onTap: () => setState(() => _ratio = r),
           child: Container(
             padding: EdgeInsets.symmetric(
-                horizontal: res.dp(13), vertical: res.vp(9)),
+              horizontal: res.dp(13),
+              vertical: res.vp(9),
+            ),
             decoration: BoxDecoration(
               color: selected ? AppColors.appBar : AppColors.surface,
               borderRadius: BorderRadius.circular(11),
               border: Border.all(
-                  color: selected ? AppColors.appBar : AppColors.stroke),
+                color: selected ? AppColors.appBar : AppColors.stroke,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(r.icon,
-                    size: res.ic(15),
-                    color: selected ? AppColors.onAppBar : AppColors.textDim),
+                Icon(
+                  r.icon,
+                  size: res.ic(15),
+                  color: selected ? AppColors.onAppBar : AppColors.textDim,
+                ),
                 SizedBox(width: res.dp(7)),
                 Text(
                   AiVideoService.aspectFor(r),
@@ -331,24 +414,49 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
     );
   }
 
+  /// Off until the generator is finished.
+  ///
+  /// The screen is left standing rather than hidden so the shape of the tool
+  /// is there to be seen — the prompt, the frame, the length — but the
+  /// button says what it is and does nothing, which is honester than a
+  /// button that fails.
+  static const bool _generatorReady = false;
+
   Widget _generateButton() {
-    final ready = _shotCount > 0 && !_working;
+    final ready = _generatorReady && _shotCount > 0 && !_working;
     final res = context.r;
-    return FilledButton.icon(
-      style: FilledButton.styleFrom(
-        backgroundColor: AppColors.accent,
-        foregroundColor: AppColors.onAccent,
-        minimumSize: Size.fromHeight(res.tap(50)),
-        disabledBackgroundColor: AppColors.surfaceHigh,
-        disabledForegroundColor: AppColors.textFaint,
-      ),
-      icon: Icon(Icons.auto_awesome, size: res.ic(19)),
-      label: Text(
-        _shotCount == 0 ? 'Describe your video first' : 'Generate with AI',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: res.sp(14), fontWeight: FontWeight.w700),
-      ),
-      onPressed: ready ? _generate : null,
+    return Column(
+      children: [
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.accent,
+            foregroundColor: AppColors.onAccent,
+            minimumSize: Size.fromHeight(res.tap(50)),
+            disabledBackgroundColor: AppColors.surfaceHigh,
+            disabledForegroundColor: AppColors.textFaint,
+          ),
+          icon: Icon(Icons.auto_awesome, size: res.ic(19)),
+          label: Text(
+            !_generatorReady
+                ? 'Coming soon'
+                : _shotCount == 0
+                ? 'Describe your video first'
+                : 'Generate with AI',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: res.sp(14), fontWeight: FontWeight.w700),
+          ),
+          onPressed: ready ? _generate : null,
+        ),
+        if (!_generatorReady) ...[
+          SizedBox(height: res.vp(10)),
+          Text(
+            'Generating video from a prompt is still being built. '
+            'Everything else in the app works today.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: res.sp(11), color: AppColors.textDim),
+          ),
+        ],
+      ],
     );
   }
 
@@ -368,61 +476,69 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
             child: ContentBox(
               maxWidth: 480,
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: res.dp(36),
-                  height: res.dp(36),
-                  child: const CircularProgressIndicator(
-                      strokeWidth: 2.5, color: AppColors.accent),
-                ),
-                SizedBox(height: res.vp(18)),
-                Text(
-                  update?.message ?? 'Starting',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: res.sp(14), fontWeight: FontWeight.w700),
-                ),
-                SizedBox(height: res.vp(6)),
-                Text(
-                  shots > 1
-                      ? 'Shot ${update?.shot ?? 1} of $shots · '
-                          '${(update?.elapsed ?? Duration.zero).mmss} elapsed'
-                      : '${(update?.elapsed ?? Duration.zero).mmss} elapsed',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: res.sp(11.5), color: AppColors.textDim),
-                ),
-                SizedBox(height: res.vp(14)),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: update?.fraction,
-                    minHeight: 5,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: res.dp(36),
+                    height: res.dp(36),
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: AppColors.accent,
+                    ),
                   ),
-                ),
-                SizedBox(height: res.vp(14)),
-                Text(
-                  'Veo takes a few minutes per shot. Keep the app open — '
-                  'the clip downloads as soon as it is ready.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: res.sp(11), color: AppColors.textFaint),
-                ),
-                SizedBox(height: res.vp(18)),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.danger,
-                    side: BorderSide(
-                        color: AppColors.danger.withValues(alpha: 0.5)),
-                    minimumSize: Size(0, res.tap(40)),
+                  SizedBox(height: res.vp(18)),
+                  Text(
+                    update?.message ?? 'Starting',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: res.sp(14),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  icon:
-                      Icon(Icons.stop_circle_outlined, size: res.ic(17)),
-                  label: const Text('Cancel'),
-                  onPressed: () => _cancel?.cancel(),
-                ),
-              ],
+                  SizedBox(height: res.vp(6)),
+                  Text(
+                    shots > 1
+                        ? 'Shot ${update?.shot ?? 1} of $shots · '
+                              '${(update?.elapsed ?? Duration.zero).mmss} elapsed'
+                        : '${(update?.elapsed ?? Duration.zero).mmss} elapsed',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: res.sp(11.5),
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                  SizedBox(height: res.vp(14)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: update?.fraction,
+                      minHeight: 5,
+                    ),
+                  ),
+                  SizedBox(height: res.vp(14)),
+                  Text(
+                    'Veo takes a few minutes per shot. Keep the app open — '
+                    'the clip downloads as soon as it is ready.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: res.sp(11),
+                      color: AppColors.textFaint,
+                    ),
+                  ),
+                  SizedBox(height: res.vp(18)),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.danger,
+                      side: BorderSide(
+                        color: AppColors.danger.withValues(alpha: 0.5),
+                      ),
+                      minimumSize: Size(0, res.tap(40)),
+                    ),
+                    icon: Icon(Icons.stop_circle_outlined, size: res.ic(17)),
+                    label: const Text('Cancel'),
+                    onPressed: () => _cancel?.cancel(),
+                  ),
+                ],
               ),
             ),
           ),
@@ -432,17 +548,23 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
   }
 
   Widget _sectionLabel(String text) => Padding(
-        padding: EdgeInsets.only(left: 4, bottom: context.r.vp(8)),
-        child: Text(text,
-            style: TextStyle(
-                fontSize: context.r.sp(12.5), fontWeight: FontWeight.w700)),
-      );
+    padding: EdgeInsets.only(left: 4, bottom: context.r.vp(8)),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: context.r.sp(12.5),
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 
   Widget _pill(IconData icon, String label) {
     final res = context.r;
     return Container(
       padding: EdgeInsets.symmetric(
-          horizontal: res.dp(10), vertical: res.vp(6)),
+        horizontal: res.dp(10),
+        vertical: res.vp(6),
+      ),
       decoration: BoxDecoration(
         color: AppColors.appBar.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(9),
@@ -452,38 +574,40 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
         children: [
           Icon(icon, size: res.ic(13), color: AppColors.appBarMuted),
           SizedBox(width: res.dp(6)),
-          Text(label,
-              style: TextStyle(
-                  fontSize: res.sp(11),
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.appBarMuted)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: res.sp(11),
+              fontWeight: FontWeight.w600,
+              color: AppColors.appBarMuted,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _card({required Widget child, EdgeInsets? padding}) => Container(
-        padding: padding ?? const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: child,
-      );
+    padding: padding ?? const EdgeInsets.symmetric(vertical: 8),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.divider),
+    ),
+    child: child,
+  );
 
   InputDecoration _fieldDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: AppColors.surfaceHigh,
-        hintStyle: const TextStyle(fontSize: 12.5, color: AppColors.textFaint),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      );
+    hintText: hint,
+    filled: true,
+    fillColor: AppColors.surfaceHigh,
+    hintStyle: const TextStyle(fontSize: 12.5, color: AppColors.textFaint),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+  );
 
   // ------------------------------------------------------------- actions
 
@@ -546,10 +670,14 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
         );
         if (!mounted) return;
         if (failure != null) {
-          messenger.showSnackBar(SnackBar(
-            content: Text('$failure Kept ${paths.length} of '
-                '${shots.length} shots.'),
-          ));
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                '$failure Kept ${paths.length} of '
+                '${shots.length} shots.',
+              ),
+            ),
+          );
         }
         Navigator.pop<Project>(context, project);
         return;
@@ -563,7 +691,8 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
       _cancel = null;
     });
     messenger.showSnackBar(
-        SnackBar(content: Text(failure ?? 'Nothing was generated.')));
+      SnackBar(content: Text(failure ?? 'Nothing was generated.')),
+    );
   }
 
   String _projectName(String prompt) {

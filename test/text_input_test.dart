@@ -16,7 +16,6 @@ import 'helpers/editor_tools.dart';
 import 'package:video_editor/ui/text_to_video/text_slides_screen.dart';
 import 'package:video_editor/ui/text_to_video/text_to_video_screen.dart';
 
-
 /// The windows a text field has to stay usable in.
 const Map<String, Size> _windows = {
   'small phone': Size(320, 568),
@@ -33,24 +32,25 @@ double _keyboardFor(Size window) =>
     window.height < 500 ? window.height * 0.55 : window.height * 0.38;
 
 Widget _host(Widget child) => ChangeNotifierProvider(
-      create: (_) => ProjectsController(),
-      child: MaterialApp(
-        theme: AppTheme.light,
-        scrollBehavior: const AppScrollBehavior(),
-        home: child,
-      ),
-    );
+  create: (_) => ProjectsController(),
+  child: MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    scrollBehavior: const AppScrollBehavior(),
+    home: child,
+  ),
+);
 
 Project _project() => Project(
-      name: 'Typing',
-      clips: [
-        VideoClip(
-          path: '/nonexistent/clip.jpg',
-          isImage: true,
-          sourceDuration: const Duration(seconds: 4),
-        ),
-      ],
-    );
+  name: 'Typing',
+  clips: [
+    VideoClip(
+      path: '/nonexistent/clip.jpg',
+      isImage: true,
+      sourceDuration: const Duration(seconds: 4),
+    ),
+  ],
+);
 
 /// Sizes the window. The keyboard is down, as it is when the user is still
 /// looking for the tool that opens the field.
@@ -79,13 +79,23 @@ void _expectUsable(
   final rect = tester.getRect(field);
   final floor = window.height - _keyboardFor(window);
 
-  expect(rect.height, greaterThan(16),
-      reason: '$where: the field is collapsed ($rect)');
-  expect(rect.top, greaterThanOrEqualTo(-0.5),
-      reason: '$where: the field is off the top of the window ($rect)');
-  expect(rect.top, lessThan(floor),
-      reason: '$where: the field starts under the keyboard — '
-          'window ${window.height}, keyboard floor $floor, field $rect');
+  expect(
+    rect.height,
+    greaterThan(16),
+    reason: '$where: the field is collapsed ($rect)',
+  );
+  expect(
+    rect.top,
+    greaterThanOrEqualTo(-0.5),
+    reason: '$where: the field is off the top of the window ($rect)',
+  );
+  expect(
+    rect.top,
+    lessThan(floor),
+    reason:
+        '$where: the field starts under the keyboard — '
+        'window ${window.height}, keyboard floor $floor, field $rect',
+  );
 }
 
 /// The editor toolbar is a lazily-built strip — sideways under the preview,
@@ -100,11 +110,15 @@ Future<void> _tapTool(WidgetTester tester, String label) async {
 /// Some panels wait on a platform answer (voices, saved settings) that only
 /// arrives off the fake clock. Pump and yield to the real event loop until
 /// [target] shows up, rather than betting on a fixed delay.
-Future<void> _settleFor(WidgetTester tester, Finder target,
-    {int tries = 20}) async {
+Future<void> _settleFor(
+  WidgetTester tester,
+  Finder target, {
+  int tries = 20,
+}) async {
   for (var i = 0; i < tries && target.evaluate().isEmpty; i++) {
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 40)));
+      () => Future<void>.delayed(const Duration(milliseconds: 40)),
+    );
     await tester.pump(const Duration(milliseconds: 100));
   }
 }
@@ -119,15 +133,17 @@ void main() {
     sandbox = Directory.systemTemp.createTempSync('text_input');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async => sandbox.path,
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async => sandbox.path,
+        );
   });
 
   tearDownAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/path_provider'), null);
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
     if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
   });
   group('the editor text panel', () {
@@ -144,8 +160,12 @@ void main() {
         await _raiseKeyboard(tester, entry.value);
 
         final field = find.byType(TextField);
-        _expectUsable(tester, field,
-            window: entry.value, where: 'editor text panel on ${entry.key}');
+        _expectUsable(
+          tester,
+          field,
+          window: entry.value,
+          where: 'editor text panel on ${entry.key}',
+        );
 
         await tester.enterText(field, 'Hello world');
         await tester.pump(const Duration(seconds: 1));
@@ -169,8 +189,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         await _raiseKeyboard(tester, entry.value);
 
-        _expectUsable(tester, field,
-            window: entry.value, where: 'prompt on ${entry.key}');
+        _expectUsable(
+          tester,
+          field,
+          window: entry.value,
+          where: 'prompt on ${entry.key}',
+        );
 
         await tester.enterText(field, 'A drone shot over a lake');
         await tester.pump(const Duration(milliseconds: 300));
@@ -192,8 +216,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         await _raiseKeyboard(tester, entry.value);
 
-        _expectUsable(tester, field,
-            window: entry.value, where: 'slides title on ${entry.key}');
+        _expectUsable(
+          tester,
+          field,
+          window: entry.value,
+          where: 'slides title on ${entry.key}',
+        );
 
         await tester.enterText(field, 'My title');
         await tester.pump(const Duration(milliseconds: 300));
@@ -219,8 +247,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
         await _raiseKeyboard(tester, entry.value);
 
-        _expectUsable(tester, field,
-            window: entry.value, where: 'watermark on ${entry.key}');
+        _expectUsable(
+          tester,
+          field,
+          window: entry.value,
+          where: 'watermark on ${entry.key}',
+        );
 
         await tester.enterText(field, '@myhandle');
         await tester.pump(const Duration(seconds: 1));
@@ -244,8 +276,12 @@ void main() {
         await _raiseKeyboard(tester, entry.value);
 
         final field = find.byType(TextField);
-        _expectUsable(tester, field,
-            window: entry.value, where: 'rename dialog on ${entry.key}');
+        _expectUsable(
+          tester,
+          field,
+          window: entry.value,
+          where: 'rename dialog on ${entry.key}',
+        );
 
         await tester.enterText(field, 'Renamed');
         await tester.pump(const Duration(milliseconds: 200));
@@ -256,7 +292,6 @@ void main() {
       });
     }
   });
-
 
   group('the text to speech panel', () {
     for (final entry in _windows.entries) {
@@ -275,8 +310,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
         await _raiseKeyboard(tester, entry.value);
 
-        _expectUsable(tester, field,
-            window: entry.value, where: 'tts on ${entry.key}');
+        _expectUsable(
+          tester,
+          field,
+          window: entry.value,
+          where: 'tts on ${entry.key}',
+        );
 
         await tester.enterText(field, 'Read this out loud');
         await tester.pump(const Duration(milliseconds: 300));
@@ -287,16 +326,19 @@ void main() {
   });
 
   group('the second field on a screen', () {
-    testWidgets('the text to video negative prompt takes typing',
-        (tester) async {
+    testWidgets('the text to video negative prompt takes typing', (
+      tester,
+    ) async {
       const window = Size(390, 844);
       _useWindow(tester, window);
       await tester.pumpWidget(_host(const TextToVideoScreen()));
       await _settleFor(tester, find.byType(TextField));
 
       // It lives behind a disclosure, so it only exists once expanded.
-      await tester.tap(find.text('Things to avoid (optional)'),
-          warnIfMissed: false);
+      await tester.tap(
+        find.text('Things to avoid (optional)'),
+        warnIfMissed: false,
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       final field = find.byType(TextField).last;

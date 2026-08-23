@@ -9,19 +9,22 @@ import 'package:video_editor/data/models/video_clip.dart';
 void main() {
   group('keyframe interpolation', () {
     KeyframeTrack track() => KeyframeTrack(
-          property: KeyframeProperty.scale,
-          keys: [
-            Keyframe(
-                time: Duration.zero, value: 1, easing: KeyframeEasing.linear),
-            Keyframe(
-                time: const Duration(seconds: 2),
-                value: 2,
-                easing: KeyframeEasing.linear),
-          ],
-        );
+      property: KeyframeProperty.scale,
+      keys: [
+        Keyframe(time: Duration.zero, value: 1, easing: KeyframeEasing.linear),
+        Keyframe(
+          time: const Duration(seconds: 2),
+          value: 2,
+          easing: KeyframeEasing.linear,
+        ),
+      ],
+    );
 
     test('interpolates linearly between two keys', () {
-      expect(track().valueAt(const Duration(seconds: 1), 0), closeTo(1.5, 1e-9));
+      expect(
+        track().valueAt(const Duration(seconds: 1), 0),
+        closeTo(1.5, 1e-9),
+      );
     });
 
     test('holds the first and last value outside the range', () {
@@ -48,9 +51,10 @@ void main() {
         keys: [
           Keyframe(time: Duration.zero, value: 0),
           Keyframe(
-              time: const Duration(seconds: 2),
-              value: 1,
-              easing: KeyframeEasing.hold),
+            time: const Duration(seconds: 2),
+            value: 1,
+            easing: KeyframeEasing.hold,
+          ),
         ],
       );
       expect(t.valueAt(const Duration(milliseconds: 1900), 0), 0);
@@ -76,7 +80,11 @@ void main() {
       final restored = VideoClip.fromJson(clip.toJson());
       expect(restored.hasKeyframes, isTrue);
       expect(
-        restored.animated(KeyframeProperty.scale, const Duration(seconds: 1), 1),
+        restored.animated(
+          KeyframeProperty.scale,
+          const Duration(seconds: 1),
+          1,
+        ),
         closeTo(1.8, 1e-9),
       );
     });
@@ -143,16 +151,20 @@ void main() {
     });
 
     test('animation categories cover the whole list', () {
-      final grouped =
-          LayerAnimation.categories.expand(LayerAnimation.byCategory).toSet();
+      final grouped = LayerAnimation.categories
+          .expand(LayerAnimation.byCategory)
+          .toSet();
       expect(grouped.length, LayerAnimation.values.length);
     });
 
     test('a text preset writes every style field onto the layer', () {
       final layer = TextLayer(
-          start: Duration.zero, duration: const Duration(seconds: 2));
-      final preset = TextPresetLibrary.all
-          .firstWhere((p) => p.id == 'neonCyan');
+        start: Duration.zero,
+        duration: const Duration(seconds: 2),
+      );
+      final preset = TextPresetLibrary.all.firstWhere(
+        (p) => p.id == 'neonCyan',
+      );
       preset.applyTo(layer);
       expect(layer.fontFamily, preset.fontFamily);
       expect(layer.shadowBlur, preset.shadowBlur);

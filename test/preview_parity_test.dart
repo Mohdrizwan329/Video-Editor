@@ -33,10 +33,15 @@ void main() {
     test('fades up from black and back down to it', () {
       final c = clip();
       expect(c.fadeGainAt(Duration.zero), 0);
-      expect(c.fadeGainAt(const Duration(milliseconds: 500)), closeTo(0.5, 0.01));
+      expect(
+        c.fadeGainAt(const Duration(milliseconds: 500)),
+        closeTo(0.5, 0.01),
+      );
       expect(c.fadeGainAt(const Duration(seconds: 2)), 1);
-      expect(c.fadeGainAt(const Duration(milliseconds: 3500)),
-          closeTo(0.5, 0.01));
+      expect(
+        c.fadeGainAt(const Duration(milliseconds: 3500)),
+        closeTo(0.5, 0.01),
+      );
       expect(c.fadeGainAt(const Duration(seconds: 4)), 0);
     });
 
@@ -73,6 +78,7 @@ void main() {
       ChangeNotifierProvider(
         create: (_) => ProjectsController(),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           scrollBehavior: const AppScrollBehavior(),
           home: EditorScreen(project: project),
@@ -152,11 +158,7 @@ void main() {
       clips.first
         ..transitionType = transition
         ..transitionDuration = const Duration(milliseconds: 600);
-      return Project(
-        name: 'Join',
-        ratio: CanvasRatio.r9x16,
-        clips: clips,
-      );
+      return Project(name: 'Join', ratio: CanvasRatio.r9x16, clips: clips);
     }
 
     Future<EditorController> open(WidgetTester tester, Project project) async {
@@ -167,6 +169,7 @@ void main() {
         ChangeNotifierProvider(
           create: (_) => ProjectsController(),
           child: MaterialApp(
+            debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             scrollBehavior: const AppScrollBehavior(),
             home: EditorScreen(project: project),
@@ -224,6 +227,7 @@ void main() {
       for (final type in TransitionType.values) {
         await tester.pumpWidget(
           MaterialApp(
+            debugShowCheckedModeBanner: false,
             home: SizedBox(
               width: 200,
               height: 300,

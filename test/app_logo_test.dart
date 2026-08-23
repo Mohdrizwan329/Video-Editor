@@ -8,7 +8,9 @@ import 'package:video_editor/ui/widgets/app_logo.dart';
 void main() {
   testWidgets('AppLogo paints the bundled logo asset', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: Center(child: AppLogo()))),
+      const MaterialApp(
+        home: Scaffold(body: Center(child: AppLogo())),
+      ),
     );
 
     final image = tester.widget<Image>(find.byType(Image));
@@ -19,6 +21,7 @@ void main() {
   testWidgets('AppLogo fills the size it is given', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        debugShowCheckedModeBanner: false,
         home: Scaffold(body: Center(child: AppLogo(size: 120, glow: true))),
       ),
     );

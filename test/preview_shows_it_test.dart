@@ -41,10 +41,7 @@ void main() {
     final c = clip()..fadeOut = const Duration(seconds: 1);
     expect(c.opacityAt(Duration.zero), 1.0);
     expect(c.opacityAt(const Duration(seconds: 3)), 1.0);
-    expect(
-      c.opacityAt(const Duration(milliseconds: 3500)),
-      closeTo(0.5, 1e-9),
-    );
+    expect(c.opacityAt(const Duration(milliseconds: 3500)), closeTo(0.5, 1e-9));
     expect(c.opacityAt(const Duration(seconds: 4)), 0.0);
   });
 

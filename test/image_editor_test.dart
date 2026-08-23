@@ -3,7 +3,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:video_editor/ui/editor/panels/effects_panel.dart' show PresetTile;
+import 'package:video_editor/ui/editor/panels/effects_panel.dart'
+    show PresetTile;
 import 'package:video_editor/core/theme/app_theme.dart';
 import 'package:video_editor/data/models/layers.dart';
 import 'package:video_editor/data/models/photo_edit.dart';
@@ -13,8 +14,7 @@ import 'package:video_editor/data/services/photo_renderer.dart';
 import 'package:video_editor/ui/image_editor/image_editor_screen.dart';
 import 'package:video_editor/ui/image_editor/widgets/crop_overlay.dart';
 
-Widget _host(Widget child) =>
-    MaterialApp(theme: AppTheme.light, home: child);
+Widget _host(Widget child) => MaterialApp(theme: AppTheme.light, home: child);
 
 /// A [width]x[height] picture whose left half is red and right half is blue —
 /// enough asymmetry to tell a mirror from a turn from a no-op.
@@ -24,9 +24,13 @@ Future<ui.Image> _twoTone(WidgetTester tester, int width, int height) async {
     final canvas = Canvas(recorder);
     final w = width.toDouble(), h = height.toDouble();
     canvas.drawRect(
-        Rect.fromLTWH(0, 0, w / 2, h), Paint()..color = const Color(0xFFFF0000));
-    canvas.drawRect(Rect.fromLTWH(w / 2, 0, w / 2, h),
-        Paint()..color = const Color(0xFF0000FF));
+      Rect.fromLTWH(0, 0, w / 2, h),
+      Paint()..color = const Color(0xFFFF0000),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(w / 2, 0, w / 2, h),
+      Paint()..color = const Color(0xFF0000FF),
+    );
     final picture = recorder.endRecording();
     final out = await picture.toImage(width, height);
     picture.dispose();
@@ -114,8 +118,9 @@ void main() {
   });
 
   group('the photo renderer', () {
-    testWidgets('the output size follows the crop and the turns',
-        (tester) async {
+    testWidgets('the output size follows the crop and the turns', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 100, 50);
       addTearDown(source.dispose);
 
@@ -153,8 +158,9 @@ void main() {
       expect(colour.r, lessThan(0.25));
     });
 
-    testWidgets('a clockwise turn puts the left edge along the top',
-        (tester) async {
+    testWidgets('a clockwise turn puts the left edge along the top', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 100, 50);
       addTearDown(source.dispose);
 
@@ -165,8 +171,9 @@ void main() {
       expect(colour.b, lessThan(0.25));
     });
 
-    testWidgets('a greyscale look drains the colour out of the file',
-        (tester) async {
+    testWidgets('a greyscale look drains the colour out of the file', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 100, 50);
       addTearDown(source.dispose);
 
@@ -176,8 +183,9 @@ void main() {
       expect((colour.g - colour.b).abs(), lessThan(0.05));
     });
 
-    testWidgets('half strength lands between the photo and the look',
-        (tester) async {
+    testWidgets('half strength lands between the photo and the look', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 100, 50);
       addTearDown(source.dispose);
 
@@ -195,24 +203,29 @@ void main() {
   group('the crop rectangle', () {
     testWidgets('a locked ratio survives a corner drag', (tester) async {
       Rect? reported;
-      await tester.pumpWidget(_host(
-        Center(
-          child: SizedBox(
-            width: 300,
-            height: 300,
-            child: CropOverlay(
-              rect: const Rect.fromLTRB(0, 0, 1, 1),
-              aspect: 1,
-              onChanged: (r) => reported = r,
-              onCommit: () {},
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: SizedBox(
+              width: 300,
+              height: 300,
+              child: CropOverlay(
+                rect: const Rect.fromLTRB(0, 0, 1, 1),
+                aspect: 1,
+                onChanged: (r) => reported = r,
+                onCommit: () {},
+              ),
             ),
           ),
         ),
-      ));
+      );
 
       // From the bottom-right corner, inwards and much further in x than y.
       final corner = tester.getBottomRight(find.byType(CropOverlay));
-      await tester.dragFrom(corner - const Offset(2, 2), const Offset(-120, -20));
+      await tester.dragFrom(
+        corner - const Offset(2, 2),
+        const Offset(-120, -20),
+      );
       await tester.pump();
 
       expect(reported, isNotNull);
@@ -223,22 +236,25 @@ void main() {
       expect(r.top, closeTo(0, 1e-9));
     });
 
-    testWidgets('a free rectangle never turns itself inside out',
-        (tester) async {
+    testWidgets('a free rectangle never turns itself inside out', (
+      tester,
+    ) async {
       Rect? reported;
-      await tester.pumpWidget(_host(
-        Center(
-          child: SizedBox(
-            width: 300,
-            height: 300,
-            child: CropOverlay(
-              rect: const Rect.fromLTRB(0, 0, 1, 1),
-              onChanged: (r) => reported = r,
-              onCommit: () {},
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: SizedBox(
+              width: 300,
+              height: 300,
+              child: CropOverlay(
+                rect: const Rect.fromLTRB(0, 0, 1, 1),
+                onChanged: (r) => reported = r,
+                onCommit: () {},
+              ),
             ),
           ),
         ),
-      ));
+      );
 
       // Drag the left edge far past the right one.
       final left = tester.getCenter(find.byType(CropOverlay));
@@ -255,10 +271,10 @@ void main() {
     });
   });
 
-
   group('the brushes', () {
-    testWidgets('a mosaic stroke averages what it is painted over',
-        (tester) async {
+    testWidgets('a mosaic stroke averages what it is painted over', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 200, 200);
       addTearDown(source.dispose);
 
@@ -271,28 +287,37 @@ void main() {
       // coarsest block the slider offers.
       final edit = PhotoEdit()
         ..pixelSize = 1
-        ..pixelate.add(PhotoStroke(
-          width: 0.5,
-          points: const [Offset(0.5, 0.2), Offset(0.5, 0.5), Offset(0.5, 0.8)],
-        ));
+        ..pixelate.add(
+          PhotoStroke(
+            width: 0.5,
+            points: const [
+              Offset(0.5, 0.2),
+              Offset(0.5, 0.5),
+              Offset(0.5, 0.8),
+            ],
+          ),
+        );
       final (after, _) = await _renderAt(tester, source, edit, 0.49, 0.5);
       // A block that straddles the seam is half of each half.
-      expect(after.b, greaterThan(0.2),
-          reason: 'the block should have pulled blue across the seam');
+      expect(
+        after.b,
+        greaterThan(0.2),
+        reason: 'the block should have pulled blue across the seam',
+      );
       expect(after.r, lessThan(before.r));
     });
 
-    testWidgets('a mosaic leaves everything outside the stroke alone',
-        (tester) async {
+    testWidgets('a mosaic leaves everything outside the stroke alone', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 200, 200);
       addTearDown(source.dispose);
 
       final edit = PhotoEdit()
         ..pixelSize = 1
-        ..pixelate.add(PhotoStroke(
-          width: 0.3,
-          points: const [Offset(0.5, 0.5)],
-        ));
+        ..pixelate.add(
+          PhotoStroke(width: 0.3, points: const [Offset(0.5, 0.5)]),
+        );
       final (corner, _) = await _renderAt(tester, source, edit, 0.05, 0.05);
       expect(corner.r, greaterThan(0.8));
       expect(corner.b, lessThan(0.2));
@@ -303,11 +328,13 @@ void main() {
       addTearDown(source.dispose);
 
       final edit = PhotoEdit()
-        ..markup.add(PhotoStroke(
-          color: 0xFF00FF00,
-          width: 0.25,
-          points: const [Offset(0.7, 0.2), Offset(0.7, 0.8)],
-        ));
+        ..markup.add(
+          PhotoStroke(
+            color: 0xFF00FF00,
+            width: 0.25,
+            points: const [Offset(0.7, 0.2), Offset(0.7, 0.8)],
+          ),
+        );
       final (ink, _) = await _renderAt(tester, source, edit, 0.7, 0.5);
       expect(ink.g, greaterThan(0.8), reason: 'the stroke should be there');
       expect(ink.b, lessThan(0.3));
@@ -317,39 +344,44 @@ void main() {
       expect(clear.r, greaterThan(0.8));
     });
 
-    testWidgets('the eraser takes ink off without taking the photo with it',
-        (tester) async {
+    testWidgets('the eraser takes ink off without taking the photo with it', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 200, 200);
       addTearDown(source.dispose);
 
       final edit = PhotoEdit()
-        ..markup.add(PhotoStroke(
-          color: 0xFF00FF00,
-          width: 0.25,
-          points: const [Offset(0.7, 0.2), Offset(0.7, 0.8)],
-        ))
-        ..markup.add(PhotoStroke(
-          erase: true,
-          width: 0.4,
-          points: const [Offset(0.7, 0.2), Offset(0.7, 0.8)],
-        ));
+        ..markup.add(
+          PhotoStroke(
+            color: 0xFF00FF00,
+            width: 0.25,
+            points: const [Offset(0.7, 0.2), Offset(0.7, 0.8)],
+          ),
+        )
+        ..markup.add(
+          PhotoStroke(
+            erase: true,
+            width: 0.4,
+            points: const [Offset(0.7, 0.2), Offset(0.7, 0.8)],
+          ),
+        );
       final (rubbed, _) = await _renderAt(tester, source, edit, 0.7, 0.5);
       expect(rubbed.g, lessThan(0.3), reason: 'the ink should be gone');
       expect(rubbed.b, greaterThan(0.8), reason: 'the photo should not be');
       expect(rubbed.a, greaterThan(0.99), reason: 'and it should be opaque');
     });
 
-    testWidgets('the healing brush only softens where it was dabbed',
-        (tester) async {
+    testWidgets('the healing brush only softens where it was dabbed', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 200, 200);
       addTearDown(source.dispose);
 
       final edit = PhotoEdit()
         ..retouchStrength = 1
-        ..retouch.add(PhotoStroke(
-          width: 0.4,
-          points: const [Offset(0.5, 0.5)],
-        ));
+        ..retouch.add(
+          PhotoStroke(width: 0.4, points: const [Offset(0.5, 0.5)]),
+        );
       // On the seam, under the dab: the blur pulls the two halves together.
       final (soft, _) = await _renderAt(tester, source, edit, 0.49, 0.5);
       expect(soft.b, greaterThan(0.1));
@@ -365,14 +397,16 @@ void main() {
       addTearDown(source.dispose);
 
       final edit = PhotoEdit()
-        ..texts.add(TextLayer(
-          start: Duration.zero,
-          duration: const Duration(hours: 6),
-          text: 'HELLO',
-          fontSize: 90,
-          backgroundColor: 0xFF00FF00,
-          backgroundPadding: 40,
-        ));
+        ..texts.add(
+          TextLayer(
+            start: Duration.zero,
+            duration: const Duration(hours: 6),
+            text: 'HELLO',
+            fontSize: 90,
+            backgroundColor: 0xFF00FF00,
+            backgroundPadding: 40,
+          ),
+        );
       final (colour, _) = await _renderAt(tester, source, edit, 0.5, 0.5);
       expect(colour.g, greaterThan(0.5), reason: 'the caption backdrop');
     });
@@ -382,20 +416,23 @@ void main() {
       addTearDown(source.dispose);
 
       final edit = PhotoEdit()
-        ..stickers.add(StickerLayer(
-          start: Duration.zero,
-          duration: const Duration(hours: 6),
-          content: 'square',
-          isEmoji: false,
-          color: 0xFF00FF00,
-          size: 600,
-        ));
+        ..stickers.add(
+          StickerLayer(
+            start: Duration.zero,
+            duration: const Duration(hours: 6),
+            content: 'square',
+            isEmoji: false,
+            color: 0xFF00FF00,
+            size: 600,
+          ),
+        );
       final (colour, _) = await _renderAt(tester, source, edit, 0.5, 0.5);
       expect(colour.g, greaterThan(0.8));
     });
 
-    testWidgets('an enabled watermark is burned in, a disabled one is not',
-        (tester) async {
+    testWidgets('an enabled watermark is burned in, a disabled one is not', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 200, 200);
       addTearDown(source.dispose);
 
@@ -416,8 +453,9 @@ void main() {
       expect(bare.g, lessThan(0.2));
     });
 
-    testWidgets('an overlay is hit where it is drawn and not beside it',
-        (tester) async {
+    testWidgets('an overlay is hit where it is drawn and not beside it', (
+      tester,
+    ) async {
       final layer = TextLayer(
         start: Duration.zero,
         duration: const Duration(hours: 6),
@@ -445,8 +483,9 @@ void main() {
       expect(face.isNeutral, isTrue);
     });
 
-    testWidgets('a photo with no skin in it is left exactly as it was',
-        (tester) async {
+    testWidgets('a photo with no skin in it is left exactly as it was', (
+      tester,
+    ) async {
       final source = await _twoTone(tester, 120, 120);
       addTearDown(source.dispose);
 
@@ -463,11 +502,15 @@ void main() {
       final source = await tester.runAsync(() async {
         final recorder = ui.PictureRecorder();
         final canvas = Canvas(recorder);
-        canvas.drawRect(const Rect.fromLTWH(0, 0, 120, 120),
-            Paint()..color = const Color(0xFF203040));
+        canvas.drawRect(
+          const Rect.fromLTWH(0, 0, 120, 120),
+          Paint()..color = const Color(0xFF203040),
+        );
         // A patch of a complexion, big enough to count as a face.
-        canvas.drawRect(const Rect.fromLTWH(0, 0, 120, 60),
-            Paint()..color = const Color(0xFFDCAA8C));
+        canvas.drawRect(
+          const Rect.fromLTWH(0, 0, 120, 60),
+          Paint()..color = const Color(0xFFDCAA8C),
+        );
         final picture = recorder.endRecording();
         final image = await picture.toImage(120, 120);
         picture.dispose();
@@ -519,11 +562,13 @@ void main() {
       final e = PhotoEdit()
         ..markup.add(PhotoStroke(points: const [Offset(0.1, 0.1)]))
         ..pixelate.add(PhotoStroke(points: const [Offset(0.2, 0.2)]))
-        ..texts.add(TextLayer(
-          start: Duration.zero,
-          duration: const Duration(hours: 6),
-          text: 'one',
-        ))
+        ..texts.add(
+          TextLayer(
+            start: Duration.zero,
+            duration: const Duration(hours: 6),
+            text: 'one',
+          ),
+        )
         ..watermark.text = 'before';
 
       final copy = e.copy();
@@ -548,10 +593,12 @@ void main() {
   });
 
   group('the image editor screen', () {
-    testWidgets('offers every tool and swaps the panel under it',
-        (tester) async {
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+    testWidgets('offers every tool and swaps the panel under it', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       for (final tool in const [
@@ -585,8 +632,9 @@ void main() {
       expect(find.text('Brightness'), findsNothing);
     });
 
-    testWidgets('every tool panel fits the smallest and largest windows',
-        (tester) async {
+    testWidgets('every tool panel fits the smallest and largest windows', (
+      tester,
+    ) async {
       const windows = [
         Size(320, 568),
         Size(390, 844),
@@ -599,16 +647,19 @@ void main() {
           tester.view.devicePixelRatio = 1.0;
           addTearDown(tester.view.reset);
 
-          await tester.pumpWidget(MaterialApp(
-            theme: AppTheme.light,
-            home: MediaQuery(
-              data: MediaQueryData(
-                size: window,
-                textScaler: TextScaler.linear(scale),
+          await tester.pumpWidget(
+            MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              home: MediaQuery(
+                data: MediaQueryData(
+                  size: window,
+                  textScaler: TextScaler.linear(scale),
+                ),
+                child: const ImageEditorScreen(path: '/nonexistent.jpg'),
               ),
-              child: const ImageEditorScreen(path: '/nonexistent.jpg'),
             ),
-          ));
+          );
           await tester.pump(const Duration(milliseconds: 200));
 
           for (final tool in const [
@@ -627,7 +678,8 @@ void main() {
             expect(
               tester.takeException(),
               isNull,
-              reason: 'the $tool panel broke at '
+              reason:
+                  'the $tool panel broke at '
                   '${window.width}x${window.height} @ ${scale}x',
             );
           }
@@ -635,17 +687,18 @@ void main() {
       }
     });
 
-
-    testWidgets('a panel is only as tall as the controls in it',
-        (tester) async {
+    testWidgets('a panel is only as tall as the controls in it', (
+      tester,
+    ) async {
       // A phone, where the ceiling is what the window can spare once the
       // photo has kept its minimum.
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       double panel() =>
@@ -658,18 +711,24 @@ void main() {
       await _tapTool(tester, 'Adjust');
       final full = panel();
 
-      expect(short, lessThan(full),
-          reason: 'the short panel is still opening at the full height, so '
-              'the space under its last control is empty');
+      expect(
+        short,
+        lessThan(full),
+        reason:
+            'the short panel is still opening at the full height, so '
+            'the space under its last control is empty',
+      );
       // Nothing is allowed past the ceiling either — that room is the
       // photo's, and it keeps the larger half of the window.
       expect(full, lessThan(844 * 0.5));
     });
 
-    testWidgets('a sticker is placed, selected, and can be taken off again',
-        (tester) async {
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+    testWidgets('a sticker is placed, selected, and can be taken off again', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       await _tapTool(tester, 'Sticker');
@@ -700,8 +759,9 @@ void main() {
     });
 
     testWidgets('adding text asks for the words', (tester) async {
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       await _tapTool(tester, 'Text');
@@ -724,8 +784,9 @@ void main() {
     });
 
     testWidgets('a caption typed empty is a caption deleted', (tester) async {
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       await _tapTool(tester, 'Text');
@@ -740,8 +801,9 @@ void main() {
     });
 
     testWidgets('the watermark is off until it is switched on', (tester) async {
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       await _tapTool(tester, 'Watermark');
@@ -756,8 +818,9 @@ void main() {
     });
 
     testWidgets('the brushes offer their own controls', (tester) async {
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       await _tapTool(tester, 'Doodle');
@@ -785,8 +848,9 @@ void main() {
     });
 
     testWidgets('an edit can be undone and redone', (tester) async {
-      await tester
-          .pumpWidget(_host(const ImageEditorScreen(path: '/nonexistent.jpg')));
+      await tester.pumpWidget(
+        _host(const ImageEditorScreen(path: '/nonexistent.jpg')),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       await _tapTool(tester, 'Filter');

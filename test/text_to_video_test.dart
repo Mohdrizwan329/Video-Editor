@@ -13,13 +13,15 @@ void main() {
   group('scene splitting', () {
     test('every line becomes its own scene', () {
       final scenes = TextToVideoService.splitScenes(
-          'First line\nSecond line\n\n  \nThird line');
+        'First line\nSecond line\n\n  \nThird line',
+      );
       expect(scenes, ['First line', 'Second line', 'Third line']);
     });
 
     test('sentences inside one line split, keeping their punctuation', () {
       final scenes = TextToVideoService.splitScenes(
-          'One thing happened. Then another! And you? Done');
+        'One thing happened. Then another! And you? Done',
+      );
       expect(scenes, [
         'One thing happened.',
         'Then another!',
@@ -53,17 +55,23 @@ void main() {
   group('line wrapping', () {
     test('wraps at the budget without splitting words', () {
       final wrapped = TextToVideoService.wrapLines(
-          'the quick brown fox jumps over the lazy dog', 14);
+        'the quick brown fox jumps over the lazy dog',
+        14,
+      );
       for (final line in wrapped.split('\n')) {
         expect(line.length, lessThanOrEqualTo(14));
       }
-      expect(wrapped.replaceAll('\n', ' '),
-          'the quick brown fox jumps over the lazy dog');
+      expect(
+        wrapped.replaceAll('\n', ' '),
+        'the quick brown fox jumps over the lazy dog',
+      );
     });
 
     test('a word longer than the budget stays on its own line', () {
-      final wrapped =
-          TextToVideoService.wrapLines('short supercalifragilistic end', 10);
+      final wrapped = TextToVideoService.wrapLines(
+        'short supercalifragilistic end',
+        10,
+      );
       expect(wrapped.split('\n'), ['short', 'supercalifragilistic', 'end']);
     });
   });
@@ -72,22 +80,32 @@ void main() {
     test('grows with the number of scenes', () {
       const one = TextToVideoRequest(script: 'One line');
       const three = TextToVideoRequest(script: 'One line\nTwo\nThree');
-      expect(TextToVideoService.estimate(three),
-          greaterThan(TextToVideoService.estimate(one)));
+      expect(
+        TextToVideoService.estimate(three),
+        greaterThan(TextToVideoService.estimate(one)),
+      );
     });
 
     test('an empty script estimates nothing', () {
-      expect(TextToVideoService.estimate(const TextToVideoRequest(script: '')),
-          Duration.zero);
+      expect(
+        TextToVideoService.estimate(const TextToVideoRequest(script: '')),
+        Duration.zero,
+      );
     });
 
     test('a longer scene floor makes a longer video', () {
       const fast = TextToVideoRequest(
-          script: 'A\nB\nC', sceneDuration: Duration(seconds: 2));
+        script: 'A\nB\nC',
+        sceneDuration: Duration(seconds: 2),
+      );
       const slow = TextToVideoRequest(
-          script: 'A\nB\nC', sceneDuration: Duration(seconds: 6));
-      expect(TextToVideoService.estimate(slow),
-          greaterThan(TextToVideoService.estimate(fast)));
+        script: 'A\nB\nC',
+        sceneDuration: Duration(seconds: 6),
+      );
+      expect(
+        TextToVideoService.estimate(slow),
+        greaterThan(TextToVideoService.estimate(fast)),
+      );
     });
   });
 
@@ -127,20 +145,23 @@ void main() {
       sandbox = Directory.systemTemp.createTempSync('t2v_test');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
-        const MethodChannel('plugins.flutter.io/path_provider'),
-        (call) async => sandbox.path,
-      );
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            (call) async => sandbox.path,
+          );
     });
 
     tearDownAll(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
-              const MethodChannel('plugins.flutter.io/path_provider'), null);
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            null,
+          );
       if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
     });
 
-    testWidgets('builds a clip, artwork and a text layer per scene',
-        (tester) async {
+    testWidgets('builds a clip, artwork and a text layer per scene', (
+      tester,
+    ) async {
       Project? built;
       await tester.runAsync(() async {
         built = await TextToVideoService.instance.generate(
@@ -162,8 +183,11 @@ void main() {
       for (final clip in p.clips) {
         expect(clip.isImage, isTrue);
         expect(clip.hasAudio, isFalse);
-        expect(File(clip.path).existsSync(), isTrue,
-            reason: 'scene artwork must be written to disk');
+        expect(
+          File(clip.path).existsSync(),
+          isTrue,
+          reason: 'scene artwork must be written to disk',
+        );
         // 9:16 art at the service's 1920 long side, both sides even.
         expect(clip.sourceHeight, 1920);
         expect(clip.sourceWidth.isEven, isTrue);
@@ -186,8 +210,9 @@ void main() {
       );
     });
 
-    testWidgets('text is laid out inside each scene, never past its end',
-        (tester) async {
+    testWidgets('text is laid out inside each scene, never past its end', (
+      tester,
+    ) async {
       Project? built;
       await tester.runAsync(() async {
         built = await TextToVideoService.instance.generate(
@@ -202,12 +227,12 @@ void main() {
       }
     });
 
-    testWidgets('an empty script is refused rather than saved',
-        (tester) async {
+    testWidgets('an empty script is refused rather than saved', (tester) async {
       await tester.runAsync(() async {
         expect(
-          () => TextToVideoService.instance
-              .generate(const TextToVideoRequest(script: '   ')),
+          () => TextToVideoService.instance.generate(
+            const TextToVideoRequest(script: '   '),
+          ),
           throwsA(isA<TextToVideoException>()),
         );
       });
