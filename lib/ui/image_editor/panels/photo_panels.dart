@@ -327,45 +327,46 @@ extension _PhotoPanels on _ImageEditorScreenState {
     await _writeText(layer, fresh: true);
   }
 
+  /// Asks for a line of words and hands back what was typed, or null if the
+  /// user backed out.
+  ///
+  /// The controller belongs to the dialog rather than to this method. A
+  /// controller made out here has to be disposed when the await returns —
+  /// which is while the dialog is still animating away, and the field it
+  /// belongs to is still being built. That is a use-after-dispose, and it
+  /// threw every time a caption was typed.
+  Future<String?> _promptFor({
+    required String title,
+    required String hint,
+    required String initial,
+    bool selectAll = false,
+    int lines = 1,
+  }) {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => _TextPrompt(
+        title: title,
+        hint: hint,
+        initial: initial,
+        selectAll: selectAll,
+        lines: lines,
+      ),
+    );
+  }
+
   /// The keyboard, in a dialog. A caption is typed far more often than it is
   /// dragged, so it opens the moment one is added.
   ///
   /// Re-opening it on an existing caption selects the whole of it, so the
   /// first key replaces the words instead of running on from them.
   Future<void> _writeText(TextLayer layer, {bool fresh = false}) async {
-    final controller = TextEditingController(text: fresh ? '' : layer.text)
-      ..selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: fresh ? 0 : layer.text.length,
-      );
-    final typed = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Text'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          minLines: 1,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'Type something'),
-          onSubmitted: (v) => Navigator.pop(context, v),
-        ),
-        actions: [
-          TextButton(
-            style: AppTheme.outlinedAction(),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: AppTheme.outlinedAction(tone: AppColors.accent),
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
+    final typed = await _promptFor(
+      title: 'Text',
+      hint: 'Type something',
+      initial: fresh ? '' : layer.text,
+      selectAll: !fresh,
+      lines: 3,
     );
-    controller.dispose();
     // Backing out of a brand new caption takes the caption with it — the
     // user asked for words and gave none.
     if (typed == null) {
@@ -529,32 +530,11 @@ extension _PhotoPanels on _ImageEditorScreenState {
 
   Future<void> _writeMark() async {
     final mark = _edit.watermark;
-    final controller = TextEditingController(text: mark.text);
-    final typed = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Watermark'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Your brand'),
-          onSubmitted: (v) => Navigator.pop(context, v),
-        ),
-        actions: [
-          TextButton(
-            style: AppTheme.outlinedAction(),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: AppTheme.outlinedAction(tone: AppColors.accent),
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
+    final typed = await _promptFor(
+      title: 'Watermark',
+      hint: 'Your brand',
+      initial: mark.text,
     );
-    controller.dispose();
     if (typed == null) return;
     _edited(() {
       mark.text = typed;
@@ -686,10 +666,7 @@ extension _PhotoPanels on _ImageEditorScreenState {
       alignment: WrapAlignment.center,
       spacing: r.dp(6),
       runSpacing: r.vp(6),
-      children: [
-        for (final pill in pills)
-          _PillButton(pill: pill, scale: r),
-      ],
+      children: [for (final pill in pills) _PillButton(pill: pill, scale: r)],
     );
   }
 
@@ -788,6 +765,77 @@ class _PillButton extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A one-field dialog that owns its own controller.
+///
+/// The controller has to outlive the await that opens the dialog: the route
+/// is still animating out when that returns, so anything disposed there is
+/// disposed while the field is still being built.
+class _TextPrompt extends StatefulWidget {
+  const _TextPrompt({
+    required this.title,
+    required this.hint,
+    required this.initial,
+    required this.selectAll,
+    required this.lines,
+  });
+
+  final String title;
+  final String hint;
+  final String initial;
+
+  /// Re-opening on existing words selects the whole of them, so the first
+  /// key replaces what is there instead of running on from it.
+  final bool selectAll;
+
+  final int lines;
+
+  @override
+  State<_TextPrompt> createState() => _TextPromptState();
+}
+
+class _TextPromptState extends State<_TextPrompt> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial)
+        ..selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: widget.selectAll ? widget.initial.length : 0,
+        );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLines: widget.lines,
+        minLines: 1,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: InputDecoration(hintText: widget.hint),
+        onSubmitted: (v) => Navigator.pop(context, v),
+      ),
+      actions: [
+        TextButton(
+          style: AppTheme.outlinedAction(),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          style: AppTheme.outlinedAction(tone: AppColors.accent),
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('Done'),
+        ),
+      ],
     );
   }
 }
