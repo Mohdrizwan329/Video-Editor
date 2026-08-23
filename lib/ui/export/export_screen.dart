@@ -88,7 +88,10 @@ class _ExportScreenState extends State<ExportScreen> {
       padding: EdgeInsets.fromLTRB(r.gutter, r.vp(12), r.gutter, r.vp(12)),
       child: Column(
         children: [
-          Flexible(
+          // Expanded, not Flexible: the dials sit at the top and the button
+          // at the bottom of the screen, rather than the two of them bunched
+          // under the summary with the rest of the window left blank.
+          Expanded(
             child: SingleChildScrollView(
               physics: const NeverScrollableScrollPhysics(),
               child: Column(
