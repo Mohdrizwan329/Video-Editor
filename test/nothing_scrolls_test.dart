@@ -10,6 +10,7 @@ import 'package:video_editor/data/models/video_clip.dart';
 import 'package:video_editor/state/projects_controller.dart';
 import 'package:video_editor/ui/editor/editor_screen.dart';
 import 'package:video_editor/ui/export/export_screen.dart';
+import 'package:video_editor/ui/image_editor/image_editor_screen.dart';
 import 'package:video_editor/ui/widgets/panel_shell.dart';
 import 'package:video_editor/ui/editor/toolbar/editor_toolbar.dart';
 import 'helpers/editor_tools.dart';
@@ -145,6 +146,63 @@ void main() {
     // along the bottom of the editor, and it has always slid.
     await openEditor(tester);
     expect(scrollersIn(tester, find.byType(EditorToolbar)).isNotEmpty, isTrue);
+  });
+
+  testWidgets('Switch re-orders down the sheet rather than across it', (
+    tester,
+  ) async {
+    await openEditor(tester);
+    await tapEditorTool(tester, 'Switch');
+    await tester.pump(const Duration(milliseconds: 400));
+    if (find.byType(PanelShell).evaluate().isEmpty) return;
+
+    // A drag-to-reorder list is still a list, but it does not slide: the
+    // clips past the fold are behind the button, where the whole track is
+    // laid out and every one of them can still be dragged.
+    for (final scroller in scrollersIn(tester, find.byType(PanelShell))) {
+      expect(scroller.position.physics, isA<NeverScrollableScrollPhysics>());
+    }
+  });
+
+  testWidgets('the photo editor panel does not slide either', (tester) async {
+    tester.view.physicalSize =
+        const Size(390, 844) * tester.view.devicePixelRatio;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      const MaterialApp(home: ImageEditorScreen(path: '/nonexistent.jpg')),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Its tool bar slides, the way the editor's does — it is a strip of
+    // tools, not a panel. The panel above it must not.
+    final panel = find.byKey(const ValueKey('photo-panel'));
+    expect(panel, findsOneWidget);
+    for (final scroller in scrollersIn(tester, panel)) {
+      expect(scroller.position.physics, isA<NeverScrollableScrollPhysics>());
+    }
+  });
+
+  testWidgets('a photo tool too long for the panel names the way to the rest', (
+    tester,
+  ) async {
+    tester.view.physicalSize =
+        const Size(390, 844) * tester.view.devicePixelRatio;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      const MaterialApp(home: ImageEditorScreen(path: '/nonexistent.jpg')),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The tool bar is a strip; the tool has to be brought into view first.
+    await tester.ensureVisible(find.text('Watermark').last);
+    await tester.pump();
+    await tester.tap(find.text('Watermark').last);
+    await tester.pump(const Duration(milliseconds: 400));
+    // The overflow is measured after the frame that laid the panel out, so
+    // the button lands on the frame after that.
+    await tester.pump();
+
+    expect(find.text('More options'), findsOneWidget);
   });
 
   testWidgets('the export screen pins its button and hides no dial', (

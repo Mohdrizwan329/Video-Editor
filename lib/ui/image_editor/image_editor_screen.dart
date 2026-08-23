@@ -94,9 +94,7 @@ extension on _Tool {
   /// Tools that place something on the picture and then let it be dragged,
   /// pinched and turned.
   bool get isOverlay =>
-      this == _Tool.text ||
-      this == _Tool.sticker ||
-      this == _Tool.watermark;
+      this == _Tool.text || this == _Tool.sticker || this == _Tool.watermark;
 }
 
 class _ImageEditorScreenState extends State<ImageEditorScreen> {
@@ -165,6 +163,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
 
   @override
   void dispose() {
+    _panelScroll.dispose();
     _image?.dispose();
     _skinMask?.dispose();
     _logo?.dispose();
@@ -462,9 +461,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         // Long-pressing the picture shows the original, which would fight
         // every tool that wants the finger for itself.
         final canCompare = !cropping && !_tool.isBrush && !_tool.isOverlay;
-        final selected = _tool.isOverlay
-            ? _edit.overlayById(_selected)
-            : null;
+        final selected = _tool.isOverlay ? _edit.overlayById(_selected) : null;
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -614,7 +611,6 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   void _setCropRect(Rect r) =>
       _edit.setCrop(r.left, r.top, 1 - r.right, 1 - r.bottom);
 
-
   // --------------------------------------------------------- stage gestures
 
   /// Which list the current brush paints into.
@@ -725,13 +721,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         if (_toolOwns(_tool, o)) o,
     ].reversed;
     for (final overlay in candidates) {
-      if (PhotoRenderer.hitTest(
-        size,
-        overlay,
-        point,
-        logo: _logo,
-        slop: 12,
-      )) {
+      if (PhotoRenderer.hitTest(size, overlay, point, logo: _logo, slop: 12)) {
         final id = _overlayId(overlay);
         if (id != _selected) setState(() => _selected = id);
         return true;
@@ -790,17 +780,120 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   /// is not enough picture left to judge an edit against.
   static const double _kMinStageHeight = 260;
 
+  /// The panel's viewport. It never scrolls under a finger — it is only ever
+  /// measured, to find out whether the open tool outruns the ceiling.
+  final ScrollController _panelScroll = ScrollController();
+
+  /// True once a laid-out frame has found more controls than the panel can
+  /// show, which is what puts the 'More options' button on screen. Measured
+  /// rather than guessed: the same tool overflows on a short phone and fits
+  /// on a tall one.
+  bool _panelOverflows = false;
+
+  /// The open tool's controls, built once and used in both places — the
+  /// panel and the sheet the button opens.
+  Widget _toolControls() => switch (_tool) {
+    _Tool.core => _cropTools(),
+    _Tool.filter => _filterTools(),
+    _Tool.adjust => _adjustTools(),
+    _Tool.face => _faceTools(),
+    _Tool.markup => _markupTools(),
+    _Tool.text => _textTools(),
+    _Tool.watermark => _watermarkTools(),
+    _Tool.pixelate => _pixelateTools(),
+    _Tool.retouch => _retouchTools(),
+    _Tool.sticker => _stickerTools(),
+  };
+
+  /// Reads the laid-out panel once the frame is done: how much of it is out
+  /// of sight.
+  void _measurePanel() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_panelScroll.hasClients ||
+          !_panelScroll.position.hasContentDimensions) {
+        return;
+      }
+      final overflows = _panelScroll.position.maxScrollExtent > 0.5;
+      if (overflows != _panelOverflows) {
+        setState(() => _panelOverflows = overflows);
+      }
+    });
+  }
+
+  /// The way to everything the panel had to leave out.
+  Widget _moreToolsButton(Responsive r) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Divider(height: 1),
+        SizedBox(
+          height: math.max(r.vp(38), 36),
+          width: double.infinity,
+          child: TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.accent,
+              shape: const RoundedRectangleBorder(),
+            ),
+            onPressed: _openMoreTools,
+            icon: Icon(Icons.expand_less, size: r.ic(18)),
+            label: Text(
+              'More options',
+              style: TextStyle(
+                fontSize: r.sp(12.5),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Opens the whole tool in a sheet of its own.
+  ///
+  /// This one *is* allowed to scroll: it is a list the user asked for by
+  /// name, and it opens most of the way up the window, so its scroll bar is
+  /// a list's rather than a panel quietly hiding half of itself.
+  Future<void> _openMoreTools() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
+      constraints: BoxConstraints(maxHeight: context.r.height * 0.85),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        // The controls are the panel's own, so a slider moved in here writes
+        // to the same edit the panel behind it is showing.
+        return StatefulBuilder(
+          builder: (sheetContext, _) => SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.only(top: context.r.vp(10)),
+                child: _toolControls(),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (mounted) setState(() {});
+  }
+
   Widget _tools(BuildContext context, double available) {
     final r = context.r;
+    _measurePanel();
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
         // The app bar's colour, the same line the editor's sheets are edged
         // with — the stage above shares this fill, so the line is what marks
         // where the picture ends and the tools begin.
-        border: Border(
-          top: BorderSide(color: AppColors.appBar, width: 1.2),
-        ),
+        border: Border(top: BorderSide(color: AppColors.appBar, width: 1.2)),
       ),
       child: SafeArea(
         top: false,
@@ -810,12 +903,17 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             // A ceiling, not a height: the panel is as tall as the controls
             // in it and no taller, so a tool with one slider does not open
             // the same box a preset grid needs and leave the bottom of it
-            // empty. Anything past the ceiling scrolls.
+            // empty.
             //
             // The ceiling is what the window can actually spare rather than a
             // number picked per tool — the fixed 178 was shorter than what
             // Core, Markup, Retouch and Pixelate draw, so each of them hid a
             // row behind a scroll while the photo above floated in white.
+            //
+            // Past the ceiling nothing scrolls: the panel clips, and what it
+            // clipped is behind the button under it, the same way the video
+            // editor's sheets work. A panel that slides hides how much of a
+            // tool is left behind a gesture the user has to guess at.
             ConstrainedBox(
               key: const ValueKey('photo-panel'),
               constraints: BoxConstraints(
@@ -825,20 +923,12 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                 ),
               ),
               child: SingleChildScrollView(
-                child: switch (_tool) {
-                  _Tool.core => _cropTools(),
-                  _Tool.filter => _filterTools(),
-                  _Tool.adjust => _adjustTools(),
-                  _Tool.face => _faceTools(),
-                  _Tool.markup => _markupTools(),
-                  _Tool.text => _textTools(),
-                  _Tool.watermark => _watermarkTools(),
-                  _Tool.pixelate => _pixelateTools(),
-                  _Tool.retouch => _retouchTools(),
-                  _Tool.sticker => _stickerTools(),
-                },
+                controller: _panelScroll,
+                physics: const NeverScrollableScrollPhysics(),
+                child: _toolControls(),
               ),
             ),
+            if (_panelOverflows) _moreToolsButton(r),
             const Divider(height: 1),
             _toolBar(),
           ],

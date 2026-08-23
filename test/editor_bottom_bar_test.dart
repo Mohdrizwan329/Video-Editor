@@ -207,15 +207,17 @@ void main() {
     expect(find.text('1'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
 
-    // Drag the first card past the second.
+    // Drag the first card past the second. The list runs down the sheet
+    // now, so the move does too.
     final cards = find.byType(ReorderableDragStartListener);
     final start = tester.getCenter(cards.at(0));
     final gesture = await tester.startGesture(start);
     await tester.pump(const Duration(milliseconds: 400));
-    // One card's width — 64pt tile plus its 4pt margins — so it lands in
-    // the slot next door rather than at the far end.
+    // One row's height, so it lands in the slot next door rather than at
+    // the far end of the track.
+    final step = tester.getSize(cards.at(0)).height / 6;
     for (var i = 0; i < 6; i++) {
-      await gesture.moveBy(const Offset(13, 0));
+      await gesture.moveBy(Offset(0, step));
       await tester.pump(const Duration(milliseconds: 30));
     }
     await gesture.up();

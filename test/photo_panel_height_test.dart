@@ -13,11 +13,11 @@ void main() {
 
   /// Tools whose controls are short enough to fit on a phone.
   ///
-  /// Adjust is not among them on purpose: it is a long column of sliders and
-  /// scrolling is the right answer for it. Watermark left the list when the
-  /// preset rows stopped scrolling sideways — five fonts on two lines is
-  /// taller than the ceiling, and two lines the user can see beats one line
-  /// with the rest off the edge.
+  /// Adjust is not among them on purpose: it is a long column of sliders,
+  /// and the 'More options' sheet is the right answer for it. Watermark left
+  /// the list when the preset rows stopped scrolling sideways — five fonts
+  /// on two lines is taller than the ceiling, and two lines the user can see
+  /// beats one line with the rest off the edge.
   const fitsOnAPhone = [
     'Core',
     'Filter',
