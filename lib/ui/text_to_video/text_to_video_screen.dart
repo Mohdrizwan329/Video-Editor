@@ -407,8 +407,15 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
             backgroundColor: AppColors.accent,
             foregroundColor: AppColors.onAccent,
             minimumSize: Size.fromHeight(res.tap(50)),
-            disabledBackgroundColor: AppColors.surfaceHigh,
-            disabledForegroundColor: AppColors.textFaint,
+            // Off, but not faded to nothing: 'Coming soon' is the one thing
+            // on this screen the user has to read, and the usual disabled
+            // grey on grey is the one thing they will not.
+            disabledBackgroundColor: _generatorReady
+                ? AppColors.surfaceHigh
+                : AppColors.appBar,
+            disabledForegroundColor: _generatorReady
+                ? AppColors.textFaint
+                : AppColors.onAppBar,
           ),
           icon: Icon(Icons.auto_awesome, size: res.ic(19)),
           label: Text(
