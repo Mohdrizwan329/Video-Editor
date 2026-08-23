@@ -126,7 +126,18 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
   /// screen's card uses, so arriving here reads as the card that was tapped.
   Widget _headerCard() {
     final res = context.r;
-    return _headerBody(res);
+    return Stack(
+      children: [
+        _headerBody(res),
+        // Bottom right, where nothing else is — the same corner the home
+        // screen's card puts it in, so the two read as one thing.
+        Positioned(
+          right: res.dp(14),
+          bottom: res.vp(10),
+          child: _comingSoonPill(res),
+        ),
+      ],
+    );
   }
 
   /// The words that say this way in is not finished.
@@ -162,7 +173,6 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
         boxShadow: AppColors.glow(AppColors.violet, opacity: 0.3),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(width: res.dp(18)),
           Container(
@@ -185,14 +195,6 @@ class _TextToVideoScreenState extends State<TextToVideoScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // A line of its own, at the right-hand end: beside the title
-                // there is not room for both, and over the card it covered
-                // the end of the name.
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _comingSoonPill(res),
-                ),
-                SizedBox(height: res.vp(4)),
                 Text(
                   'Generate Text to AI Video',
                   maxLines: 2,

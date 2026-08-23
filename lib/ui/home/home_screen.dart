@@ -753,7 +753,47 @@ class _HeroCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
-      child: _card(context, r),
+      child: Stack(
+        children: [
+          _card(context, r),
+          // Bottom right, where nothing else is: the title needs the width
+          // it has and the subtitle ends well short of that corner.
+          if (badge != null)
+            Positioned(
+              right: r.dp(14),
+              bottom: r.vp(10),
+              // Solid, not a tint: a translucent pill on a gradient reads
+              // as part of the gradient, and this is the one thing on the
+              // card the user has to notice.
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: r.dp(10),
+                  vertical: r.vp(4),
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.onAppBar,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.22),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  badge!,
+                  style: TextStyle(
+                    fontSize: r.sp(10),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                    color: AppColors.appBar,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -791,37 +831,6 @@ class _HeroCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // A line of its own, at the right-hand end. Beside the title
-                // there was not room for both and the name came out as
-                // 'Generate Text t…'; over the card it covered the name
-                // outright.
-                if (badge != null) ...[
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: r.dp(9),
-                        vertical: r.vp(2),
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.onAppBar.withValues(alpha: 0.20),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppColors.onAppBar.withValues(alpha: 0.34),
-                        ),
-                      ),
-                      child: Text(
-                        badge!,
-                        style: TextStyle(
-                          fontSize: r.sp(9.5),
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.onAppBar,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: r.vp(5)),
-                ],
                 Text(
                   title,
                   maxLines: 1,
