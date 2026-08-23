@@ -539,23 +539,42 @@ class PhotoRenderer {
   }
 
   static void _paintGrain(Canvas canvas, Size size, double strength) {
-    // A fixed pattern rather than a random one: the same picture has to come
-    // out of the preview and out of the saved file looking the same.
+    // Points in two batches rather than a circle apiece: the picture wants
+    // thousands of specks, and thousands of drawCircle calls is a frame the
+    // device cannot paint — it hung the stage on a phone.
+    //
+    // The pattern is fixed rather than random, so the same picture comes out
+    // of the preview and out of the saved file looking the same.
     final rnd = math.Random(7);
-    final paint = Paint()..blendMode = BlendMode.overlay;
-    final count = (size.width * size.height / 900).clamp(200, 9000).toInt();
-    final dot = math.max(1.0, size.shortestSide / 600);
+    final count = (size.width * size.height / 1400).clamp(200, 4000).toInt();
+    final light = <Offset>[];
+    final dark = <Offset>[];
     for (var i = 0; i < count; i++) {
-      final grey = rnd.nextDouble();
-      paint.color = (grey > 0.5 ? Colors.white : Colors.black).withValues(
-        alpha: 0.30 * strength * (grey - 0.5).abs() * 2,
+      final at = Offset(
+        rnd.nextDouble() * size.width,
+        rnd.nextDouble() * size.height,
       );
-      canvas.drawCircle(
-        Offset(rnd.nextDouble() * size.width, rnd.nextDouble() * size.height),
-        dot,
-        paint,
-      );
+      (rnd.nextBool() ? light : dark).add(at);
     }
+    final dot = math.max(1.0, size.shortestSide / 500);
+    canvas.drawPoints(
+      ui.PointMode.points,
+      light,
+      Paint()
+        ..blendMode = BlendMode.overlay
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = dot
+        ..color = Colors.white.withValues(alpha: 0.22 * strength),
+    );
+    canvas.drawPoints(
+      ui.PointMode.points,
+      dark,
+      Paint()
+        ..blendMode = BlendMode.overlay
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = dot
+        ..color = Colors.black.withValues(alpha: 0.22 * strength),
+    );
   }
 
   static void _paintDust(Canvas canvas, Size size, double strength) {

@@ -10,6 +10,8 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:video_editor/core/theme/app_theme.dart';
 import 'package:video_editor/core/utils/responsive.dart';
+import 'package:video_editor/ui/editor/panels/effects_panel.dart'
+    show PresetTile;
 import 'package:video_editor/ui/image_editor/image_editor_screen.dart';
 
 /// Presses every tool on the photo editor's bar, one at a time, in the real
@@ -87,11 +89,14 @@ void main() {
 
   /// Brings a tool into view on the bar and taps it.
   Future<void> tapTool(WidgetTester tester, String label) async {
-    final button = find.text(label);
+    // Scoped to the bar: the panel's own header shows the open tool's name,
+    // so an unscoped search for 'Crop' finds two of them.
+    final bar = find.byKey(const ValueKey('photo-toolbar'));
+    final button = find.descendant(of: bar, matching: find.text(label));
     await tester.scrollUntilVisible(
       button,
       120,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: find.descendant(of: bar, matching: find.byType(Scrollable)),
       maxScrolls: 60,
     );
     await tester.tap(button.last, warnIfMissed: false);
@@ -173,7 +178,14 @@ void main() {
   /// their button and marked as such.
   final use = <String, Future<void> Function(WidgetTester)>{
     'Canvas': (t) => tapText(t, '1:1'),
-    'Filter': (t) => tapText(t, 'Kodak'),
+    // The first look after 'Original'. A named one would be a guess at
+    // which of a hundred the panel has room for on this device.
+    'Filter': (t) async {
+      final tiles = find.byType(PresetTile).hitTestable();
+      if (tiles.evaluate().length < 2) return;
+      await t.tap(tiles.at(1));
+      await t.pump(const Duration(milliseconds: 400));
+    },
     'Adjust': dragFirstSlider,
     'Effect': (t) => tapText(t, 'Grain'),
     'Portrait': dragFirstSlider,

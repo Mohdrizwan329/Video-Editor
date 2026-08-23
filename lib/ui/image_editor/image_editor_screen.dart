@@ -1133,6 +1133,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   Widget _toolBar() {
     final r = context.r;
     return SingleChildScrollView(
+      key: const ValueKey('photo-toolbar'),
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.symmetric(horizontal: r.dp(6), vertical: r.vp(9)),
       child: Row(
