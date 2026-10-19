@@ -8,7 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 class UpdateService {
   // Current app version se compare karne wala minimum version.
   // Apne next APK ke version ke hisaab se change karein.
-  static const String minimumVersion = '1.1.0';
+  static const String minimumVersion = '1.2.0';
 
   static const String installDateKey = 'first_install_date';
 
