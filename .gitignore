@@ -49,3 +49,6 @@ app.*.map.json
 
 # Gradle build output for the Android module
 /android/build/
+
+# Personal Claude Code settings
+.claude/settings.local.json

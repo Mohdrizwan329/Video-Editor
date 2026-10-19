@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
+import 'package:video_editor/data/services/update_service.dart';
+import 'package:video_editor/ui/widgets/mandatory_update_dialog.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
@@ -23,7 +27,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Past this many projects the list stops being something you can scan, so
   /// the filter appears. Below it the field would be one more row between the
   /// user and the two projects they have.
@@ -31,11 +35,58 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final TextEditingController _search = TextEditingController();
 
+  // Prevent the mandatory update dialog from being opened more than once
+  // during this HomeScreen instance.
+  bool _updateDialogShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkMandatoryUpdate();
+    // The deadline can pass while the app is open, so look again now and then
+    // and whenever the app returns to the foreground.
+    _updateTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _checkMandatoryUpdate(),
+    );
+  }
+
+  Timer? _updateTimer;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkMandatoryUpdate();
+  }
+
+  Future<void> _checkMandatoryUpdate() async {
+    try {
+      // Saves the date on the first app launch only.
+      await UpdateService.saveInstallDate();
+
+      // Shows the popup only after two calendar months and when the
+      // installed version is lower than UpdateService.minimumVersion.
+      final required = await UpdateService.isUpdateRequired();
+
+      if (!mounted || !required || _updateDialogShown) return;
+      _updateDialogShown = true;
+
+      // Straight away, not in a post-frame callback: on a screen that is not
+      // animating no frame is scheduled, so the dialog would wait for a tap.
+      await MandatoryUpdateDialog.show(context);
+    } catch (error, stackTrace) {
+      debugPrint('Mandatory update check failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
   /// What the field currently holds, lower-cased once rather than per row.
   String _query = '';
 
   @override
   void dispose() {
+    _updateTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _search.dispose();
     super.dispose();
   }
@@ -214,13 +265,15 @@ class _HomeScreenState extends State<HomeScreen> {
         subtitleColor: const Color(0xE6FFFFFF),
         gradient: AppColors.heroGradient,
         glow: AppColors.glow(AppColors.violet, opacity: 0.34),
-        onTap: () => _startTextToVideo(context),
+        // Coming soon: nothing opens until the generator is ready.
+        onTap: null,
       ),
     );
   }
 
   /// Builds the project on the generator screen, then drops straight into the
   /// editor with it — the same landing point every other entry point uses.
+  // ignore: unused_element -- wired back in when the generator ships.
   Future<void> _startTextToVideo(BuildContext context) async {
     final navigator = Navigator.of(context);
     final controller = context.read<ProjectsController>();
@@ -730,7 +783,7 @@ class _HeroCard extends StatelessWidget {
     required this.subtitleColor,
     required this.gradient,
     required this.glow,
-    required this.onTap,
+    this.onTap,
     this.badge,
   });
 
@@ -745,7 +798,7 @@ class _HeroCard extends StatelessWidget {
   final Color subtitleColor;
   final Gradient gradient;
   final List<BoxShadow> glow;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

@@ -24,11 +24,11 @@ class SplashScreen extends StatefulWidget {
 
   /// The mark stays up at least this long even on a warm start, so the name
   /// under it has time to arrive and be read, not just flash past.
-  static const Duration minimumOnScreen = Duration(seconds: 3);
+  static const Duration minimumOnScreen = Duration(milliseconds: 600);
 
   /// Startup work is a courtesy, not a gate: if the shader or the repository
   /// hangs, the app still opens.
-  static const Duration bootTimeout = Duration(seconds: 5);
+  static const Duration bootTimeout = Duration(milliseconds: 1500);
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -41,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen>
   // home screen replaced it, so it never got read.
   late final AnimationController _anim = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: const Duration(milliseconds: 500),
   )..forward();
 
   late final Animation<double> _markIn = CurvedAnimation(
@@ -97,7 +97,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Route<void> _fadeToHome() => PageRouteBuilder<void>(
-    transitionDuration: const Duration(milliseconds: 450),
+    transitionDuration: const Duration(milliseconds: 200),
     pageBuilder: (_, _, _) => const HomeScreen(),
     transitionsBuilder: (_, animation, _, child) =>
         FadeTransition(opacity: animation, child: child),
